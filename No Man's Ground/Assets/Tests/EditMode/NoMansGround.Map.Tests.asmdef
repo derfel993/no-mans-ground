@@ -1,0 +1,17 @@
+{
+    "name": "NoMansGround.Map.Tests",
+    "references": [
+        "NoMansGround.Map",
+        "NoMansGround.Editor",
+        "NoMansGround.Soldiers",
+        "Unity.ugui",
+        "Unity.InputSystem",
+        "Unity.InputSystem.TestFramework"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

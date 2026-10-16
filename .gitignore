@@ -1,0 +1,50 @@
+# Unity: generated caches, local settings and build output
+/No Man's Ground/[Ll]ibrary/
+/No Man's Ground/[Tt]emp/
+/No Man's Ground/[Oo]bj/
+/No Man's Ground/[Ll]ogs/
+/No Man's Ground/[Uu]ser[Ss]ettings/
+/No Man's Ground/[Bb]uild/
+/No Man's Ground/[Bb]uilds/
+/No Man's Ground/[Mm]emoryCaptures/
+/No Man's Ground/[Rr]ecordings/
+/No Man's Ground/Assets/AssetStoreTools/
+
+# Unity-generated IDE projects
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Local IDE configuration
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userprefs
+*.DotSettings.user
+
+# Crash reports and temporary files
+sysinfo.txt
+mono_crash.*
+*.tmp
+*.bak
+*~
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini

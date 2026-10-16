@@ -1,0 +1,11 @@
+{
+    "name": "NoMansGround.Editor",
+    "rootNamespace": "NoMansGround.Editor",
+    "references": [
+        "NoMansGround.Map",
+        "NoMansGround.Soldiers"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

@@ -1,0 +1,8 @@
+{
+    "name": "NoMansGround.Map",
+    "rootNamespace": "NoMansGround.Map",
+    "references": [
+        "Unity.InputSystem",
+        "Unity.ugui"
+    ]
+}
