@@ -172,6 +172,19 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(1, moving);
                 Assert.IsTrue(roster.Soldiers[7].IsMoving,
                     "The selected guard must move, not the worker nearest to the destination.");
+                SoldierView guard = orders.Selected;
+                guard.AdvanceMovement(0.4f / guard.MovementSpeed);
+                Vector3 position = guard.transform.position;
+                Release(mouse.rightButton);
+                var latest = new Vector2Int(60, 15);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(latest.x, latest.y, 0))));
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.AreEqual(latest, guard.Destination);
+                Assert.AreEqual(position, guard.transform.position);
+                guard.AdvanceMovement(100f);
+                Assert.AreEqual(latest, guard.Cell);
             }
             finally
             {

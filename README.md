@@ -203,7 +203,11 @@ con il fixture ufficiale Input System.
 ## Step 3: movimento e pathfinding
 
 Con **clic destro** su una cella si muove soltanto il soldato selezionato,
-che deve essere **in Guardia** e fermo. Il soldato resta in Guardia all'arrivo.
+che deve essere **in Guardia**. Il soldato resta in Guardia all'arrivo.
+Un nuovo clic destro durante la marcia sostituisce la destinazione: il soldato
+termina il passo verso il prossimo centro cella e segue il nuovo percorso,
+senza teletrasporti o tagli degli ostacoli. Vale sempre l'ultimo ordine valido;
+una destinazione bloccata, prenotata o irraggiungibile conserva il percorso precedente.
 In Lavoro il destro viene rifiutato con un messaggio, senza scegliere un altro
 soldato. Il movimento manuale non ha una coda, mentre gli scavi si.
 
@@ -432,7 +436,7 @@ ancora in Lavoro. Non ricevera il job successivo. Premere Lavoro prima della
 fine annulla la richiesta. Se il job viene annullato o rilasciato, la richiesta
 viene applicata al rilascio; un percorso gia iniziato termina senza teletrasporti.
 Tornando in Lavoro durante una marcia di Guardia, termina il percorso prima di
-poter prendere job. Il destro non sostituisce percorsi gia in corso.
+poter prendere job. In Guardia il destro sostituisce anche percorsi gia in corso.
 
 Il **cuoco resta sempre in Lavoro** e il suo pulsante Guardia e disabilitato.
 Il mestiere non cambia passando tra i due stati. I bisogni e lo stress

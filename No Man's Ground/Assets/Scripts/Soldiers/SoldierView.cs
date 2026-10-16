@@ -21,7 +21,10 @@ namespace NoMansGround.Soldiers
         public bool GuardRequested { get; private set; }
         public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
             && !GuardRequested && Data.Profession == SoldierProfession.Engineer;
-        public bool CanTakeGuardMove => IsAvailable && Duty == SoldierDuty.Guard;
+        public bool CanTakeGuardMove => isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard;
+        public Vector2Int GuardPathStart => IsMoving && !transform.position.Equals(
+            movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(Cell.x, Cell.y, 0)))
+                ? path[waypoint] : Cell;
         public float DiggingProgress { get; private set; }
         public TrenchJobKind WorkKind { get; private set; }
 
@@ -112,6 +115,27 @@ namespace NoMansGround.Soldiers
                 Duty = SoldierDuty.Guard;
                 DutyChanged?.Invoke();
             }
+            MovementChanged?.Invoke();
+        }
+
+        internal void SetGuardPath(MapTilemapView mapView, IReadOnlyList<Vector2Int> cells)
+        {
+            if (mapView == null)
+                throw new ArgumentNullException(nameof(mapView));
+            if (Data == null)
+                throw new InvalidOperationException("Initialize the soldier before assigning a guard path.");
+            if (!CanTakeGuardMove)
+                throw new InvalidOperationException("Only guards without a work assignment can receive guard paths.");
+            Vector2Int start = GuardPathStart;
+            if (cells == null || cells.Count == 0 || cells[0] != start)
+                throw new ArgumentException("The guard path must start at the next reachable cell centre.", nameof(cells));
+            var replacement = new List<Vector2Int>();
+            if (start != Cell)
+                replacement.Add(Cell);
+            replacement.AddRange(cells);
+            movementMap = mapView;
+            path = replacement.Count > 1 ? replacement.AsReadOnly() : null;
+            waypoint = 1;
             MovementChanged?.Invoke();
         }
 

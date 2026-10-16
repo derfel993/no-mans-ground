@@ -121,7 +121,7 @@ namespace NoMansGround.Soldiers
                 return Reject("Seleziona un soldato in Guardia.");
             if (!assigned.CanTakeGuardMove)
                 return Reject("Il soldato deve essere in Guardia e libero.");
-            if (assigned.Cell == destination)
+            if (!assigned.IsMoving && assigned.Cell == destination)
             {
                 SetStatus("Il soldato e gia in guardia sulla cella.");
                 return true;
@@ -133,12 +133,18 @@ namespace NoMansGround.Soldiers
                 if (soldier != assigned && soldier.Destination == destination)
                     return Reject("Destinazione gia occupata o prenotata.");
             }
-            GridPath path = GridPathfinder.FindNearest(map.Data, new[] { assigned.Cell }, destination);
+            GridPath path = GridPathfinder.FindNearest(map.Data, new[] { assigned.GuardPathStart }, destination);
             if (path == null)
                 return Reject("Nessun percorso raggiungibile verso la destinazione.");
 
-            assigned.BeginMove(mapView, path.Cells);
-            ShowRoute(assigned, path.Cells);
+            assigned.SetGuardPath(mapView, path.Cells);
+            if (!assigned.IsMoving)
+            {
+                ClearRoute();
+                SetStatus("Il soldato e gia in guardia sulla cella.");
+                return true;
+            }
+            ShowRoute(assigned);
             SetStatus($"{assigned.Data.FullName}\nIn marcia verso ({destination.x}, {destination.y}).");
             return true;
         }
@@ -168,7 +174,7 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
-        private void ShowRoute(SoldierView soldier, IReadOnlyList<Vector2Int> path)
+        private void ShowRoute(SoldierView soldier)
         {
             ClearRoute();
             routeSoldier = soldier;
@@ -177,7 +183,8 @@ namespace NoMansGround.Soldiers
                 return;
             UpdateRoute();
             destinationMarker.sprite = mapView.Tilemap.GetSprite(new Vector3Int(soldier.Destination.x, soldier.Destination.y, 0));
-            destinationMarker.transform.position = route.GetPosition(path.Count - 1);
+            destinationMarker.transform.position = mapView.Tilemap.GetCellCenterWorld(
+                new Vector3Int(soldier.Destination.x, soldier.Destination.y, 0));
             destinationMarker.transform.localScale = Vector3.one * 0.55f;
             destinationMarker.enabled = true;
         }

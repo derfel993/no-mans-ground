@@ -84,6 +84,19 @@ namespace NoMansGround.Tests
             Assert.Greater(Vector3.Distance(beforeMove, moving.transform.position), 0f);
             LineRenderer route = orders.GetComponentInChildren<LineRenderer>();
             Assert.Greater(route.positionCount, 1);
+            Vector3 redirectPosition = moving.transform.position;
+            goal += Vector2Int.left * 4;
+            Assert.IsTrue(orders.IssueMove(goal));
+            Assert.AreEqual(redirectPosition, moving.transform.position);
+            AssertTextExists($"In marcia: ({goal.x}, {goal.y})\nVelocita: {moving.MovementSpeed:0.00} unita/s");
+            Vector3 goalPosition = map.GetComponentInChildren<MapTilemapView>().Tilemap.GetCellCenterWorld(
+                new Vector3Int(goal.x, goal.y, 0));
+            Assert.AreEqual(goalPosition, route.GetPosition(route.positionCount - 1));
+            bool markerFound = false;
+            foreach (SpriteRenderer sprite in orders.GetComponentsInChildren<SpriteRenderer>())
+                if (sprite.enabled && sprite.transform.position == goalPosition)
+                    markerFound = true;
+            Assert.IsTrue(markerFound, "The destination marker must follow the replacement path.");
             moving.AdvanceMovement(1000f);
             Assert.IsFalse(moving.IsMoving);
             Assert.AreEqual(goal, moving.Cell);
