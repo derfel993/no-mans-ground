@@ -19,6 +19,29 @@ namespace NoMansGround.Soldiers
 
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
         public event Action Rebuilt;
+        public event Action DutiesChanged;
+        public int GuardCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (SoldierView soldier in soldiers)
+                    if (soldier != null && soldier.Duty == SoldierDuty.Guard) count++;
+                return count;
+            }
+        }
+        public int WorkCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (SoldierView soldier in soldiers)
+                    if (soldier != null && soldier.Duty == SoldierDuty.Work) count++;
+                return count;
+            }
+        }
+
+        private void NotifyDutiesChanged() { DutiesChanged?.Invoke(); }
 
         public void ConfigureCook(bool includeCook)
         {
@@ -72,6 +95,7 @@ namespace NoMansGround.Soldiers
             {
                 if (soldier == null)
                     continue;
+                soldier.DutyChanged -= NotifyDutiesChanged;
                 soldier.gameObject.SetActive(false);
                 if (Application.isPlaying)
                     Destroy(soldier.gameObject);
@@ -111,9 +135,11 @@ namespace NoMansGround.Soldiers
                         person.Needs, levels, SoldierProfession.Cook);
                 }
                 soldier.Initialize(person, cell, soldierSprite);
+                soldier.DutyChanged += NotifyDutiesChanged;
                 soldiers.Add(soldier);
             }
             Rebuilt?.Invoke();
+            DutiesChanged?.Invoke();
         }
     }
 }

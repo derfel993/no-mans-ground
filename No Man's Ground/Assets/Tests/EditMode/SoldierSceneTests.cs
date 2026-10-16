@@ -69,6 +69,7 @@ namespace NoMansGround.Tests
             yield return null;
             Assert.Less(selected.Data.Needs.Hunger, hunger);
             Vector2Int goal = selected.Cell + Vector2Int.up * 10;
+            selected.RequestDuty(SoldierDuty.Guard);
             Assert.IsTrue(orders.IssueMove(goal));
             SoldierView moving = null;
             foreach (SoldierView soldier in roster.Soldiers)

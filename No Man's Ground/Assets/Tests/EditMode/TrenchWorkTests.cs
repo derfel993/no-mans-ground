@@ -182,6 +182,8 @@ namespace NoMansGround.Tests
             trenches.Designate(cell);
             trenches.Tick(0.01f);
             SoldierView worker = trenches.Jobs[0].Worker;
+            movement.Selected = roster.Soldiers[1];
+            movement.Selected.RequestDuty(SoldierDuty.Guard);
             Assert.IsTrue(movement.IssueMove(worker.Cell + Vector2Int.left));
             Assert.IsFalse(worker.IsMoving);
             worker.enabled = false;
@@ -223,8 +225,93 @@ namespace NoMansGround.Tests
             trenches.Designate(new Vector2Int(50, 10));
             trenches.Tick(0.01f);
             Vector2Int reserved = trenches.Jobs[0].Worker.Destination;
+            movement.Selected = roster.Soldiers[7];
+            movement.Selected.RequestDuty(SoldierDuty.Guard);
+            movement.Selected.AdvanceMovement(100f);
             LogAssert.Expect(LogType.Warning, "Destinazione gia occupata o prenotata.");
             Assert.IsFalse(movement.IssueMove(reserved));
+        }
+
+        [Test]
+        public void GuardRequestWaitsForCurrentJobThenExcludesWorkerFromNextJob()
+        {
+            SoldierView worker = roster.Soldiers[0];
+            Assert.AreEqual(9, roster.WorkCount);
+            Assert.Zero(roster.GuardCount);
+            trenches.Designate(worker.Cell + Vector2Int.down);
+            trenches.Tick(0.01f);
+            Assert.AreSame(worker, trenches.Jobs[0].Worker);
+            worker.RequestDuty(SoldierDuty.Guard);
+            Assert.IsTrue(worker.GuardRequested);
+            Assert.AreEqual(SoldierDuty.Work, worker.Duty);
+            Assert.AreEqual(9, roster.WorkCount);
+            trenches.Tick(10f);
+            Assert.AreEqual(SoldierDuty.Guard, worker.Duty);
+            Assert.IsFalse(worker.GuardRequested);
+            Assert.AreEqual(8, roster.WorkCount);
+            Assert.AreEqual(1, roster.GuardCount);
+            Assert.IsFalse(worker.CanTakeEngineeringWork);
+            trenches.Designate(worker.Cell + Vector2Int.left);
+            trenches.Tick(1f);
+            Assert.AreNotSame(worker, trenches.Jobs[0].Worker);
+            worker.RequestDuty(SoldierDuty.Work);
+            Assert.IsTrue(worker.CanTakeEngineeringWork);
+        }
+
+        [Test]
+        public void PendingGuardCanBeCancelledAndCookCannotLeaveWork()
+        {
+            SoldierView worker = roster.Soldiers[0];
+            trenches.Designate(worker.Cell + Vector2Int.down);
+            trenches.Tick(0.01f);
+            worker.RequestDuty(SoldierDuty.Guard);
+            worker.RequestDuty(SoldierDuty.Work);
+            trenches.Tick(10f);
+            Assert.AreEqual(SoldierDuty.Work, worker.Duty);
+            Assert.IsFalse(worker.GuardRequested);
+            LogAssert.Expect(LogType.Warning, "Il cuoco resta in Lavoro.");
+            Assert.IsFalse(roster.Soldiers[8].RequestDuty(SoldierDuty.Guard));
+            Assert.AreEqual(SoldierDuty.Work, roster.Soldiers[8].Duty);
+        }
+
+        [Test]
+        public void GuardRequestDuringWorkTravelFinishesJobBeforeChangingState()
+        {
+            var target = new Vector2Int(50, 10);
+            trenches.Designate(target);
+            trenches.Tick(0.01f);
+            SoldierView worker = trenches.Jobs[0].Worker;
+            Assert.IsTrue(worker.IsMoving);
+            worker.RequestDuty(SoldierDuty.Guard);
+            Assert.IsTrue(worker.GuardRequested);
+            Assert.AreEqual(SoldierDuty.Work, worker.Duty);
+            worker.AdvanceMovement(100f);
+            Assert.AreEqual(SoldierDuty.Work, worker.Duty);
+            trenches.Tick(1f);
+            Assert.IsTrue(worker.HasWorkAssignment);
+            Assert.IsTrue(worker.GuardRequested);
+            trenches.Tick(10f);
+            Assert.IsTrue(map.Data.IsTrench(target));
+            Assert.AreEqual(SoldierDuty.Guard, worker.Duty);
+            Assert.AreEqual(1, roster.GuardCount);
+        }
+
+        [Test]
+        public void SelectedWorkerAndMissingSelectionCannotReceiveGuardMoves()
+        {
+            movement.Selected = null;
+            LogAssert.Expect(LogType.Warning, "Seleziona un soldato in Guardia.");
+            Assert.IsFalse(movement.IssueMove(new Vector2Int(50, 10)));
+            movement.Selected = roster.Soldiers[0];
+            LogAssert.Expect(LogType.Warning, "Il soldato deve essere in Guardia e libero.");
+            Assert.IsFalse(movement.IssueMove(new Vector2Int(50, 10)));
+            Assert.IsFalse(roster.Soldiers[0].IsMoving);
+            roster.Soldiers[0].RequestDuty(SoldierDuty.Guard);
+            Assert.IsTrue(movement.IssueMove(new Vector2Int(50, 10)));
+            roster.Soldiers[0].AdvanceMovement(100f);
+            Assert.AreEqual(SoldierDuty.Guard, roster.Soldiers[0].Duty);
+            Assert.IsFalse(roster.Soldiers[0].CanTakeEngineeringWork);
+            Assert.IsTrue(movement.IssueMove(roster.Soldiers[0].Cell));
         }
 
         [Test]
@@ -259,6 +346,8 @@ namespace NoMansGround.Tests
             view.Render(map.Data);
             Assert.AreEqual("Ladder", view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
             Assert.IsFalse(trenches.DesignateLadder(cell));
+            worker.RequestDuty(SoldierDuty.Guard);
+            movement.Selected = worker;
             Assert.IsTrue(movement.IssueMove(cell));
             worker.AdvanceMovement(100f);
             Assert.AreEqual(cell, worker.Cell);

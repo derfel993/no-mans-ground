@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace NoMansGround.Soldiers
 {
+    public enum SoldierDuty { Work, Guard }
+
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class SoldierView : MonoBehaviour
     {
@@ -15,8 +17,11 @@ namespace NoMansGround.Soldiers
         private int waypoint;
         public bool HasWorkAssignment { get; private set; }
         public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
-        public bool CanTakeEngineeringWork => IsAvailable && Data.Profession == SoldierProfession.Engineer;
-        public bool CanTakeSharedMove => IsAvailable && Data.Profession != SoldierProfession.Cook;
+        public SoldierDuty Duty { get; private set; } = SoldierDuty.Work;
+        public bool GuardRequested { get; private set; }
+        public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
+            && !GuardRequested && Data.Profession == SoldierProfession.Engineer;
+        public bool CanTakeGuardMove => IsAvailable && Duty == SoldierDuty.Guard;
         public float DiggingProgress { get; private set; }
         public TrenchJobKind WorkKind { get; private set; }
 
@@ -29,6 +34,24 @@ namespace NoMansGround.Soldiers
         public Vector2Int Destination => IsMoving ? path[path.Count - 1] : Cell;
         public float MovementSpeed => Mathf.Lerp(1.5f, 4.5f, Data.GetSkill(SoldierSkill.Speed).Value / 100f);
         public event Action MovementChanged;
+        public event Action DutyChanged;
+
+        public bool RequestDuty(SoldierDuty duty)
+        {
+            if (!Enum.IsDefined(typeof(SoldierDuty), duty))
+                throw new ArgumentOutOfRangeException(nameof(duty));
+            if (Data.Profession == SoldierProfession.Cook && duty == SoldierDuty.Guard)
+            {
+                Debug.LogWarning("Il cuoco resta in Lavoro.", this);
+                return false;
+            }
+            GuardRequested = duty == SoldierDuty.Guard && HasWorkAssignment;
+            if (!GuardRequested)
+                Duty = duty;
+            DutyChanged?.Invoke();
+            MovementChanged?.Invoke();
+            return true;
+        }
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite)
         {
@@ -83,6 +106,12 @@ namespace NoMansGround.Soldiers
             HasWorkAssignment = assigned;
             DiggingProgress = progress;
             WorkKind = kind;
+            if (!assigned && GuardRequested)
+            {
+                GuardRequested = false;
+                Duty = SoldierDuty.Guard;
+                DutyChanged?.Invoke();
+            }
             MovementChanged?.Invoke();
         }
 

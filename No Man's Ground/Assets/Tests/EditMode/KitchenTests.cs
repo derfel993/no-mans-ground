@@ -68,7 +68,7 @@ namespace NoMansGround.Tests
             Assert.AreSame(roster.Soldiers[8], kitchen.Cook);
             Assert.AreEqual(SoldierProfession.Cook, kitchen.Cook.Data.Profession);
             Assert.IsFalse(kitchen.Cook.CanTakeEngineeringWork);
-            Assert.IsFalse(kitchen.Cook.CanTakeSharedMove);
+            Assert.IsFalse(kitchen.Cook.CanTakeGuardMove);
             for (int i = 0; i < 8; i++)
                 Assert.AreEqual(SoldierProfession.Engineer, roster.Soldiers[i].Data.Profession);
             Assert.IsTrue(kitchen.HasFacilities);

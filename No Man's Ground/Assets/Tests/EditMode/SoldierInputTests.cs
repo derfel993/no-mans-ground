@@ -112,7 +112,7 @@ namespace NoMansGround.Tests
         }
 
         [Test]
-        public void RightClickCreatesSharedOrderAndShiftRightClickEditsObstacles()
+        public void RightClickMovesOnlySelectedGuardAndShiftRightClickEditsObstacles()
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
@@ -157,6 +157,8 @@ namespace NoMansGround.Tests
                 Assert.IsTrue(map.Data.IsWalkable(cell));
                 Release(mouse.rightButton);
                 Release(keyboard.leftShiftKey);
+                orders.Selected = roster.Soldiers[7];
+                orders.Selected.RequestDuty(SoldierDuty.Guard);
                 Press(mouse.rightButton);
                 UpdateOrders(orders);
                 int moving = 0;
@@ -168,6 +170,8 @@ namespace NoMansGround.Tests
                     Assert.AreEqual(cell, soldier.Destination);
                 }
                 Assert.AreEqual(1, moving);
+                Assert.IsTrue(roster.Soldiers[7].IsMoving,
+                    "The selected guard must move, not the worker nearest to the destination.");
             }
             finally
             {

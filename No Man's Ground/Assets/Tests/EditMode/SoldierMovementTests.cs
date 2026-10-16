@@ -38,6 +38,8 @@ namespace NoMansGround.Tests
             Assert.IsNotNull(orders);
             map.Regenerate();
             roster.Spawn(map.Data);
+            orders.Selected = roster.Soldiers[0];
+            orders.Selected.RequestDuty(SoldierDuty.Guard);
         }
 
         [TearDown]
@@ -47,7 +49,7 @@ namespace NoMansGround.Tests
         }
 
         [Test]
-        public void SharedOrderChoosesNearestFreeSoldierAndReservesDestination()
+        public void GuardOrderMovesOnlySelectedSoldierAndReservesDestination()
         {
             SoldierView nearest = roster.Soldiers[0];
             Vector2Int start = nearest.Cell;
@@ -55,6 +57,8 @@ namespace NoMansGround.Tests
             Assert.IsTrue(orders.IssueMove(goal));
             Assert.IsTrue(nearest.IsMoving);
             Assert.AreEqual(goal, nearest.Destination);
+            orders.Selected = roster.Soldiers[3];
+            orders.Selected.RequestDuty(SoldierDuty.Guard);
             LogAssert.Expect(LogType.Warning, "Destinazione gia occupata o prenotata.");
             Assert.IsFalse(orders.IssueMove(goal));
             Assert.IsTrue(orders.IssueMove(start));
@@ -64,8 +68,10 @@ namespace NoMansGround.Tests
             Assert.IsFalse(nearest.IsMoving);
             Assert.AreEqual(goal, nearest.Cell);
             Assert.AreEqual(view.Tilemap.GetCellCenterWorld(new Vector3Int(goal.x, goal.y, 0)), nearest.transform.position);
+            roster.Soldiers[3].AdvanceMovement(100f);
             LogAssert.Expect(LogType.Warning, "Destinazione gia occupata o prenotata.");
             Assert.IsFalse(orders.IssueMove(goal));
+            orders.Selected = nearest;
             Assert.IsTrue(orders.IssueMove(goal + Vector2Int.left));
             Assert.IsTrue(nearest.IsMoving);
         }
@@ -138,6 +144,8 @@ namespace NoMansGround.Tests
         {
             SoldierView first = roster.Soldiers[0];
             first.enabled = false;
+            orders.Selected = roster.Soldiers[1];
+            orders.Selected.RequestDuty(SoldierDuty.Guard);
             LogAssert.Expect(LogType.Warning, "Destinazione gia occupata o prenotata.");
             Assert.IsFalse(orders.IssueMove(first.Cell));
             Assert.IsTrue(orders.IssueMove(first.Cell + Vector2Int.left));
@@ -148,8 +156,12 @@ namespace NoMansGround.Tests
         public void BusyAndUnreachableOrdersReportFailureWithoutChangingExistingOrders()
         {
             for (int i = 0; i < roster.Soldiers.Count - 1; i++)
+            {
+                orders.Selected = roster.Soldiers[i];
+                orders.Selected.RequestDuty(SoldierDuty.Guard);
                 Assert.IsTrue(orders.IssueMove(new Vector2Int(20 + i, 20)));
-            LogAssert.Expect(LogType.Warning, "Nessun soldato disponibile. Attendi un soldato libero.");
+            }
+            LogAssert.Expect(LogType.Warning, "Il soldato deve essere in Guardia e libero.");
             Assert.IsFalse(orders.IssueMove(new Vector2Int(50, 20)));
             foreach (SoldierView soldier in roster.Soldiers)
                 soldier.AdvanceMovement(1000f);

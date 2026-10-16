@@ -29,6 +29,10 @@ namespace NoMansGround.Soldiers
         private Text ladderButton;
         private Text mealStatus;
         private Text facilityStatus;
+        private Text dutyCounts;
+        private Text dutyStatus;
+        private Button guardButton;
+        private Button workButton;
         private bool facilitySelected;
         private bool depotSelected;
         private SoldierView subscribedMovement;
@@ -70,7 +74,11 @@ namespace NoMansGround.Soldiers
             if (canvasObject != null)
                 canvasObject.SetActive(true);
             if (roster != null)
+            {
                 roster.Rebuilt += HandleRosterRebuilt;
+                roster.DutiesChanged += RefreshDutyCounts;
+            }
+            RefreshDutyCounts();
             if (movementOrders != null)
                 movementOrders.StatusChanged += RefreshOrderStatus;
             if (trenchOrders != null)
@@ -91,7 +99,10 @@ namespace NoMansGround.Soldiers
         private void OnDisable()
         {
             if (roster != null)
+            {
                 roster.Rebuilt -= HandleRosterRebuilt;
+                roster.DutiesChanged -= RefreshDutyCounts;
+            }
             if (movementOrders != null)
                 movementOrders.StatusChanged -= RefreshOrderStatus;
             if (trenchOrders != null)
@@ -162,6 +173,8 @@ namespace NoMansGround.Soldiers
                     skill.Changed -= Refresh;
             }
             Selected = soldier;
+            if (movementOrders != null)
+                movementOrders.Selected = soldier;
             subscribedMovement = soldier;
             selectedData = soldier != null ? soldier.Data : null;
             if (Selected != null)
@@ -210,9 +223,16 @@ namespace NoMansGround.Soldiers
 
         private void HandleRosterRebuilt()
         {
+            RefreshDutyCounts();
             Select(roster.Soldiers.Count > 0 ? roster.Soldiers[0] : null);
             if (Selected != null && mapCamera.TryGetComponent(out MapCameraController controller))
                 controller.FocusOn(Selected.transform.position);
+        }
+
+        private void RefreshDutyCounts()
+        {
+            if (dutyCounts != null && roster != null)
+                dutyCounts.text = $"Lavoro: {roster.WorkCount} | Guardia: {roster.GuardCount}";
         }
 
         private void Refresh()
@@ -222,18 +242,23 @@ namespace NoMansGround.Soldiers
                 facilityStatus.gameObject.SetActive(false);
             identity.text = selected ? Selected.Data.FullName : "Nessun soldato selezionato";
             instructions.text = selected
-                ? "Sinistro: ispeziona.\nDestro: ordine condiviso."
-                : "Sinistro: scegli un soldato.\nDestro: ordine condiviso.";
+                ? "Sinistro: ispeziona.\nDestro: muovi solo in Guardia."
+                : "Sinistro: scegli un soldato.\nDestro: muovi solo in Guardia.";
             RefreshOrderStatus();
             details.SetActive(selected);
             if (!selected)
                 return;
+            dutyStatus.text = Selected.GuardRequested ? "Lavoro -> Guardia a fine job"
+                : Selected.Duty == SoldierDuty.Guard ? "Stato: Guardia" : "Stato: Lavoro";
+            guardButton.interactable = Selected.Data.Profession != SoldierProfession.Cook
+                && Selected.Duty != SoldierDuty.Guard && !Selected.GuardRequested;
+            workButton.interactable = Selected.Duty != SoldierDuty.Work || Selected.GuardRequested;
 
             Vector2Int target = Selected.Destination;
             activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
                     ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
-                    : "Disponibile")
+                    : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             RefreshNeeds();
             for (int i = 0; i < skills.Length; i++)
@@ -339,6 +364,8 @@ namespace NoMansGround.Soldiers
             layout.childForceExpandHeight = false;
             content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             CreateText(content, "SOLDATI", 13, 20f);
+            dutyCounts = CreateText(content, "", 10, 20f);
+            RefreshDutyCounts();
             identity = CreateText(content, "", 12, 32f);
             instructions = CreateText(content, "", 10, 28f);
             orderStatus = CreateText(content, "", 10, 48f);
@@ -359,6 +386,14 @@ namespace NoMansGround.Soldiers
             detailLayout.childControlWidth = true;
             detailLayout.childForceExpandHeight = false;
             details = detailRect.gameObject;
+            dutyStatus = CreateText(detailRect, "", 10, 28f);
+            var dutyRow = CreateRect("Duty controls", detailRect);
+            dutyRow.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
+            var dutyLayout = dutyRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+            dutyLayout.spacing = 4f;
+            dutyLayout.childForceExpandWidth = true;
+            guardButton = CreateDutyButton(dutyRow, "Guardia", SoldierDuty.Guard);
+            workButton = CreateDutyButton(dutyRow, "Lavoro", SoldierDuty.Work);
             activity = CreateText(detailRect, "", 10, 28f);
             mealStatus = CreateText(detailRect, "", 10, 28f);
             CreateText(detailRect, "Riserve: 100 pieno, 0 esaurito\nStress/paura/fatica: 100 critico", 10, 28f);
@@ -386,6 +421,19 @@ namespace NoMansGround.Soldiers
             Text text = CreateText(rect, label, 10, 0f);
             Stretch(text.rectTransform, 2f);
             return text;
+        }
+
+        private Button CreateDutyButton(Transform parent, string label, SoldierDuty duty)
+        {
+            var rect = CreateRect(label, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = new Color(0.26f, 0.32f, 0.22f);
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => { if (Selected != null) Selected.RequestDuty(duty); });
+            Text text = CreateText(rect, label, 10, 0f);
+            Stretch(text.rectTransform, 2f);
+            return button;
         }
 
         private void FitContent()

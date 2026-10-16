@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NoMansGround.Map;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -19,8 +20,9 @@ namespace NoMansGround.Soldiers
         private SpriteRenderer destinationMarker;
         private SoldierView routeSoldier;
         private Material routeMaterial;
+        public SoldierView Selected { get; set; }
 
-        public string Status { get; private set; } = "Destro: invia un soldato.\nMaiusc+destro: ostacolo debug.";
+        public string Status { get; private set; } = "Destro: muovi la guardia scelta.\nMaiusc+destro: ostacolo debug.";
         public event Action StatusChanged;
 
         public void ConfigureTrenches(TrenchWorkOrders orders)
@@ -114,27 +116,27 @@ namespace NoMansGround.Soldiers
             if (!map.Data.IsWalkable(destination))
                 return Reject("Destinazione fuori mappa o bloccata.");
 
-            var available = new List<SoldierView>();
-            var starts = new List<Vector2Int>();
+            SoldierView assigned = Selected;
+            if (assigned == null || !roster.Soldiers.Contains(assigned))
+                return Reject("Seleziona un soldato in Guardia.");
+            if (!assigned.CanTakeGuardMove)
+                return Reject("Il soldato deve essere in Guardia e libero.");
+            if (assigned.Cell == destination)
+            {
+                SetStatus("Il soldato e gia in guardia sulla cella.");
+                return true;
+            }
             foreach (SoldierView soldier in roster.Soldiers)
             {
                 if (soldier == null)
                     continue;
-                if (soldier.Destination == destination)
+                if (soldier != assigned && soldier.Destination == destination)
                     return Reject("Destinazione gia occupata o prenotata.");
-                if (soldier.CanTakeSharedMove)
-                {
-                    available.Add(soldier);
-                    starts.Add(soldier.Cell);
-                }
             }
-            if (available.Count == 0)
-                return Reject("Nessun soldato disponibile. Attendi un soldato libero.");
-            GridPath path = GridPathfinder.FindNearest(map.Data, starts, destination);
+            GridPath path = GridPathfinder.FindNearest(map.Data, new[] { assigned.Cell }, destination);
             if (path == null)
                 return Reject("Nessun percorso raggiungibile verso la destinazione.");
 
-            SoldierView assigned = available[path.StartIndex];
             assigned.BeginMove(mapView, path.Cells);
             ShowRoute(assigned, path.Cells);
             SetStatus($"{assigned.Data.FullName}\nIn marcia verso ({destination.x}, {destination.y}).");
@@ -215,7 +217,8 @@ namespace NoMansGround.Soldiers
         private void ResetOrders()
         {
             ClearRoute();
-            SetStatus("Destro: invia un soldato.\nMaiusc+destro: ostacolo debug.");
+            Selected = null;
+            SetStatus("Destro: muovi la guardia scelta.\nMaiusc+destro: ostacolo debug.");
         }
 
         private bool Reject(string message)

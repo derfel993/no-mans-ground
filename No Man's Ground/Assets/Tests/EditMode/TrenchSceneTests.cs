@@ -24,7 +24,7 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(3, buttons.Length);
+            Assert.AreEqual(5, buttons.Length);
             buttons[0].onClick.Invoke();
             Assert.AreEqual(DiggingMode.Dig, trenches.Mode);
             buttons[1].onClick.Invoke();
@@ -32,6 +32,12 @@ namespace NoMansGround.Tests
             buttons[1].onClick.Invoke();
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
             SoldierView worker = roster.Soldiers[0];
+            buttons[3].onClick.Invoke();
+            Assert.AreEqual(SoldierDuty.Guard, worker.Duty);
+            AssertTextContains(canvas, "Lavoro: 8 | Guardia: 1");
+            buttons[4].onClick.Invoke();
+            Assert.AreEqual(SoldierDuty.Work, worker.Duty);
+            AssertTextContains(canvas, "Lavoro: 9 | Guardia: 0");
             Vector2Int target = worker.Cell + Vector2Int.down;
             panel.Select(worker);
             Assert.IsTrue(trenches.Designate(target));
@@ -67,6 +73,7 @@ namespace NoMansGround.Tests
             Vector2Int inside = target + Vector2Int.left;
             view.CompleteTrench(map.Data, inside);
             var orders = roster.GetComponent<SoldierMovementOrders>();
+            worker.RequestDuty(SoldierDuty.Guard);
             Assert.IsTrue(orders.IssueMove(inside));
             Assert.IsTrue(worker.IsMoving);
             CollectionAssert.Contains(worker.CurrentPath, target);
@@ -77,12 +84,15 @@ namespace NoMansGround.Tests
             worker.BeginMove(view, exit.Cells);
             worker.AdvanceMovement(100f);
             Assert.AreEqual(target + Vector2Int.up, worker.Cell);
+            worker.RequestDuty(SoldierDuty.Work);
             trenches.Designate(new Vector2Int(50, 10));
             trenches.Tick(0.01f);
             trenches.SetMode(DiggingMode.Dig);
             map.Regenerate();
             Assert.Zero(trenches.Jobs.Count);
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            Assert.AreEqual(9, roster.WorkCount);
+            Assert.Zero(roster.GuardCount);
             Assert.AreNotEqual(TerrainKind.Trench, map.Data[target.x, target.y]);
             Assert.IsFalse(map.Data.HasLadder(target));
             yield return null;

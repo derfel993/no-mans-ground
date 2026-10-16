@@ -22,7 +22,8 @@ Il terreno viene generato all'avvio, non salvato come migliaia di tile nella sce
 | Rotella | Zoom sul punto sotto il cursore |
 | Clic sinistro su un soldato | Seleziona e mostra la scheda |
 | Clic sinistro sul terreno | Deseleziona |
-| Clic destro sul terreno | Ordina di raggiungere la cella al soldato disponibile piu vicino |
+| Pulsanti Guardia / Lavoro nella scheda | Cambia lo stato del soldato selezionato |
+| Clic destro sul terreno | Muove soltanto il soldato selezionato in Guardia |
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
 | L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
@@ -196,23 +197,23 @@ all'avvio, riutilizzando un EventSystem esistente se presente.
 I test `SoldierDataTests` verificano generazione, limiti degli stati, soglie XP,
 passaggi multipli di livello e livello massimo. `SoldierSceneTests` entra in Play
 per verificare spawn, selezione, aggiornamento UI e rigenerazione anche su mappa minima.
-`SoldierInputTests` verifica selezione, ordini condivisi e ostacoli tramite clic simulati
+`SoldierInputTests` verifica selezione, movimento della guardia selezionata e ostacoli tramite clic simulati
 con il fixture ufficiale Input System.
 
 ## Step 3: movimento e pathfinding
 
-Con **clic destro** su una cella viene assegnato un ordine al soldato disponibile
-con il percorso raggiungibile piu breve, indipendentemente da quello selezionato.
-Un soldato in marcia o assegnato a uno scavo e occupato e non riceve altri
-ordini manuali. Se tutti sono occupati, il comando di movimento viene rifiutato
-con un messaggio: il movimento manuale non ha una coda, mentre gli scavi si.
+Con **clic destro** su una cella si muove soltanto il soldato selezionato,
+che deve essere **in Guardia** e fermo. Il soldato resta in Guardia all'arrivo.
+In Lavoro il destro viene rifiutato con un messaggio, senza scegliere un altro
+soldato. Il movimento manuale non ha una coda, mentre gli scavi si.
 
 ### Percorsi e movimento
 
 - Otto direzioni; una diagonale e consentita solo se entrambe le celle laterali
   sono percorribili, evitando di tagliare gli angoli degli ostacoli.
-- Ricerca Dijkstra inversa dalla destinazione: una sola ricerca confronta i
-  soldati liberi. Costo di griglia 10 per passo ortogonale e 14 per diagonale.
+- Ricerca Dijkstra inversa dalla destinazione: per gli ordini di Guardia calcola
+  il percorso del selezionato; per i lavori confronta i lavoratori liberi.
+  Costo di griglia 10 per passo ortogonale e 14 per diagonale.
   Non viene scelta la distanza in linea retta ne il tempo di arrivo.
 - Movimento continuo tra i centri delle celle, indipendente dal frame rate.
   La skill Velocita determina la velocita come `1.5 + 3 * valore / 100`
@@ -365,7 +366,7 @@ L'attesa e indicata sulla scheda, insieme al mestiere.
 - **Genio**: gli 8 soldati iniziali eseguono scavi e installazioni di scale.
 - **Cuoco**: un nono personaggio con nome italiano e tinta chiara raggiunge
   la cucina e produce soltanto rancio. Non riceve scavi, scale o spostamenti
-  condivisi con il destro; la sua posizione resta prenotata per gli altri.
+  manuali con il destro; la sua posizione resta prenotata per gli altri.
 - **Soldato**: ruolo previsto per il solo combattimento futuro, escluso dai
   lavori del Genio. Il combattimento non e ancora implementato.
 
@@ -407,6 +408,41 @@ consumata: la fame continua quindi a diminuire anche con razioni disponibili.
   implementa soltanto il costo fisso di 10 unita per razione.
 - [ ] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
 - [ ] Assegnazione e cambio dei mestieri da parte del giocatore.
+
+## Step 6: Guardia e Lavoro
+
+Ogni personaggio ha uno stato distinto dal mestiere:
+
+- **Lavoro**: partecipa soltanto ai job consentiti dal mestiere (Genio: scavi e
+  scale; Cuoco: rancio). Non riceve spostamenti manuali con il destro.
+- **Guardia**: non prende job. Selezionarlo con il sinistro e usare il destro
+  per raggiungere una cella; rimane in Guardia sulla destinazione, anche se
+  vengono designati lavori vicini. Non sono ancora presenti tiro o nemici.
+
+Nella scheda del soldato sono presenti i pulsanti **Guardia** e **Lavoro**.
+Il contatore **Lavoro: N | Guardia: N** resta visibile anche senza selezione
+o quando si ispeziona un edificio, e conta gli stati effettivi di tutti
+i personaggi generati, **incluso il cuoco in Lavoro**.
+All'avvio normale indica Lavoro: 9 e Guardia: 0.
+
+Se si richiede Guardia durante un job, il soldato resta in Lavoro fino al
+completamento del job assegnato, incluso l'eventuale viaggio. La scheda indica
+**Lavoro -> Guardia a fine job**; fino ad allora il contatore lo considera
+ancora in Lavoro. Non ricevera il job successivo. Premere Lavoro prima della
+fine annulla la richiesta. Se il job viene annullato o rilasciato, la richiesta
+viene applicata al rilascio; un percorso gia iniziato termina senza teletrasporti.
+Tornando in Lavoro durante una marcia di Guardia, termina il percorso prima di
+poter prendere job. Il destro non sostituisce percorsi gia in corso.
+
+Il **cuoco resta sempre in Lavoro** e il suo pulsante Guardia e disabilitato.
+Il mestiere non cambia passando tra i due stati. I bisogni e lo stress
+continuano ad avanzare in entrambi. Rigenerare ripristina tutti in Lavoro,
+azzera le richieste pendenti e aggiorna il contatore.
+
+API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`;
+`SoldierRoster.WorkCount` e `GuardCount` espongono i totali.
+`SoldierMovementOrders.Selected` segue la selezione del pannello;
+`IssueMove(cell)` valida e muove esclusivamente quella guardia.
 
 ## Step successivi (non implementati)
 
