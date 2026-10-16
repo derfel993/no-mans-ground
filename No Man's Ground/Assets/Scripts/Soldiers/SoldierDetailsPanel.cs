@@ -216,12 +216,13 @@ namespace NoMansGround.Soldiers
             if (!facilitySelected || facilityStatus == null || kitchen == null)
                 return;
             identity.text = depotSelected ? "DEPOSITO VIVERI" : "CUCINA";
-            instructions.text = "Sinistro: ispeziona.\nRancio non ancora distribuito.";
+            instructions.text = "Sinistro: ispeziona.\nRancio: ogni giorno alle 13.";
             facilityStatus.gameObject.SetActive(true);
             facilityStatus.text = depotSelected
                 ? $"Viveri: {kitchen.Stock.Provisions}/1000\nConsumo: 10 per razione."
                 : $"Razioni pronte: {kitchen.Stock.ReadyRations}\nViveri: {kitchen.Stock.Provisions}/1000\n"
-                    + $"Razione: {kitchen.Stock.Progress:P0}\n{kitchen.Status}";
+                    + $"Razione: {kitchen.Stock.Progress:P0}\nIn consegna: {kitchen.CarriedRations}"
+                    + $"\nIn attesa: {kitchen.PendingMeals}\n{kitchen.Status}";
         }
 
         [ContextMenu("Debug/Add 100 Aim XP to Selected Soldier")]
@@ -385,7 +386,7 @@ namespace NoMansGround.Soldiers
             identity = CreateText(content, "", 12, 32f);
             instructions = CreateText(content, "", 10, 28f);
             orderStatus = CreateText(content, "", 10, 48f);
-            facilityStatus = CreateText(content, "", 10, 100f);
+            facilityStatus = CreateText(content, "", 10, 156f);
             facilityStatus.gameObject.SetActive(false);
             if (trenchOrders != null)
             {

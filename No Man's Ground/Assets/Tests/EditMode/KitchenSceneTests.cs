@@ -13,6 +13,68 @@ namespace NoMansGround.Tests
     public sealed class KitchenSceneTests
     {
         [UnityTest]
+        public IEnumerator ScheduledLunchUpdatesKitchenCountersAndSoldierHungerBar()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            yield return new EnterPlayMode();
+            yield return null;
+            var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
+            var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            var map = Object.FindAnyObjectByType<MapPrototype>();
+            float scale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0f;
+                yield return null;
+                kitchen.Cook.AdvanceMovement(1000f);
+                kitchen.Stock.AdvanceTime(270f);
+                SoldierView soldier = roster.Soldiers[0];
+                soldier.Data.Needs.AdvanceTime(1000f);
+                panel.Select(soldier);
+                AssertText("Attende rancio");
+                map.Clock.Reset();
+                map.Clock.AdvanceTime(400d);
+                kitchen.Tick(0.1f);
+                panel.SelectFacility();
+                AssertText("Razioni pronte: 0");
+                AssertText("In consegna: ");
+                Assert.Greater(kitchen.CarriedRations, 0);
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                foreach (Text text in GameObject.Find("Soldier Interface").GetComponentsInChildren<Text>())
+                    Assert.LessOrEqual(text.preferredHeight, text.rectTransform.rect.height + 0.1f,
+                        "Kitchen UI text is truncated: " + text.text);
+                for (int i = 0; i < 100 && kitchen.PendingMeals > 0; i++)
+                {
+                    kitchen.Cook.AdvanceMovement(1000f);
+                    kitchen.Tick(0.6f);
+                }
+                Assert.Zero(kitchen.PendingMeals, kitchen.Status);
+                Assert.Zero(kitchen.CarriedRations);
+                AssertText("In attesa: 0");
+                panel.Select(soldier);
+                AssertText("Fame: 100/100");
+                bool greenBar = false;
+                foreach (Text text in GameObject.Find("Soldier Interface").GetComponentsInChildren<Text>())
+                    if (text.text == "Fame: 100/100")
+                    {
+                        var fill = text.transform.parent.Find("Track/Fill").GetComponent<Image>();
+                        Assert.AreEqual(1f, fill.rectTransform.anchorMax.x);
+                        Assert.AreEqual(0.70f, fill.color.g, 0.00001f);
+                        greenBar = true;
+                    }
+                Assert.IsTrue(greenBar);
+                map.Regenerate();
+                Assert.Zero(kitchen.PendingMeals);
+                Assert.Zero(kitchen.CarriedRations);
+                Assert.Zero(kitchen.Stock.ReadyRations);
+            }
+            finally { Time.timeScale = scale; }
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]
         public IEnumerator SceneCookProducesKitchenSelectionShowsStockAndRegenerationResets()
         {
             EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);

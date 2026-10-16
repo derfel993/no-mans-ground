@@ -141,5 +141,196 @@ namespace NoMansGround.Tests
             kitchen.Tick(30f);
             Assert.AreEqual(1, kitchen.Stock.ReadyRations);
         }
+
+        private void ReachKitchen()
+        {
+            kitchen.Tick(1f);
+            kitchen.Cook.AdvanceMovement(1000f);
+        }
+
+        private void CompleteMealRound()
+        {
+            for (int i = 0; i < 300 && kitchen.PendingMeals > 0; i++)
+            {
+                kitchen.Tick(1f);
+                kitchen.Cook.AdvanceMovement(1000f);
+            }
+            Assert.Zero(kitchen.PendingMeals, kitchen.Status);
+        }
+
+        [Test]
+        public void LunchStartsAtThirteenFeedsEveryoneOnceAndRepeatsNextDay()
+        {
+            foreach (SoldierView soldier in roster.Soldiers)
+                soldier.Data.Needs.AdvanceTime(1000f);
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(399d);
+            kitchen.Tick(0.1f);
+            Assert.Zero(kitchen.PendingMeals);
+            Assert.Less(kitchen.Cook.Data.Needs.Hunger, 35f);
+            map.Clock.AdvanceTime(1d);
+            kitchen.Tick(0.1f);
+            Assert.AreEqual(100f, kitchen.Cook.Data.Needs.Hunger);
+            Assert.Zero(kitchen.Stock.ReadyRations);
+            CompleteMealRound();
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.AreEqual(100f, soldier.Data.Needs.Hunger);
+            Assert.Zero(kitchen.CarriedRations);
+            foreach (SoldierView soldier in roster.Soldiers)
+                soldier.Data.Needs.AdvanceTime(10f);
+            kitchen.Tick(1f);
+            Assert.Zero(kitchen.PendingMeals, "A completed lunch must not restart on the same day.");
+            Assert.Less(roster.Soldiers[0].Data.Needs.Hunger, 100f);
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(2400d);
+            kitchen.Tick(1f);
+            CompleteMealRound();
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.AreEqual(100f, soldier.Data.Needs.Hunger);
+        }
+
+        [Test]
+        public void ShortageReturnsCookToProductionUntilEveryoneHasEaten()
+        {
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(60f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            Assert.AreEqual(1, kitchen.CarriedRations);
+            Assert.Zero(kitchen.Stock.ReadyRations);
+            for (int i = 0; i < 300 && kitchen.PendingMeals > 0; i++)
+            {
+                kitchen.Cook.AdvanceMovement(1000f);
+                kitchen.Tick(30f);
+            }
+            Assert.Zero(kitchen.PendingMeals, kitchen.Status);
+            Assert.Zero(kitchen.CarriedRations);
+            Assert.LessOrEqual(kitchen.Stock.Provisions, 910);
+        }
+
+        [Test]
+        public void PreparedMealsAreDistributedEvenWhenProvisionsAreExhausted()
+        {
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(3000f);
+            Assert.Zero(kitchen.Stock.Provisions);
+            var view = map.GetComponentInChildren<MapTilemapView>();
+            var away = new Vector2Int(20, 20);
+            kitchen.Cook.BeginMove(view,
+                GridPathfinder.FindNearest(map.Data, new[] { kitchen.Cook.Cell }, away).Cells);
+            kitchen.Cook.AdvanceMovement(1000f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            CompleteMealRound();
+            Assert.AreEqual(91, kitchen.Stock.ReadyRations);
+            Assert.Zero(kitchen.CarriedRations);
+        }
+
+        [Test]
+        public void MovingRecipientIsReachedAtNewLocationWithoutReplacingTheirGuardOrder()
+        {
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            foreach (SoldierView soldier in roster.Soldiers)
+                soldier.Data.Needs.AdvanceTime(1000f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            var orders = roster.GetComponent<SoldierMovementOrders>();
+            SoldierView guard = roster.Soldiers[0];
+            orders.Selected = guard;
+            guard.RequestDuty(SoldierDuty.Guard);
+            var destination = new Vector2Int(30, 30);
+            Assert.IsTrue(orders.IssueMove(destination));
+            guard.AdvanceMovement(1000f);
+            CompleteMealRound();
+            Assert.AreEqual(destination, guard.Cell);
+            Assert.AreEqual(SoldierDuty.Guard, guard.Duty);
+            Assert.AreEqual(100f, guard.Data.Needs.Hunger);
+            Assert.AreEqual(0, kitchen.Stock.ReadyRations);
+        }
+
+        [Test]
+        public void DisabledCookPausesDeliveryAndRegenerationClearsTheRound()
+        {
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            int pending = kitchen.PendingMeals;
+            int carried = kitchen.CarriedRations;
+            kitchen.Cook.enabled = false;
+            kitchen.Tick(10f);
+            Assert.AreEqual(pending, kitchen.PendingMeals);
+            Assert.AreEqual(carried, kitchen.CarriedRations);
+            kitchen.Cook.enabled = true;
+            CompleteMealRound();
+            kitchen.Rebuild();
+            Assert.Zero(kitchen.PendingMeals);
+            Assert.Zero(kitchen.CarriedRations);
+            Assert.Zero(kitchen.Stock.ReadyRations);
+            Assert.AreEqual(1000, kitchen.Stock.Provisions);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void UnreachableTrenchRecipientIsRetriedUntilLadderOrMidnight(bool addLadder)
+        {
+            SoldierView isolated = roster.Soldiers[0];
+            var cell = new Vector2Int(10, 10);
+            var view = map.GetComponentInChildren<MapTilemapView>();
+            isolated.BeginMove(view, GridPathfinder.FindNearest(map.Data, new[] { isolated.Cell }, cell).Cells);
+            isolated.AdvanceMovement(1000f);
+            map.Data[cell.x, cell.y] = TerrainKind.Trench;
+            isolated.Data.Needs.AdvanceTime(1000f);
+            ReachKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            for (int i = 0; i < 40; i++)
+            {
+                kitchen.Cook.AdvanceMovement(1000f);
+                kitchen.Tick(1f);
+            }
+            Assert.AreEqual(1, kitchen.PendingMeals);
+            Assert.AreEqual(1, kitchen.CarriedRations);
+            Assert.Less(isolated.Data.Needs.Hunger, 35f);
+            if (addLadder)
+            {
+                map.Data.AddLadder(cell);
+                CompleteMealRound();
+                Assert.AreEqual(100f, isolated.Data.Needs.Hunger);
+            }
+            else
+            {
+                map.Clock.AdvanceTime(1100d);
+                kitchen.Tick(0.1f);
+                Assert.Zero(kitchen.PendingMeals);
+                Assert.Zero(kitchen.CarriedRations);
+                Assert.AreEqual(1, kitchen.Stock.ReadyRations);
+                Assert.Less(isolated.Data.Needs.Hunger, 35f);
+            }
+        }
+
+        [Test]
+        public void EatingOnlyRestoresHungerAndNotifiesObservers()
+        {
+            SoldierNeeds needs = roster.Soldiers[0].Data.Needs;
+            needs.AdvanceTime(1000f);
+            float thirst = needs.Thirst;
+            float physical = needs.PhysicalNeeds;
+            float stress = needs.Stress;
+            int changes = 0;
+            needs.Changed += () => changes++;
+            needs.EatRation();
+            Assert.AreEqual(100f, needs.Hunger);
+            Assert.IsFalse(needs.WaitingForRations);
+            Assert.AreEqual(thirst, needs.Thirst);
+            Assert.AreEqual(physical, needs.PhysicalNeeds);
+            Assert.AreEqual(stress, needs.Stress);
+            Assert.AreEqual(1, changes);
+            needs.AdvanceTime(1f);
+            Assert.Less(needs.Hunger, 100f);
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NoMansGround.Map;
 using UnityEngine;
 
@@ -13,6 +14,22 @@ namespace NoMansGround.Soldiers
         public int Provisions { get; private set; } = InitialProvisions;
         public int ReadyRations { get; private set; }
         public float Progress => (float)(elapsed / SecondsPerRation);
+
+        public int TakeRations(int requested)
+        {
+            if (requested < 0)
+                throw new ArgumentOutOfRangeException(nameof(requested));
+            int taken = Math.Min(requested, ReadyRations);
+            ReadyRations -= taken;
+            return taken;
+        }
+
+        internal void ReturnRations(int count)
+        {
+            if (count < 0)
+                throw new ArgumentOutOfRangeException(nameof(count));
+            ReadyRations += count;
+        }
 
         public void AdvanceTime(float gameSeconds)
         {
@@ -41,6 +58,11 @@ namespace NoMansGround.Soldiers
         private GameObject depotObject;
         private MapData buildingMap;
         private float retryTimer;
+        private readonly List<SoldierView> mealRecipients = new List<SoldierView>();
+        private int mealDay;
+        private int lastMealDay;
+        public int CarriedRations { get; private set; }
+        public int PendingMeals => mealRecipients.Count;
         public RationStock Stock { get; private set; } = new RationStock();
         public SoldierView Cook { get; private set; }
         public Vector2Int KitchenCell { get; private set; }
@@ -97,6 +119,9 @@ namespace NoMansGround.Soldiers
                 Cook.SetWorkAssignment(false);
             ClearFacilities();
             Stock = new RationStock();
+            mealRecipients.Clear();
+            CarriedRations = 0;
+            mealDay = lastMealDay = 0;
             Cook = null;
             foreach (SoldierView soldier in roster.Soldiers)
                 if (soldier.Data.Profession == SoldierProfession.Cook)
@@ -222,25 +247,29 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentOutOfRangeException(nameof(gameSeconds));
             if (gameSeconds == 0f || !HasFacilities)
                 return;
+            UpdateMealSchedule();
             if (Cook == null || !Cook.isActiveAndEnabled || Cook.Data.Profession != SoldierProfession.Cook)
             {
                 if (Cook != null) Cook.SetWorkAssignment(false);
                 SetStatus("Nessun cuoco disponibile.");
                 return;
             }
-            if (Stock.Provisions < RationStock.ProvisionsPerRation)
+            if (Cook.IsMoving)
+            {
+                SetStatus(mealDay != 0 && CarriedRations > 0
+                    ? "Cuoco in marcia per distribuire il rancio." : "Cuoco in marcia verso la cucina.");
+                return;
+            }
+            if (mealRecipients.Count > 0 && DistributeMeals(gameSeconds))
+                return;
+            if (Stock.Provisions < RationStock.ProvisionsPerRation
+                && !(mealRecipients.Count > 0 && Stock.ReadyRations > 0))
             {
                 Cook.SetWorkAssignment(false);
                 SetStatus("Viveri esauriti. Produzione ferma.");
                 return;
             }
-            if (Cook.IsMoving)
-            {
-                SetStatus("Cuoco in marcia verso la cucina.");
-                return;
-            }
-            if (Cook.HasWorkAssignment
-                && Mathf.Abs(Cook.Cell.x - KitchenCell.x) + Mathf.Abs(Cook.Cell.y - KitchenCell.y) == 1)
+            if (Cook.HasWorkAssignment && IsAtKitchen())
             {
                 Stock.AdvanceTime(gameSeconds);
                 Cook.SetWorkAssignment(true, Stock.Progress);
@@ -253,10 +282,128 @@ namespace NoMansGround.Soldiers
             if (retryTimer > 0f)
                 return;
             retryTimer = 0.5f;
+            GridPath best = FindServingPath(KitchenCell);
+            if (best == null)
+            {
+                Cook.SetWorkAssignment(false);
+                SetStatus("Accesso cucina bloccato o occupato.");
+                return;
+            }
+            Cook.SetWorkAssignment(true, Stock.Progress);
+            if (best.Cells.Count > 1)
+                Cook.BeginMove(mapView, best.Cells);
+            SetStatus(Cook.IsMoving ? "Cuoco in marcia verso la cucina." : "Preparazione rancio.");
+        }
+
+        private void UpdateMealSchedule()
+        {
+            if (mealDay != 0 && mealDay != map.Clock.Day)
+            {
+                Stock.ReturnRations(CarriedRations);
+                CarriedRations = 0;
+                mealRecipients.Clear();
+                mealDay = 0;
+                retryTimer = 0f;
+                Changed?.Invoke();
+            }
+            if (map.Clock.Day < lastMealDay)
+                lastMealDay = 0;
+            if (map.Clock.Hour < 13 || lastMealDay == map.Clock.Day)
+                return;
+            mealDay = lastMealDay = map.Clock.Day;
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != null)
+                    mealRecipients.Add(soldier);
+            retryTimer = 0f;
+            Changed?.Invoke();
+        }
+
+        private bool DistributeMeals(float gameSeconds)
+        {
+            mealRecipients.RemoveAll(soldier => soldier == null);
+            if (IsAtKitchen() && Stock.ReadyRations > 0)
+            {
+                CarriedRations += Stock.TakeRations(Mathf.Max(0, mealRecipients.Count - CarriedRations));
+                if (CarriedRations > 0 && mealRecipients.Remove(Cook))
+                {
+                    CarriedRations--;
+                    Cook.Data.Needs.EatRation();
+                }
+                Changed?.Invoke();
+            }
+            if (mealRecipients.Count == 0)
+            {
+                Stock.ReturnRations(CarriedRations);
+                CarriedRations = 0;
+                return false;
+            }
+            if (CarriedRations == 0)
+            {
+                if (Stock.ReadyRations == 0)
+                    return false;
+                // Ready meals must be collected at the kitchen, not remotely.
+                Cook.SetWorkAssignment(false);
+                return false;
+            }
+            Cook.SetWorkAssignment(true);
+            for (int i = mealRecipients.Count - 1; i >= 0 && CarriedRations > 0; i--)
+            {
+                SoldierView soldier = mealRecipients[i];
+                if (!soldier.isActiveAndEnabled || soldier == Cook
+                    || Mathf.Abs(Cook.Cell.x - soldier.Cell.x) + Mathf.Abs(Cook.Cell.y - soldier.Cell.y) != 1
+                    || !map.Data.CanStep(Cook.Cell, soldier.Cell)
+                    || Vector3.Distance(Cook.transform.position, soldier.transform.position) > 1.05f)
+                    continue;
+                soldier.Data.Needs.EatRation();
+                CarriedRations--;
+                mealRecipients.RemoveAt(i);
+                Changed?.Invoke();
+            }
+            if (mealRecipients.Count == 0)
+            {
+                retryTimer = 0f;
+                return false;
+            }
+            if (CarriedRations == 0)
+            {
+                Cook.SetWorkAssignment(false);
+                retryTimer = 0f;
+                return false;
+            }
+            retryTimer -= gameSeconds;
+            if (retryTimer > 0f)
+                return true;
+            retryTimer = 0.5f;
+            GridPath best = null;
+            foreach (SoldierView soldier in mealRecipients)
+            {
+                if (soldier == Cook || !soldier.isActiveAndEnabled)
+                    continue;
+                GridPath candidate = FindServingPath(soldier.Cell);
+                if (candidate != null && candidate.Cells.Count > 1 && (best == null || candidate.Cost < best.Cost))
+                    best = candidate;
+            }
+            if (best == null)
+            {
+                SetStatus("Rancio in attesa: soldati non raggiungibili.");
+                return true;
+            }
+            if (best.Cells.Count > 1)
+                Cook.BeginMove(mapView, best.Cells);
+            SetStatus("Distribuzione rancio.");
+            return true;
+        }
+
+        private GridPath FindServingPath(Vector2Int target)
+        {
             GridPath best = null;
             foreach (Vector2Int offset in Neighbours)
             {
-                Vector2Int destination = KitchenCell + offset;
+                Vector2Int destination = target + offset;
+                if (target != KitchenCell && !map.Data.CanStep(destination, target))
+                    continue;
+                if (target == KitchenCell && map.Data.IsTrench(destination))
+                    continue;
                 bool reserved = false;
                 foreach (SoldierView other in roster.Soldiers)
                     if (other != Cook && other != null && other.Destination == destination)
@@ -272,16 +419,13 @@ namespace NoMansGround.Soldiers
                 if (path != null && (best == null || path.Cost < best.Cost))
                     best = path;
             }
-            if (best == null)
-            {
-                Cook.SetWorkAssignment(false);
-                SetStatus("Accesso cucina bloccato o occupato.");
-                return;
-            }
-            Cook.SetWorkAssignment(true, Stock.Progress);
-            if (best.Cells.Count > 1)
-                Cook.BeginMove(mapView, best.Cells);
-            SetStatus(Cook.IsMoving ? "Cuoco in marcia verso la cucina." : "Preparazione rancio.");
+            return best;
+        }
+
+        private bool IsAtKitchen()
+        {
+            return Mathf.Abs(Cook.Cell.x - KitchenCell.x) + Mathf.Abs(Cook.Cell.y - KitchenCell.y) == 1
+                && !map.Data.IsTrench(Cook.Cell);
         }
 
         private void SetStatus(string status)

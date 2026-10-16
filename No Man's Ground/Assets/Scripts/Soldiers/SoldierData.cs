@@ -59,6 +59,12 @@ namespace NoMansGround.Soldiers
             Fatigue = Validate(fatigue, 0f, nameof(fatigue));
         }
 
+        public void EatRation()
+        {
+            hunger = 100d;
+            Changed?.Invoke();
+        }
+
         public void AdvanceTime(float gameSeconds)
         {
             if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)

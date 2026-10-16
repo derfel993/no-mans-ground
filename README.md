@@ -99,9 +99,9 @@ dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
 
 Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
-Per ora il ciclo e solo temporale: non modifica illuminazione, bisogni, durata
-dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
-Non sono ancora previsti eventi automatici legati all'ora.
+Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
+durata dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
+Alle 13:00 viene avviata automaticamente la distribuzione del rancio.
 
 ## Step 2: soldati, stato e skill
 
@@ -161,8 +161,9 @@ Non viene ancora aggiunta un'interfaccia per pausa o velocita.
 
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione
-frazionaria e non scende mai sotto zero. Non sono ancora presenti recupero,
-consumo delle razioni, acqua, servizi igienici o interruzioni automatiche dei lavori.
+frazionaria e non scende mai sotto zero. La fame torna a 100 quando il cuoco
+consegna una razione durante il giro delle 13. Non sono ancora presenti acqua,
+servizi igienici o interruzioni automatiche dei lavori.
 La rigenerazione ripristina le tre riserve a 100 e ricrea gli stessi rate.
 
 `SoldierNeeds` espone le durate `HungerDepletionSeconds`,
@@ -394,7 +395,7 @@ L'attesa e indicata sulla scheda, insieme al mestiere.
 
 - **Genio**: gli 8 soldati iniziali eseguono scavi e installazioni di scale.
 - **Cuoco**: un nono personaggio con nome italiano e tinta chiara raggiunge
-  la cucina e produce soltanto rancio. Non riceve scavi, scale o spostamenti
+  la cucina, prepara il rancio e lo distribuisce. Non riceve scavi, scale o spostamenti
   manuali con il destro; la sua posizione resta prenotata per gli altri.
 - **Soldato**: ruolo previsto per il solo combattimento futuro, escluso dai
   lavori del Genio. Il combattimento non e ancora implementato.
@@ -412,7 +413,8 @@ gli accessi vengono ritentati automaticamente ogni mezzo secondo.
 Su mappe senza capienza per il cuoco la cucina non viene generata.
 
 - Il deposito parte con **1000 viveri** e la cucina con **0 razioni pronte**.
-- La produzione e continua, indipendente dal numero di soldati affamati.
+- La produzione e continua, indipendente dal numero di soldati affamati,
+  tranne durante gli spostamenti e il giro di distribuzione.
 - Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
 - Al completamento si sottraggono **10 viveri** e si aggiunge **1 razione**.
   Prima del completamento i viveri non vengono scalati.
@@ -427,15 +429,39 @@ Su mappe senza capienza per il cuoco la cucina non viene generata.
   progresso e stress accumulato.
 
 `RationStock` gestisce tempi e contabilita; `KitchenSystem` gestisce strutture,
-prenotazione del cuoco e preparazione. Nessuna razione viene distribuita o
-consumata: la fame continua quindi a diminuire anche con razioni disponibili.
+prenotazione del cuoco, preparazione e distribuzione.
+
+### Distribuzione quotidiana alle 13:00
+
+Ogni giorno alle **13:00**, il cuoco sospende la produzione (conservando il
+progresso) e ritira dalla cucina fino a una razione per ogni soldato, incluso
+se stesso. Mangia la propria razione in cucina; raggiunge gli altri uno alla
+volta, scegliendo il percorso raggiungibile piu breve verso una cella adiacente.
+Le razioni trasportate sono gia sottratte alle razioni pronte della cucina.
+
+- La consegna richiede la vicinanza effettiva e un passaggio valido tra le
+  celle: non si serve attraverso pareti di trincea senza scala.
+- Ogni destinatario riceve **una sola razione al giorno**, anche con fame sopra
+  35, e torna a **100 fame**. Sete, bisogni fisiologici e stress non vengono
+  ripristinati. La fame riprende poi a diminuire al ritmo abituale.
+- I soldati non interrompono ordini o lavoro per mangiare. Se si spostano,
+  il cuoco termina il percorso gia iniziato e cerca nuovamente dove raggiungerli.
+- Se mancano razioni, distribuisce quelle disponibili, torna a cucinare e
+  riparte per i destinatari rimasti, anche dopo l'esaurimento dei viveri se
+  ci sono ancora razioni pronte.
+- I destinatari irraggiungibili restano in attesa e vengono ritentati.
+  A mezzanotte il giro incompleto termina; le razioni ancora trasportate
+  tornano al conteggio della cucina. Il giorno dopo alle 13 inizia un nuovo giro.
+- La cucina mostra anche razioni in consegna e destinatari in attesa.
+  Terminato il giro, il cuoco torna alla produzione normale.
+- Rigenerazione della mappa: azzera anche il giro e il registro dei pasti.
 
 ### TODO rancio
 
 - [ ] Prevedere le **provvigioni necessarie a creare il rancio** con tipi,
   ricette, approvvigionamento e rifornimento del deposito. Il prototipo
   implementa soltanto il costo fisso di 10 unita per razione.
-- [ ] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
+- [x] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
 - [ ] Assegnazione e cambio dei mestieri da parte del giocatore.
 
 ## Step 6: Guardia e Lavoro
