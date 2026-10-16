@@ -116,6 +116,7 @@ Il coraggio e una skill distinta dalla paura attuale.
 
 ### Skill ed esperienza
 
+
 **Mira, Coraggio, Forza, Resistenza e Velocita** hanno progressione indipendente:
 
 - Livelli da **1 a 20**; livello iniziale generato tra 1 e 10, senza XP pregressi.
