@@ -88,6 +88,21 @@ Il manifest abilita i test del pacchetto Input System per rendere disponibile
 il suo fixture ufficiale; selezionare il namespace del progetto per eseguire
 soltanto i test di No Man's Ground.
 
+### Orologio e ciclo dei giorni
+
+La partita inizia al **Giorno 1, ore 09:00**. L'orologio resta visibile in cima
+al pannello destro anche senza un soldato selezionato o mentre si ispeziona un edificio.
+Un ciclo di **24 ore dura 40 minuti di gioco non in pausa** a velocita normale:
+1 secondo reale corrisponde a 36 secondi dell'orologio, 100 secondi a un'ora.
+Il giorno aumenta a mezzanotte; la prima arriva dopo 25 minuti, perche si parte
+dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
+
+Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
+Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
+Per ora il ciclo e solo temporale: non modifica illuminazione, bisogni, durata
+dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
+Non sono ancora previsti eventi automatici legati all'ora.
+
 ## Step 2: soldati, stato e skill
 
 La stessa scena include **8 soldati italiani del Genio e un cuoco aggiuntivo**,

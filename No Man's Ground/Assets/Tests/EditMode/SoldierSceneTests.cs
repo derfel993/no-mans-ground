@@ -28,6 +28,30 @@ namespace NoMansGround.Tests
             Assert.IsNotNull(map);
             Assert.IsNotNull(map.Data);
             Assert.IsNotNull(orders);
+            Assert.AreEqual(1, map.Clock.Day);
+            Assert.AreEqual(9, map.Clock.Hour);
+            AssertTextExists("Giorno 1 - 09:00");
+            double clockBefore = map.Clock.ElapsedSeconds;
+            yield return null;
+            yield return null;
+            Assert.Greater(map.Clock.ElapsedSeconds, clockBefore);
+            float previousTimeScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0f;
+                yield return null;
+                clockBefore = map.Clock.ElapsedSeconds;
+                yield return null;
+                yield return null;
+                Assert.AreEqual(clockBefore, map.Clock.ElapsedSeconds, "The clock must stop while the game is paused.");
+            }
+            finally
+            {
+                Time.timeScale = previousTimeScale;
+            }
+            map.Clock.Reset();
+            map.Clock.AdvanceTime(1500d);
+            AssertTextExists("Giorno 2 - 00:00");
             Assert.IsNotNull(Camera.main, "The prototype scene must have an enabled MainCamera.");
             Assert.AreEqual(9, roster.Soldiers.Count);
             var cells = new HashSet<Vector2Int>();
@@ -106,10 +130,13 @@ namespace NoMansGround.Tests
             panel.Select(null);
             Assert.IsFalse(selected.IsSelected);
             Assert.IsNull(panel.Selected);
+            AssertTextExists(map.Clock.Display);
             panel.Select(selected);
             string firstName = roster.Soldiers[0].Data.FullName;
             Assert.IsTrue(orders.IssueMove(new Vector2Int(20, 20)));
             map.Regenerate();
+            Assert.AreEqual("Giorno 1 - 09:00", map.Clock.Display);
+            AssertTextExists("Giorno 1 - 09:00");
             yield return null;
             Assert.AreEqual(9, roster.Soldiers.Count);
             Assert.AreEqual(9, roster.GetComponentsInChildren<SoldierView>().Length);

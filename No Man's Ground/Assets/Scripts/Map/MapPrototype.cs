@@ -11,6 +11,7 @@ namespace NoMansGround.Map
 
         public MapData Data { get; private set; }
         public MapGenerationSettings Generation => generation;
+        public GameClock Clock { get; } = new GameClock();
         public event Action<MapData> Generated;
 
         public void Configure(MapTilemapView view, MapCameraController controller)
@@ -22,6 +23,11 @@ namespace NoMansGround.Map
         private void Start()
         {
             Regenerate();
+        }
+
+        private void Update()
+        {
+            Clock.AdvanceTime(Time.deltaTime);
         }
 
         [ContextMenu("Regenerate Map")]
@@ -36,6 +42,7 @@ namespace NoMansGround.Map
             Data = MapGenerator.Generate(generation);
             mapView.Render(Data);
             cameraController.SetMapBounds(mapView.WorldBounds, true);
+            Clock.Reset();
             Generated?.Invoke(Data);
         }
     }

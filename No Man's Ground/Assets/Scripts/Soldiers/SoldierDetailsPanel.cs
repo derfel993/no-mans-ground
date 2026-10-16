@@ -18,7 +18,9 @@ namespace NoMansGround.Soldiers
         [SerializeField] private SoldierMovementOrders movementOrders;
         [SerializeField] private TrenchWorkOrders trenchOrders;
         [SerializeField] private KitchenSystem kitchen;
+        [SerializeField] private MapPrototype gameMap;
 
+        private Text clockText;
         private Text identity;
         private Text instructions;
         private Text orderStatus;
@@ -49,13 +51,14 @@ namespace NoMansGround.Soldiers
         public SoldierView Selected { get; private set; }
 
         public void Configure(SoldierRoster soldierRoster, Camera camera, SoldierMovementOrders orders = null,
-            TrenchWorkOrders trenches = null, KitchenSystem kitchenSystem = null)
+            TrenchWorkOrders trenches = null, KitchenSystem kitchenSystem = null, MapPrototype prototype = null)
         {
             roster = soldierRoster;
             mapCamera = camera;
             movementOrders = orders;
             trenchOrders = trenches;
             kitchen = kitchenSystem;
+            gameMap = prototype;
         }
 
         private void Awake()
@@ -79,6 +82,9 @@ namespace NoMansGround.Soldiers
                 roster.DutiesChanged += RefreshDutyCounts;
             }
             RefreshDutyCounts();
+            if (gameMap != null)
+                gameMap.Clock.Changed += RefreshClock;
+            RefreshClock();
             if (movementOrders != null)
                 movementOrders.StatusChanged += RefreshOrderStatus;
             if (trenchOrders != null)
@@ -98,6 +104,8 @@ namespace NoMansGround.Soldiers
 
         private void OnDisable()
         {
+            if (gameMap != null)
+                gameMap.Clock.Changed -= RefreshClock;
             if (roster != null)
             {
                 roster.Rebuilt -= HandleRosterRebuilt;
@@ -112,6 +120,12 @@ namespace NoMansGround.Soldiers
             Select(null);
             if (canvasObject != null)
                 canvasObject.SetActive(false);
+        }
+
+        private void RefreshClock()
+        {
+            if (clockText != null && gameMap != null)
+                clockText.text = gameMap.Clock.Display;
         }
 
         private void OnDestroy()
@@ -363,6 +377,8 @@ namespace NoMansGround.Soldiers
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
             content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            if (gameMap != null)
+                clockText = CreateText(content, gameMap.Clock.Display, 12, 22f);
             CreateText(content, "SOLDATI", 13, 20f);
             dutyCounts = CreateText(content, "", 10, 20f);
             RefreshDutyCounts();

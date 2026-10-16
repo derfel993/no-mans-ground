@@ -153,6 +153,7 @@ MonoBehaviour:
   movementOrders: {fileID: 911303773}
   trenchOrders: {fileID: 911303774}
   kitchen: {fileID: 911303775}
+  gameMap: {fileID: 557374255}
 --- !u!4 &51121937
 Transform:
   m_ObjectHideFlags: 0

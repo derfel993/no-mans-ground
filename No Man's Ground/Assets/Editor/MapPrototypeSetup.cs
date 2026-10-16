@@ -117,7 +117,7 @@ namespace NoMansGround.Editor
             var panel = UnityEngine.Object.FindAnyObjectByType<SoldierDetailsPanel>();
             if (panel == null)
                 panel = new GameObject("Soldier Selection", typeof(SoldierDetailsPanel)).GetComponent<SoldierDetailsPanel>();
-            panel.Configure(roster, camera, orders, trenches, kitchen);
+            panel.Configure(roster, camera, orders, trenches, kitchen, prototype);
         }
 
         private static Sprite CreateSoldierSprite()
