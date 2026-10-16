@@ -13,6 +13,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private MapTilemapView mapView;
         [SerializeField] private SoldierRoster roster;
         [SerializeField] private Camera mapCamera;
+        [SerializeField] private TrenchWorkOrders trenchOrders;
 
         private LineRenderer route;
         private SpriteRenderer destinationMarker;
@@ -21,6 +22,11 @@ namespace NoMansGround.Soldiers
 
         public string Status { get; private set; } = "Destro: invia un soldato.\nMaiusc+destro: ostacolo debug.";
         public event Action StatusChanged;
+
+        public void ConfigureTrenches(TrenchWorkOrders orders)
+        {
+            trenchOrders = orders;
+        }
 
         public void Configure(MapPrototype prototype, MapTilemapView view, SoldierRoster soldierRoster, Camera camera)
         {
@@ -81,6 +87,8 @@ namespace NoMansGround.Soldiers
         private void LateUpdate()
         {
             UpdateRoute();
+            if (trenchOrders != null && trenchOrders.BlocksWorldCommands)
+                return;
             Mouse mouse = Mouse.current;
             if (mouse == null || !mouse.rightButton.wasPressedThisFrame)
                 return;
@@ -114,14 +122,14 @@ namespace NoMansGround.Soldiers
                     continue;
                 if (soldier.Destination == destination)
                     return Reject("Destinazione gia occupata o prenotata.");
-                if (soldier.isActiveAndEnabled && !soldier.IsMoving)
+                if (soldier.IsAvailable)
                 {
                     available.Add(soldier);
                     starts.Add(soldier.Cell);
                 }
             }
             if (available.Count == 0)
-                return Reject("Nessun soldato disponibile. Attendi un arrivo.");
+                return Reject("Nessun soldato disponibile. Attendi un soldato libero.");
             GridPath path = GridPathfinder.FindNearest(map.Data, starts, destination);
             if (path == null)
                 return Reject("Nessun percorso raggiungibile verso la destinazione.");
@@ -137,6 +145,8 @@ namespace NoMansGround.Soldiers
         {
             if (map.Data == null || !map.Data.Contains(cell))
                 return Reject("Ostacolo fuori dalla mappa.");
+            if (trenchOrders != null && trenchOrders.Jobs.Count > 0)
+                return Reject("Ostacoli debug: annulla o completa prima gli scavi.");
             foreach (SoldierView soldier in roster.Soldiers)
             {
                 if (soldier == null)

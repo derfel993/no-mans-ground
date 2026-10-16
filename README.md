@@ -23,7 +23,11 @@ Il terreno viene generato all'avvio, non salvato come migliaia di tile nella sce
 | Clic sinistro su un soldato | Seleziona e mostra la scheda |
 | Clic sinistro sul terreno | Deseleziona |
 | Clic destro sul terreno | Ordina di raggiungere la cella al soldato disponibile piu vicino |
-| Maiusc + clic destro sul terreno | Aggiunge/rimuove un ostacolo di debug, a soldati fermi |
+| T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
+| Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
+| X / pulsante Annulla scavi | Attiva/disattiva la cancellazione lungo una linea |
+| Esc / destro in modalita Scava o Annulla | Esce dalla modalita, senza impartire movimento |
+| Maiusc + clic destro sul terreno | Aggiunge/rimuove un ostacolo debug, a soldati fermi e senza scavi in coda |
 | Rotella sul pannello dei soldati | Nessuno zoom sulla mappa |
 
 In Editor, dare il focus alla finestra Game per usare i comandi.
@@ -37,7 +41,7 @@ in modo da non mostrare spazio esterno.
 - Oggetto **Map**, componente **Map Prototype**: dimensioni (1-512 per asse),
   seed, scala del rumore e soglie del terreno. La soglia del fango deve essere
   inferiore a quella dell'erba. Una scala del rumore maggiore produce zone piu ampie.
-- Oggetto **Ground**: riferimenti ai tre tile.
+- Oggetto **Ground**: riferimenti ai tile del terreno e della trincea.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
@@ -119,10 +123,10 @@ Il coraggio e una skill distinta dalla paura attuale.
 - Gli XP residui si conservano e una singola assegnazione puo superare piu livelli.
 - Al livello 20 non si accumulano ulteriori XP.
 
-Le future attivita assegneranno esperienza con
+Le attivita assegnano esperienza con
 `soldier.GetSkill(SoldierSkill.Aim).AddExperience(amount)`.
-Per ora nessuna skill cresce da sola. Velocita influenza gia lo spostamento;
-le altre skill non modificano ancora attivita o combattimento.
+Velocita influenza lo spostamento; Forza influenza lo scavo e cresce
+completando celle di trincea. Le altre skill non modificano ancora le attivita.
 Per provare la progressione in Play, selezionare un soldato e usare
 **Debug/Add 100 Aim XP to Selected Soldier** nel menu contestuale del componente
 **Soldier Details Panel**, sull'oggetto **Soldier Selection**.
@@ -165,9 +169,9 @@ con il fixture ufficiale Input System.
 
 Con **clic destro** su una cella viene assegnato un ordine al soldato disponibile
 con il percorso raggiungibile piu breve, indipendentemente da quello selezionato.
-Un soldato in marcia e occupato e non riceve altri ordini fino all'arrivo.
-Se tutti sono occupati, il comando viene rifiutato con un messaggio: non c'e
-ancora una coda di job.
+Un soldato in marcia o assegnato a uno scavo e occupato e non riceve altri
+ordini manuali. Se tutti sono occupati, il comando di movimento viene rifiutato
+con un messaggio: il movimento manuale non ha una coda, mentre gli scavi si.
 
 ### Percorsi e movimento
 
@@ -196,7 +200,7 @@ ancora una coda di job.
 E un comando di debug per verificare deviazioni e destinazioni irraggiungibili,
 non un ordine di costruzione. Non si puo bloccare una cella occupata.
 Per non modificare percorsi in corso, gli ostacoli si possono cambiare solo
-quando tutti i soldati sono fermi. Il ricalcolo per ostacoli dinamici verra
+quando tutti i soldati sono fermi e non ci sono scavi in coda. Il ricalcolo per ostacoli dinamici verra
 introdotto con le attivita che modificano la mappa.
 
 I clic sul pannello non impartiscono ordini e non modificano gli ostacoli.
@@ -212,8 +216,63 @@ calcola i percorsi. `SoldierMovementOrders` gestisce input e assegnazione;
 I test verificano costi minimi contro una ricerca di riferimento, deviazioni,
 angoli, destinazioni esclusive, disponibilita, avanzamento per frame e input reali.
 
-## Step successivo (non implementato)
+## Step 4: scavo delle trincee
 
-Lavori condivisi con priorita, coda, durata e completamento, a partire dallo scavo.
-Evoluzione dei bisogni, effetti delle altre skill e combattimento rimangono
-fuori da questo step. I bisogni a 100 non impediscono ancora di muoversi.
+La scena fornita include gia **Trench Work Orders**, collegato a mappa, soldati
+e pannello. Dopo un aggiornamento dei file con Unity aperto: fermare Play,
+**riaprire la scena MapPrototype dal Project**, quindi avviare Play. Non salvare
+prima una vecchia copia della scena ancora aperta in memoria sopra quella aggiornata.
+Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
+(Soldiers, Movement, Trenches)**: preserva i parametri esistenti di mappa e camera.
+
+### Designazione e cancellazione
+
+- Premere **T** o **Scava**. Il trascinamento sinistro mostra un'anteprima azzurra;
+  al rilascio designa una linea tra partenza e arrivo, non un rettangolo.
+  Le linee diagonali sono collegate a otto direzioni. Un clic designa una sola cella.
+- Le celle gialle sono lavori pendenti; il colore tende al verde durante lo scavo.
+  Duplicati, celle gia scavate, bloccate o fuori mappa non generano altri lavori.
+  Il rilascio fuori mappa o sopra la UI scarta il trascinamento.
+- **X** o **Annulla scavi** attiva una modalita analoga, con anteprima rossa,
+  che rimuove i lavori lungo la linea. Le trincee completate non vengono rimosse.
+- **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
+  In queste modalita il sinistro non cambia il soldato selezionato.
+- Annullare perde il progresso di quella cella e libera l'assegnazione senza XP.
+  Un soldato gia in marcia raggiunge la posizione prenotata prima di tornare
+  disponibile: nessun teletrasporto o interruzione a meta cella.
+
+### Assegnazione ed esecuzione
+
+- La coda usa l'ordine di designazione. Per ciascun lavoro viene scelto il soldato
+  libero con il percorso piu breve verso una delle **quattro celle adiacenti
+  ortogonali**, mai la cella da scavare. I lavori irraggiungibili non impediscono
+  l'assegnazione di quelli successivi.
+- Lavoro e posizione finale sono esclusivi. Un soldato non riceve due lavori,
+  ne un ordine manuale durante lo scavo. Gli attraversamenti restano consentiti.
+- Il tempo avanza soltanto dopo l'arrivo. Durata per cella:
+  `6 / (1 + Forza / 100)` secondi; al valore massimo sono 3 secondi.
+  Ogni cella completata assegna **25 XP Forza** (con normale avanzamento di livello).
+  Tempo base e premio sono configurabili sul componente **Trench Work Orders**.
+- Quando un soldato si libera, prende altro lavoro automaticamente. I lavori
+  pendenti vengono rivalutati ogni 0,5 secondi; il pannello distingue scavi attivi
+  e accessi bloccati/occupati. La scheda del soldato mostra la percentuale di scavo.
+- Soldati disabilitati rilasciano il lavoro, conservandone il progresso per un
+  sostituto. Disabilitare il sistema scavi o rigenerare la mappa annulla la coda,
+  rimuove gli indicatori e libera le assegnazioni.
+- Il terreno completato diventa un tile marrone scuro **Trench**, percorribile.
+  Non conferisce ancora copertura o bonus di combattimento; nessun attrezzo,
+  materiale o consumo dei bisogni e richiesto.
+- Gli scavi, come le altre modifiche runtime, durano solo nella sessione Play.
+  La rigenerazione ricrea il terreno originale e azzera anche trincee e XP.
+
+`TrenchWorkOrders` gestisce designazione, coda, accessi, prenotazioni e progresso;
+`SoldierView` espone occupazione e avanzamento; `MapTilemapView` applica il tile
+completato. I test verificano durata e XP, accessi adiacenti, prenotazioni,
+coda automatica, cancellazione, ritentativi, input T/X e trascinamento,
+pulsanti runtime, rigenerazione e compatibilita del pannello compatto.
+
+## Step successivi (non implementati)
+
+Priorita modificabili dei lavori, costruzioni e rifornimenti, evoluzione dei
+bisogni, copertura e combattimento. I bisogni a 100 non impediscono ancora
+di muoversi o scavare.

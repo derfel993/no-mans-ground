@@ -66,6 +66,7 @@ namespace NoMansGround.Editor
         }
 
         [MenuItem("No Man's Ground/Add Soldiers to Map Prototype Scene")]
+        [MenuItem("No Man's Ground/Update Map Prototype (Soldiers, Movement, Trenches)")]
         public static void AddSoldiersToScene()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
@@ -100,10 +101,16 @@ namespace NoMansGround.Editor
             if (orders == null)
                 orders = roster.gameObject.AddComponent<SoldierMovementOrders>();
             orders.Configure(prototype, view, roster, camera);
+            var trenches = roster.GetComponent<TrenchWorkOrders>();
+            if (trenches == null)
+                trenches = roster.gameObject.AddComponent<TrenchWorkOrders>();
+            trenches.Configure(prototype, view, roster, camera);
+            orders.ConfigureTrenches(trenches);
+            view.ConfigureTrench(CreateTile("Trench", new Color(0.19f, 0.13f, 0.08f), CreateSprite()));
             var panel = UnityEngine.Object.FindAnyObjectByType<SoldierDetailsPanel>();
             if (panel == null)
                 panel = new GameObject("Soldier Selection", typeof(SoldierDetailsPanel)).GetComponent<SoldierDetailsPanel>();
-            panel.Configure(roster, camera, orders);
+            panel.Configure(roster, camera, orders, trenches);
         }
 
         private static Sprite CreateSoldierSprite()

@@ -7,7 +7,8 @@ namespace NoMansGround.Map
     {
         Dirt,
         Grass,
-        Mud
+        Mud,
+        Trench
     }
 
     public sealed class MapData

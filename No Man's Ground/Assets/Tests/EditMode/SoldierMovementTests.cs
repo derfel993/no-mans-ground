@@ -148,7 +148,7 @@ namespace NoMansGround.Tests
         {
             for (int i = 0; i < roster.Soldiers.Count; i++)
                 Assert.IsTrue(orders.IssueMove(new Vector2Int(20 + i, 20)));
-            LogAssert.Expect(LogType.Warning, "Nessun soldato disponibile. Attendi un arrivo.");
+            LogAssert.Expect(LogType.Warning, "Nessun soldato disponibile. Attendi un soldato libero.");
             Assert.IsFalse(orders.IssueMove(new Vector2Int(50, 20)));
             foreach (SoldierView soldier in roster.Soldiers)
                 soldier.AdvanceMovement(1000f);

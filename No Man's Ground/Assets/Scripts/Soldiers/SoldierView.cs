@@ -13,6 +13,9 @@ namespace NoMansGround.Soldiers
         private MapTilemapView movementMap;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
+        public bool HasWorkAssignment { get; private set; }
+        public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
+        public float DiggingProgress { get; private set; }
 
         public SoldierData Data { get; private set; }
         public Vector2Int Cell { get; private set; }
@@ -67,6 +70,13 @@ namespace NoMansGround.Soldiers
             movementMap = mapView;
             path = new List<Vector2Int>(cells).AsReadOnly();
             waypoint = 1;
+            MovementChanged?.Invoke();
+        }
+
+        internal void SetWorkAssignment(bool assigned, float progress = 0f)
+        {
+            HasWorkAssignment = assigned;
+            DiggingProgress = progress;
             MovementChanged?.Invoke();
         }
 

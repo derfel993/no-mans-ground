@@ -134,5 +134,78 @@ namespace NoMansGround.Tests
             typeof(SoldierMovementOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(orders, null);
         }
+
+        [Test]
+        public void DigModeUsesKeyboardDragAndCancelWithoutLeakingRightClickOrders()
+        {
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var orders = roster.GetComponent<SoldierMovementOrders>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                var mouse = InputSystem.AddDevice<Mouse>();
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                Press(keyboard.tKey);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(DiggingMode.Dig, trenches.Mode);
+                Release(keyboard.tKey);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(60, 10, 0))));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.Zero(trenches.Jobs.Count, "Dragging only previews until release.");
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(64, 10, 0))));
+                UpdateTrenches(trenches);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(5, trenches.Jobs.Count);
+                Press(mouse.rightButton);
+                UpdateTrenches(trenches);
+                UpdateOrders(orders);
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
+                foreach (SoldierView soldier in roster.Soldiers)
+                    Assert.IsFalse(soldier.IsMoving, "Exiting dig mode must not issue a move.");
+                Release(mouse.rightButton);
+                Press(keyboard.xKey);
+                UpdateTrenches(trenches);
+                Release(keyboard.xKey);
+                Assert.AreEqual(DiggingMode.Cancel, trenches.Mode);
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(4, trenches.Jobs.Count);
+                Press(keyboard.escapeKey);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        private static void UpdateTrenches(TrenchWorkOrders orders)
+        {
+            typeof(TrenchWorkOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(orders, null);
+        }
     }
 }

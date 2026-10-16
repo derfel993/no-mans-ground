@@ -10,6 +10,7 @@ namespace NoMansGround.Map
         [SerializeField] private TileBase dirtTile;
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
+        [SerializeField] private TileBase trenchTile;
 
         public Bounds WorldBounds { get; private set; }
         public Tilemap Tilemap => GetComponent<Tilemap>();
@@ -19,6 +20,23 @@ namespace NoMansGround.Map
             dirtTile = dirt;
             grassTile = grass;
             mudTile = mud;
+        }
+
+        public void ConfigureTrench(TileBase trench)
+        {
+            trenchTile = trench;
+        }
+
+        public void CompleteTrench(MapData map, Vector2Int cell)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (!map.IsWalkable(cell))
+                throw new InvalidOperationException("A trench requires a walkable cell.");
+            if (trenchTile == null)
+                throw new InvalidOperationException("Assign a trench tile before digging.");
+            map[cell.x, cell.y] = TerrainKind.Trench;
+            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), trenchTile);
         }
 
         public void Render(MapData map)
@@ -38,6 +56,11 @@ namespace NoMansGround.Map
                         case TerrainKind.Dirt: tiles[y * map.Width + x] = dirtTile; break;
                         case TerrainKind.Grass: tiles[y * map.Width + x] = grassTile; break;
                         case TerrainKind.Mud: tiles[y * map.Width + x] = mudTile; break;
+                        case TerrainKind.Trench:
+                            if (trenchTile == null)
+                                throw new InvalidOperationException("Assign a trench tile before rendering trenches.");
+                            tiles[y * map.Width + x] = trenchTile;
+                            break;
                         default: throw new ArgumentOutOfRangeException(nameof(map), "Unknown terrain kind.");
                     }
                 }

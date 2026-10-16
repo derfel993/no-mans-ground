@@ -16,11 +16,15 @@ namespace NoMansGround.Soldiers
         [SerializeField] private SoldierRoster roster;
         [SerializeField] private Camera mapCamera;
         [SerializeField] private SoldierMovementOrders movementOrders;
+        [SerializeField] private TrenchWorkOrders trenchOrders;
 
         private Text identity;
         private Text instructions;
         private Text orderStatus;
         private Text activity;
+        private Text diggingStatus;
+        private Text diggingButton;
+        private Text cancelButton;
         private SoldierView subscribedMovement;
         private GameObject details;
         private Meter[] needs;
@@ -34,11 +38,13 @@ namespace NoMansGround.Soldiers
 
         public SoldierView Selected { get; private set; }
 
-        public void Configure(SoldierRoster soldierRoster, Camera camera, SoldierMovementOrders orders = null)
+        public void Configure(SoldierRoster soldierRoster, Camera camera, SoldierMovementOrders orders = null,
+            TrenchWorkOrders trenches = null)
         {
             roster = soldierRoster;
             mapCamera = camera;
             movementOrders = orders;
+            trenchOrders = trenches;
         }
 
         private void Awake()
@@ -60,6 +66,9 @@ namespace NoMansGround.Soldiers
                 roster.Rebuilt += HandleRosterRebuilt;
             if (movementOrders != null)
                 movementOrders.StatusChanged += RefreshOrderStatus;
+            if (trenchOrders != null)
+                trenchOrders.Changed += RefreshDigging;
+            RefreshDigging();
             if (canvasObject != null && roster != null)
                 HandleRosterRebuilt();
         }
@@ -76,6 +85,8 @@ namespace NoMansGround.Soldiers
                 roster.Rebuilt -= HandleRosterRebuilt;
             if (movementOrders != null)
                 movementOrders.StatusChanged -= RefreshOrderStatus;
+            if (trenchOrders != null)
+                trenchOrders.Changed -= RefreshDigging;
             Select(null);
             if (canvasObject != null)
                 canvasObject.SetActive(false);
@@ -92,6 +103,8 @@ namespace NoMansGround.Soldiers
         private void LateUpdate()
         {
             FitContent();
+            if (trenchOrders != null && trenchOrders.BlocksWorldCommands)
+                return;
             Mouse mouse = Mouse.current;
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
                 return;
@@ -177,7 +190,8 @@ namespace NoMansGround.Soldiers
                 return;
 
             Vector2Int target = Selected.Destination;
-            activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})" : "Disponibile")
+            activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
+                : Selected.HasWorkAssignment ? $"Scavo: {Selected.DiggingProgress:P0}" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             SoldierNeeds state = Selected.Data.Needs;
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
@@ -210,6 +224,25 @@ namespace NoMansGround.Soldiers
         {
             if (orderStatus != null)
                 orderStatus.text = movementOrders != null ? movementOrders.Status : "Movimento non configurato.";
+        }
+
+        private void RefreshDigging()
+        {
+            if (diggingStatus == null || trenchOrders == null)
+                return;
+            int blocked = 0;
+            int active = 0;
+            foreach (TrenchJob job in trenchOrders.Jobs)
+            {
+                if (job.Worker != null) active++;
+                else if (job.Status == "Accesso bloccato o occupato") blocked++;
+            }
+            diggingStatus.text = $"Scavi: {trenchOrders.Jobs.Count} | Attivi: {active}\nBloccati: {blocked}\n"
+                + trenchOrders.Status;
+            diggingButton.text = trenchOrders.Mode == DiggingMode.Dig ? "SCAVA [T] - attivo" : "Scava [T]";
+            cancelButton.text = trenchOrders.Mode == DiggingMode.Cancel ? "ANNULLA [X] - attivo" : "Annulla scavi [X]";
+            diggingButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            cancelButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
         }
 
         private void BuildInterface()
@@ -252,6 +285,13 @@ namespace NoMansGround.Soldiers
             identity = CreateText(content, "", 12, 32f);
             instructions = CreateText(content, "", 10, 28f);
             orderStatus = CreateText(content, "", 10, 48f);
+            if (trenchOrders != null)
+            {
+                diggingButton = CreateButton(content, "Scava [T]", DiggingMode.Dig);
+                cancelButton = CreateButton(content, "Annulla scavi [X]", DiggingMode.Cancel);
+                diggingStatus = CreateText(content, "", 10, 66f);
+                RefreshDigging();
+            }
             var detailRect = CreateRect("Details", content);
             var detailLayout = detailRect.gameObject.AddComponent<VerticalLayoutGroup>();
             detailLayout.spacing = 4f;
@@ -268,8 +308,23 @@ namespace NoMansGround.Soldiers
             skills = new Meter[5];
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = CreateMeter(detailRect, 34f);
-            CreateText(detailRect, "Stati statici. Nessun job.\nMaiusc+destro: ostacolo debug.", 9, 28f);
+            CreateText(detailRect, "Stati statici. T: scava, X: annulla.\nEsc/destro: esci dalla modalita.", 9, 28f);
             Refresh();
+        }
+
+        private Text CreateButton(Transform parent, string label, DiggingMode mode)
+        {
+            var rect = CreateRect(label, parent);
+            rect.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = new Color(0.26f, 0.32f, 0.22f);
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => trenchOrders.SetMode(
+                trenchOrders.Mode == mode ? DiggingMode.None : mode));
+            Text text = CreateText(rect, label, 10, 0f);
+            Stretch(text.rectTransform, 2f);
+            return text;
         }
 
         private void FitContent()
