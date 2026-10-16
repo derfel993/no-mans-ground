@@ -38,9 +38,9 @@ namespace NoMansGround.Tests
                 Assert.IsTrue(map.Data.Contains(soldier.Cell));
                 Assert.IsTrue(cells.Add(soldier.Cell));
                 Assert.That(soldier.Cell.y, Is.InRange(1, 3));
-                Assert.AreEqual(100f, soldier.Data.Needs.Hunger);
-                Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
-                Assert.AreEqual(100f, soldier.Data.Needs.PhysicalNeeds);
+                Assert.That(soldier.Data.Needs.Hunger, Is.InRange(99.9f, 100f));
+                Assert.That(soldier.Data.Needs.Thirst, Is.InRange(99.9f, 100f));
+                Assert.That(soldier.Data.Needs.PhysicalNeeds, Is.InRange(99.9f, 100f));
                 Assert.IsNotNull(soldier.GetComponent<SpriteRenderer>().sprite);
                 Vector3 screen = Camera.main.WorldToViewportPoint(soldier.transform.position);
                 Assert.That(screen.x, Is.InRange(0f, 1f));
@@ -67,7 +67,7 @@ namespace NoMansGround.Tests
             yield return AssertPanelAtDifferentResolutions();
             float hunger = selected.Data.Needs.Hunger;
             yield return null;
-            Assert.AreEqual(hunger, selected.Data.Needs.Hunger);
+            Assert.Less(selected.Data.Needs.Hunger, hunger);
             Vector2Int goal = selected.Cell + Vector2Int.up * 10;
             Assert.IsTrue(orders.IssueMove(goal));
             SoldierView moving = null;

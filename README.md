@@ -95,16 +95,17 @@ Nome e cognome sono generati da un repertorio italiano, senza duplicati nella
 stessa squadra. Il seed dei soldati e indipendente da quello del terreno.
 I dati del soldato sono separati dal suo sprite e dal pannello.
 
-Gli stati sono **statici** in questo step: non cambiano con il tempo e non
-producono ancora effetti sulle attivita.
-Alla nascita fame, sete e bisogni fisiologici sono sempre **100/100**;
-secondo la scala attuale questo indica il massimo bisogno, non la soddisfazione.
+Fame, sete e bisogni fisiologici sono **riserve che diminuiscono nel tempo**.
+Alla nascita sono sempre **100/100**, cioe completamente soddisfatti:
+la barra e piena e verde. A **0** il bisogno deve essere soddisfatto.
+Temperatura, stress, paura e stanchezza restano statici.
+Nessuno stato produce ancora effetti sulle attivita.
 
 | Indicatore | Significato |
 | --- | --- |
-| Fame | 0 sazio, 100 fame critica |
-| Sete | 0 dissetato, 100 sete critica |
-| Bisogni fisiologici | 0 nessuna urgenza, 100 urgenza critica |
+| Fame | 100 sazio, 0 deve mangiare |
+| Sete | 100 dissetato, 0 deve bere |
+| Bisogni fisiologici | 100 nessuna urgenza, 0 deve soddisfare il bisogno |
 | Temperatura percepita | -100 freddo estremo, 0 neutra, +100 caldo estremo |
 | Stress | 0 rilassato, 100 stress massimo |
 | Paura | 0 nessuna paura, 100 paura massima |
@@ -113,6 +114,35 @@ secondo la scala attuale questo indica il massimo bisogno, non la soddisfazione.
 La temperatura e uno stato relativo, non una misura in gradi Celsius.
 La barra termica indica l'intensita del disagio, blu per freddo e arancione per caldo.
 Il coraggio e una skill distinta dalla paura attuale.
+
+### Consumo dei bisogni
+
+Per ciascun soldato e per ciascuna delle tre riserve viene estratta una durata
+indipendente e uniforme tra **17 e 23 minuti di gioco** (20 minuti +/-15%).
+La variazione si applica al **tempo da 100 a 0**, non direttamente al rate.
+Il rate costante e `100 / durataInSecondi` punti al secondo:
+circa **5 punti al minuto** in media nominale (4,35-5,88 agli estremi).
+Il tempo medio di esaurimento della distribuzione e 20 minuti; una piccola
+squadra non ha necessariamente questa media esatta.
+
+Le durate sono generate con il seed dei soldati e restano costanti nella
+sessione, senza alterare anagrafica, skill e altri stati generati.
+Il consumo avviene sia da fermi sia in marcia o al lavoro, senza moltiplicatori.
+Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x un secondo reale
+corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende il consumo.
+Non viene ancora aggiunta un'interfaccia per pausa o velocita.
+
+Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
+visualizzati sono arrotondati, mentre il consumo mantiene la precisione
+frazionaria e non scende mai sotto zero. Non sono ancora presenti recupero,
+cibo, acqua, servizi igienici, penalita o interruzioni automatiche dei lavori.
+La rigenerazione ripristina le tre riserve a 100 e ricrea gli stessi rate.
+
+`SoldierNeeds` espone le durate `HungerDepletionSeconds`,
+`ThirstDepletionSeconds`, `PhysicalNeedsDepletionSeconds` e i rispettivi
+`ConsumptionPerSecond`; `AdvanceTime(gameSeconds)` applica il consumo.
+`SoldierView` avanza i bisogni durante Play e il pannello si aggiorna tramite
+l'evento `Changed`, anche quando il soldato e fermo.
 
 ### Skill ed esperienza
 
@@ -271,7 +301,7 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 - Il terreno completato diventa un tile marrone scuro **Trench**, percorribile
   all'interno ma accessibile dal terreno solo attraverso una **scala**.
   Non conferisce ancora copertura o bonus di combattimento; nessun attrezzo,
-  materiale o consumo dei bisogni e richiesto.
+  materiale e richiesto. Le riserve continuano a calare al rate normale.
 - Gli scavi, come le altre modifiche runtime, durano solo nella sessione Play.
   La rigenerazione ricrea il terreno originale e azzera anche trincee e XP.
 
@@ -321,6 +351,6 @@ le transizioni tra livelli sono validate da `CanStep(from, to)`.
 
 ## Step successivi (non implementati)
 
-Priorita modificabili dei lavori, costruzioni e rifornimenti, evoluzione dei
-bisogni, copertura e combattimento. I bisogni a 100 non impediscono ancora
-di muoversi o scavare.
+Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
+dei bisogni, evoluzione degli altri stati, copertura e combattimento.
+Anche con riserve a zero i soldati possono ancora muoversi e lavorare.

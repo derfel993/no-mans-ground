@@ -84,6 +84,7 @@ namespace NoMansGround.Soldiers
 
         private void Update()
         {
+            Data.Needs.AdvanceTime(Time.deltaTime);
             AdvanceMovement(Time.deltaTime);
         }
 

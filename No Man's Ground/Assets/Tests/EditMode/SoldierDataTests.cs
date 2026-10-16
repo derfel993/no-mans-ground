@@ -32,6 +32,9 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(first[i].Needs.Stress, second[i].Needs.Stress);
                 Assert.AreEqual(first[i].Needs.Fear, second[i].Needs.Fear);
                 Assert.AreEqual(first[i].Needs.Fatigue, second[i].Needs.Fatigue);
+                Assert.AreEqual(first[i].Needs.HungerDepletionSeconds, second[i].Needs.HungerDepletionSeconds);
+                Assert.AreEqual(first[i].Needs.ThirstDepletionSeconds, second[i].Needs.ThirstDepletionSeconds);
+                Assert.AreEqual(first[i].Needs.PhysicalNeedsDepletionSeconds, second[i].Needs.PhysicalNeedsDepletionSeconds);
                 foreach (SoldierSkill skill in Enum.GetValues(typeof(SoldierSkill)))
                 {
                     Assert.That(first[i].GetSkill(skill).Level, Is.InRange(1, 10));
@@ -64,6 +67,103 @@ namespace NoMansGround.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(0, 0, 0, 0, float.PositiveInfinity, 0, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(0, 0, 0, 0, 0, -1, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(0, 0, 0, 0, 0, 0, 101));
+        }
+
+        [Test]
+        public void GeneratedConsumptionVariesIndependentlyWithinSeventeenToTwentyThreeMinutes()
+        {
+            var durations = new HashSet<float>();
+            double sum = 0d;
+            int count = 0;
+            for (int seed = 0; seed < 32; seed++)
+            {
+                foreach (SoldierData soldier in SoldierGenerator.Generate(64, seed))
+                {
+                    var state = soldier.Needs;
+                    foreach (float seconds in new[] { state.HungerDepletionSeconds,
+                        state.ThirstDepletionSeconds, state.PhysicalNeedsDepletionSeconds })
+                    {
+                        Assert.That(seconds, Is.InRange(1020f, 1380f));
+                        durations.Add(seconds);
+                        sum += seconds;
+                        count++;
+                    }
+                }
+            }
+            Assert.Greater(durations.Count, count * 0.95f);
+            Assert.AreEqual(1200d, sum / count, 5d);
+        }
+
+        [Test]
+        public void NeedsDeclineAtIndependentRatesAndClampAtZeroWithoutChangingOtherStates()
+        {
+            var state = new SoldierNeeds(100, 100, 100, -12, 25, 30, 40, 1020, 1200, 1380);
+            Assert.AreEqual(100f / 1020f, state.HungerConsumptionPerSecond);
+            Assert.AreEqual(100f / 1200f, state.ThirstConsumptionPerSecond);
+            Assert.AreEqual(100f / 1380f, state.PhysicalNeedsConsumptionPerSecond);
+            state.AdvanceTime(510f);
+            Assert.AreEqual(50f, state.Hunger, 0.00001f);
+            Assert.AreEqual(57.5f, state.Thirst, 0.00001f);
+            Assert.AreEqual(100f - 100f * 510f / 1380f, state.PhysicalNeeds, 0.00001f);
+            state.AdvanceTime(510f);
+            Assert.Zero(state.Hunger);
+            Assert.Greater(state.Thirst, 0f);
+            Assert.Greater(state.PhysicalNeeds, 0f);
+            state.AdvanceTime(180f);
+            Assert.Zero(state.Thirst);
+            Assert.Greater(state.PhysicalNeeds, 0f);
+            state.AdvanceTime(180f);
+            Assert.Zero(state.PhysicalNeeds);
+            state.AdvanceTime(float.MaxValue);
+            Assert.Zero(state.Hunger);
+            Assert.Zero(state.Thirst);
+            Assert.Zero(state.PhysicalNeeds);
+            Assert.AreEqual(-12, state.ThermalState);
+            Assert.AreEqual(25, state.Stress);
+            Assert.AreEqual(30, state.Fear);
+            Assert.AreEqual(40, state.Fatigue);
+        }
+
+        [Test]
+        public void NeedDecayIsFrameRateIndependentAndZeroTimeDoesNotNotify()
+        {
+            var single = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            var stepped = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            int notifications = 0;
+            stepped.Changed += () => notifications++;
+            stepped.AdvanceTime(0f);
+            Assert.Zero(notifications);
+            single.AdvanceTime(600f);
+            for (int i = 0; i < 36000; i++)
+                stepped.AdvanceTime(1f / 60f);
+            Assert.AreEqual(50f, single.Hunger);
+            Assert.AreEqual(single.Hunger, stepped.Hunger, 0.00001f);
+            Assert.AreEqual(single.Thirst, stepped.Thirst, 0.00001f);
+            Assert.AreEqual(single.PhysicalNeeds, stepped.PhysicalNeeds, 0.00001f);
+            Assert.AreEqual(36000, notifications);
+            stepped.AdvanceTime(601f);
+            stepped.AdvanceTime(10f);
+            Assert.AreEqual(36001, notifications);
+        }
+
+        [Test]
+        public void NeedTimeAndDepletionDurationsRejectInvalidInputsWithoutChangingState()
+        {
+            var state = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            foreach (float invalid in new[] { -1f, float.NaN, float.PositiveInfinity, float.NegativeInfinity })
+                Assert.Throws<ArgumentOutOfRangeException>(() => state.AdvanceTime(invalid));
+            foreach (float invalid in new[] { 0f, 1019f, 1381f, float.NaN, float.PositiveInfinity })
+            {
+                Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(100, 100, 100, 0, 0, 0, 0,
+                    hungerDepletionSeconds: invalid));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(100, 100, 100, 0, 0, 0, 0,
+                    thirstDepletionSeconds: invalid));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new SoldierNeeds(100, 100, 100, 0, 0, 0, 0,
+                    physicalNeedsDepletionSeconds: invalid));
+            }
+            Assert.AreEqual(100f, state.Hunger);
+            Assert.AreEqual(100f, state.Thirst);
+            Assert.AreEqual(100f, state.PhysicalNeeds);
         }
 
         [Test]

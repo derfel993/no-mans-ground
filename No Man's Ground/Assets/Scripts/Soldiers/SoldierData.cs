@@ -14,24 +14,65 @@ namespace NoMansGround.Soldiers
 
     public sealed class SoldierNeeds
     {
-        public float Hunger { get; }
-        public float Thirst { get; }
-        public float PhysicalNeeds { get; }
+        public const float AverageDepletionSeconds = 20f * 60f;
+        public const float MinimumDepletionSeconds = AverageDepletionSeconds * 0.85f;
+        public const float MaximumDepletionSeconds = AverageDepletionSeconds * 1.15f;
+
+        private double hunger;
+        private double thirst;
+        private double physicalNeeds;
+
+        public float Hunger => (float)hunger;
+        public float Thirst => (float)thirst;
+        public float PhysicalNeeds => (float)physicalNeeds;
+        public float HungerDepletionSeconds { get; }
+        public float ThirstDepletionSeconds { get; }
+        public float PhysicalNeedsDepletionSeconds { get; }
+        public float HungerConsumptionPerSecond => 100f / HungerDepletionSeconds;
+        public float ThirstConsumptionPerSecond => 100f / ThirstDepletionSeconds;
+        public float PhysicalNeedsConsumptionPerSecond => 100f / PhysicalNeedsDepletionSeconds;
         public float ThermalState { get; }
         public float Stress { get; }
         public float Fear { get; }
         public float Fatigue { get; }
+        public event Action Changed;
 
         public SoldierNeeds(float hunger, float thirst, float physicalNeeds, float thermalState,
-            float stress, float fear, float fatigue)
+            float stress, float fear, float fatigue,
+            float hungerDepletionSeconds = AverageDepletionSeconds,
+            float thirstDepletionSeconds = AverageDepletionSeconds,
+            float physicalNeedsDepletionSeconds = AverageDepletionSeconds)
         {
-            Hunger = Validate(hunger, 0f, nameof(hunger));
-            Thirst = Validate(thirst, 0f, nameof(thirst));
-            PhysicalNeeds = Validate(physicalNeeds, 0f, nameof(physicalNeeds));
+            this.hunger = Validate(hunger, 0f, nameof(hunger));
+            this.thirst = Validate(thirst, 0f, nameof(thirst));
+            this.physicalNeeds = Validate(physicalNeeds, 0f, nameof(physicalNeeds));
+            HungerDepletionSeconds = ValidateDuration(hungerDepletionSeconds, nameof(hungerDepletionSeconds));
+            ThirstDepletionSeconds = ValidateDuration(thirstDepletionSeconds, nameof(thirstDepletionSeconds));
+            PhysicalNeedsDepletionSeconds = ValidateDuration(physicalNeedsDepletionSeconds, nameof(physicalNeedsDepletionSeconds));
             ThermalState = Validate(thermalState, -100f, nameof(thermalState));
             Stress = Validate(stress, 0f, nameof(stress));
             Fear = Validate(fear, 0f, nameof(fear));
             Fatigue = Validate(fatigue, 0f, nameof(fatigue));
+        }
+
+        public void AdvanceTime(float gameSeconds)
+        {
+            if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)
+                throw new ArgumentOutOfRangeException(nameof(gameSeconds));
+            if (gameSeconds == 0f || (hunger == 0d && thirst == 0d && physicalNeeds == 0d))
+                return;
+
+            hunger = Math.Max(0d, hunger - 100d * gameSeconds / HungerDepletionSeconds);
+            thirst = Math.Max(0d, thirst - 100d * gameSeconds / ThirstDepletionSeconds);
+            physicalNeeds = Math.Max(0d, physicalNeeds - 100d * gameSeconds / PhysicalNeedsDepletionSeconds);
+            Changed?.Invoke();
+        }
+
+        private static float ValidateDuration(float seconds, string name)
+        {
+            if (!float.IsFinite(seconds) || seconds < MinimumDepletionSeconds || seconds > MaximumDepletionSeconds)
+                throw new ArgumentOutOfRangeException(name, "Depletion duration must be between 17 and 23 game minutes.");
+            return seconds;
         }
 
         private static float Validate(float value, float minimum, string name)

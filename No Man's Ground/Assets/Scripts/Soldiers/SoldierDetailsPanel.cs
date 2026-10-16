@@ -143,6 +143,7 @@ namespace NoMansGround.Soldiers
                 Selected.SetSelected(false);
             if (selectedData != null)
             {
+                selectedData.Needs.Changed -= RefreshNeeds;
                 foreach (SkillProgress skill in selectedData.Skills)
                     skill.Changed -= Refresh;
             }
@@ -151,6 +152,7 @@ namespace NoMansGround.Soldiers
             selectedData = soldier != null ? soldier.Data : null;
             if (Selected != null)
             {
+                selectedData.Needs.Changed += RefreshNeeds;
                 Selected.MovementChanged += Refresh;
                 Selected.SetSelected(true);
                 foreach (SkillProgress skill in Selected.Data.Skills)
@@ -196,22 +198,7 @@ namespace NoMansGround.Soldiers
                     ? $"{(Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
-            SoldierNeeds state = Selected.Data.Needs;
-            float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
-                state.Stress, state.Fear, state.Fatigue };
-            for (int i = 0; i < needs.Length; i++)
-            {
-                float severity = Mathf.Abs(values[i]) / 100f;
-                Color color = Color.Lerp(new Color(0.35f, 0.70f, 0.43f), new Color(0.85f, 0.32f, 0.24f), severity);
-                string label = NeedNames[i] + ": " + values[i].ToString("0") + "/100";
-                if (i == 3)
-                {
-                    label = "Termico: " + (values[i] > 0 ? "+" : "") + values[i].ToString("0")
-                        + (values[i] < 0 ? " (freddo)" : values[i] > 0 ? " (caldo)" : " (neutro)");
-                    color = values[i] < 0f ? new Color(0.40f, 0.67f, 0.90f) : new Color(0.91f, 0.58f, 0.29f);
-                }
-                needs[i].Set(label, severity, color);
-            }
+            RefreshNeeds();
             for (int i = 0; i < skills.Length; i++)
             {
                 SkillProgress skill = Selected.Data.GetSkill((SoldierSkill)i);
@@ -220,6 +207,29 @@ namespace NoMansGround.Soldiers
                 skills[i].Set($"{SkillNames[i]} - Liv. {skill.Level} ({skill.Value}/100)\n{progress}",
                     skill.IsMaximumLevel ? 1f : (float)skill.Experience / skill.ExperienceToNextLevel,
                     new Color(0.75f, 0.70f, 0.44f));
+            }
+        }
+
+        private void RefreshNeeds()
+        {
+            if (Selected == null || needs == null)
+                return;
+            SoldierNeeds state = Selected.Data.Needs;
+            float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
+                state.Stress, state.Fear, state.Fatigue };
+            for (int i = 0; i < needs.Length; i++)
+            {
+                float fill = Mathf.Abs(values[i]) / 100f;
+                float severity = i < 3 ? 1f - fill : fill;
+                Color color = Color.Lerp(new Color(0.35f, 0.70f, 0.43f), new Color(0.85f, 0.32f, 0.24f), severity);
+                string label = NeedNames[i] + ": " + values[i].ToString("0") + "/100";
+                if (i == 3)
+                {
+                    label = "Termico: " + (values[i] > 0 ? "+" : "") + values[i].ToString("0")
+                        + (values[i] < 0 ? " (freddo)" : values[i] > 0 ? " (caldo)" : " (neutro)");
+                    color = values[i] < 0f ? new Color(0.40f, 0.67f, 0.90f) : new Color(0.91f, 0.58f, 0.29f);
+                }
+                needs[i].Set(label, fill, color);
             }
         }
 
@@ -307,7 +317,7 @@ namespace NoMansGround.Soldiers
             detailLayout.childForceExpandHeight = false;
             details = detailRect.gameObject;
             activity = CreateText(detailRect, "", 10, 28f);
-            CreateText(detailRect, "STATO: 0 soddisfatto, 100 critico", 10, 28f);
+            CreateText(detailRect, "Riserve: 100 pieno, 0 esaurito\nStress/paura/fatica: 100 critico", 10, 28f);
             needs = new Meter[7];
             for (int i = 0; i < needs.Length; i++)
                 needs[i] = CreateMeter(detailRect, 24f);

@@ -25,6 +25,7 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentOutOfRangeException(nameof(count), "Soldier count must be between 1 and 64.");
 
             var random = new Random(seed);
+            var consumptionRandom = new Random(unchecked(seed ^ 0x4E454544));
             var identities = new List<int>();
             for (int i = 0; i < FirstNames.Length * LastNames.Length; i++)
                 identities.Add(i);
@@ -36,7 +37,9 @@ namespace NoMansGround.Soldiers
                 int identity = identities[choice];
                 identities.RemoveAt(choice);
                 var needs = new SoldierNeeds(100f, 100f, 100f,
-                    random.Next(-25, 26), random.Next(0, 31), random.Next(0, 21), random.Next(0, 36));
+                    random.Next(-25, 26), random.Next(0, 31), random.Next(0, 21), random.Next(0, 36),
+                    GenerateDepletionSeconds(consumptionRandom), GenerateDepletionSeconds(consumptionRandom),
+                    GenerateDepletionSeconds(consumptionRandom));
                 var levels = new int[5];
                 for (int skill = 0; skill < levels.Length; skill++)
                     levels[skill] = random.Next(1, 11);
@@ -44,6 +47,12 @@ namespace NoMansGround.Soldiers
                     LastNames[identity % LastNames.Length], needs, levels);
             }
             return Array.AsReadOnly(soldiers);
+        }
+
+        private static float GenerateDepletionSeconds(Random random)
+        {
+            return SoldierNeeds.MinimumDepletionSeconds + (float)random.NextDouble()
+                * (SoldierNeeds.MaximumDepletionSeconds - SoldierNeeds.MinimumDepletionSeconds);
         }
     }
 }
