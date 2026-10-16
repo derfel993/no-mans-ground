@@ -74,6 +74,12 @@ namespace NoMansGround.Tests
             Assert.IsTrue(kitchen.HasFacilities);
             Assert.IsFalse(map.Data.IsWalkable(kitchen.KitchenCell));
             Assert.IsFalse(map.Data.IsWalkable(kitchen.DepotCell));
+            Assert.AreNotEqual(TerrainKind.Road, map.Data[kitchen.KitchenCell.x, kitchen.KitchenCell.y]);
+            Assert.AreNotEqual(TerrainKind.Road, map.Data[kitchen.DepotCell.x, kitchen.DepotCell.y]);
+            for (int y = 0; y < 6; y++)
+                for (int x = 62; x < 66; x++)
+                    Assert.IsTrue(map.Data.IsWalkable(new Vector2Int(x, y)),
+                        "Facilities must leave the arrival road walkable.");
         }
 
         [Test]

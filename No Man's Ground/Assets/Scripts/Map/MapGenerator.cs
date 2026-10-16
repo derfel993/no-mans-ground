@@ -50,6 +50,13 @@ namespace NoMansGround.Map
                 }
             }
 
+            int roadWidth = Mathf.Min(4, map.Width);
+            int roadLength = Mathf.Min(6, map.Height);
+            int roadStartX = (map.Width - roadWidth) / 2;
+            for (int y = 0; y < roadLength; y++)
+                for (int x = roadStartX; x < roadStartX + roadWidth; x++)
+                    map[x, y] = TerrainKind.Road;
+
             return map;
         }
     }

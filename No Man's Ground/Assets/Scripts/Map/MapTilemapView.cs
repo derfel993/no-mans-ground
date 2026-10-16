@@ -12,6 +12,7 @@ namespace NoMansGround.Map
         [SerializeField] private TileBase mudTile;
         [SerializeField] private TileBase trenchTile;
         [SerializeField] private TileBase ladderTile;
+        [SerializeField] private TileBase roadTile;
 
         public Bounds WorldBounds { get; private set; }
         public Tilemap Tilemap => GetComponent<Tilemap>();
@@ -26,6 +27,11 @@ namespace NoMansGround.Map
         public void ConfigureTrench(TileBase trench)
         {
             trenchTile = trench;
+        }
+
+        public void ConfigureRoad(TileBase road)
+        {
+            roadTile = road;
         }
 
         public void ConfigureLadder(TileBase ladder)
@@ -72,6 +78,11 @@ namespace NoMansGround.Map
                         case TerrainKind.Dirt: tiles[y * map.Width + x] = dirtTile; break;
                         case TerrainKind.Grass: tiles[y * map.Width + x] = grassTile; break;
                         case TerrainKind.Mud: tiles[y * map.Width + x] = mudTile; break;
+                        case TerrainKind.Road:
+                            if (roadTile == null)
+                                throw new InvalidOperationException("Assign a road tile before rendering roads.");
+                            tiles[y * map.Width + x] = roadTile;
+                            break;
                         case TerrainKind.Trench:
                             if (trenchTile == null)
                                 throw new InvalidOperationException("Assign a trench tile before rendering trenches.");

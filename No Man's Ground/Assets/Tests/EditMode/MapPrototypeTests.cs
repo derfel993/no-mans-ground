@@ -36,7 +36,7 @@ namespace NoMansGround.Tests
             settings.seed++;
             MapData second = MapGenerator.Generate(settings);
             int differences = 0;
-            var counts = new int[3];
+            var counts = new int[Enum.GetValues(typeof(TerrainKind)).Length];
             for (int y = 0; y < first.Height; y++)
             {
                 for (int x = 0; x < first.Width; x++)
@@ -47,8 +47,40 @@ namespace NoMansGround.Tests
                 }
             }
             Assert.Greater(differences, first.Width * first.Height / 10);
-            foreach (int count in counts)
-                Assert.Greater(count, 0);
+            foreach (TerrainKind terrain in new[] { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road })
+                Assert.Greater(counts[(int)terrain], 0);
+            Assert.AreEqual(24, counts[(int)TerrainKind.Road]);
+            Assert.Zero(counts[(int)TerrainKind.Trench]);
+        }
+
+        [TestCase(128, 128, 1916)]
+        [TestCase(129, 100, 1917)]
+        [TestCase(4, 6, 10)]
+        [TestCase(3, 8, 42)]
+        [TestCase(8, 3, 42)]
+        [TestCase(1, 1, 42)]
+        public void RoadIsCentredOnSouthEdgeWithExactFootprintAndWalkableConnections(int width, int height, int seed)
+        {
+            MapData map = MapGenerator.Generate(new MapGenerationSettings { width = width, height = height, seed = seed });
+            int roadWidth = Mathf.Min(4, width);
+            int roadLength = Mathf.Min(6, height);
+            int startX = (width - roadWidth) / 2;
+            int roadCount = 0;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    bool expectedRoad = x >= startX && x < startX + roadWidth && y < roadLength;
+                    Assert.AreEqual(expectedRoad, map[x, y] == TerrainKind.Road, $"Cell {cell}");
+                    if (!expectedRoad)
+                        continue;
+                    roadCount++;
+                    Assert.IsTrue(map.IsWalkable(cell));
+                    foreach (Vector2Int direction in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
+                        if (map.Contains(cell + direction))
+                            Assert.IsTrue(map.CanStep(cell, cell + direction));
+                }
+            Assert.AreEqual(roadWidth * roadLength, roadCount);
         }
 
         [TestCase(0, 128)]
@@ -82,17 +114,22 @@ namespace NoMansGround.Tests
             var dirt = ScriptableObject.CreateInstance<Tile>();
             var grass = ScriptableObject.CreateInstance<Tile>();
             var mud = ScriptableObject.CreateInstance<Tile>();
+            var road = ScriptableObject.CreateInstance<Tile>();
             try
             {
                 var map = new MapData(3, 2);
                 map[1, 0] = TerrainKind.Grass;
                 map[2, 1] = TerrainKind.Mud;
+                map[0, 1] = TerrainKind.Road;
                 var view = ground.GetComponent<MapTilemapView>();
                 view.Configure(dirt, grass, mud);
+                Assert.Throws<InvalidOperationException>(() => view.Render(map));
+                view.ConfigureRoad(road);
                 view.Render(map);
                 Assert.AreEqual(dirt, view.Tilemap.GetTile(Vector3Int.zero));
                 Assert.AreEqual(grass, view.Tilemap.GetTile(new Vector3Int(1, 0, 0)));
                 Assert.AreEqual(mud, view.Tilemap.GetTile(new Vector3Int(2, 1, 0)));
+                Assert.AreEqual(road, view.Tilemap.GetTile(new Vector3Int(0, 1, 0)));
                 Assert.AreEqual(new Vector3(10f, 20f, 0f), view.WorldBounds.min);
                 Assert.AreEqual(new Vector3(13f, 22f, 0f), view.WorldBounds.max);
                 view.Render(new MapData(1, 1));
@@ -104,6 +141,7 @@ namespace NoMansGround.Tests
                 Object.DestroyImmediate(dirt);
                 Object.DestroyImmediate(grass);
                 Object.DestroyImmediate(mud);
+                Object.DestroyImmediate(road);
             }
         }
 
@@ -197,7 +235,18 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(camera);
                 prototype.Regenerate();
                 Assert.AreEqual(new Vector3Int(128, 128, 1), view.Tilemap.cellBounds.size);
-                Assert.AreEqual(3, view.Tilemap.GetUsedTilesCount());
+                Assert.AreEqual(4, view.Tilemap.GetUsedTilesCount());
+                Tile road = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Road.asset");
+                Assert.IsNotNull(road);
+                Assert.IsNotNull(road.sprite);
+                Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
+                for (int y = 0; y < 6; y++)
+                    for (int x = 62; x < 66; x++)
+                        Assert.AreSame(road, view.Tilemap.GetTile(new Vector3Int(x, y, 0)));
+                prototype.Data[62, 0] = TerrainKind.Dirt;
+                prototype.Regenerate();
+                Assert.AreEqual(TerrainKind.Road, prototype.Data[62, 0]);
+                Assert.AreSame(road, view.Tilemap.GetTile(new Vector3Int(62, 0, 0)));
                 Assert.AreEqual(prototype.Data.Width * prototype.Data.Height,
                     view.Tilemap.GetTilesBlock(view.Tilemap.cellBounds).Length);
                 foreach (TileBase tile in view.Tilemap.GetTilesBlock(view.Tilemap.cellBounds))

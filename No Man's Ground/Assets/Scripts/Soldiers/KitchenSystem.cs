@@ -142,7 +142,8 @@ namespace NoMansGround.Soldiers
                     for (int side = -1; side <= 1; side += 2)
                     {
                         cell = new Vector2Int(center + distance * side, y);
-                        if (!map.Data.IsWalkable(cell) || map.Data.IsTrench(cell))
+                        if (!map.Data.IsWalkable(cell) || map.Data.IsTrench(cell)
+                            || map.Data[cell.x, cell.y] == TerrainKind.Road)
                             continue;
                         if (buildingMap != null && (cell - KitchenCell).sqrMagnitude < 4)
                             continue;

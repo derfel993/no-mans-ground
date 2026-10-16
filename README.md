@@ -13,6 +13,16 @@ La mappa iniziale misura 128 x 128 celle sul piano XY; ogni cella occupa
 1 unita Unity. Terra, erba e fango sono rappresentati da tile provvisori.
 Il terreno viene generato all'avvio, non salvato come migliaia di tile nella scena.
 
+Sul bordo inferiore viene generata una **strada larga 4 tile e lunga 6 tile**
+verso l'interno, centrata orizzontalmente (x 62-65, y 0-5 nella mappa 128 x 128).
+Il tile provvisorio grigio-terra distingue la strada dal terreno circostante.
+E percorribile come il terreno normale, senza bonus di velocita; cucina e deposito
+vengono collocati fuori dalla carreggiata. La strada viene ricreata anche alla
+rigenerazione, indipendentemente dal seed. Su mappe piu piccole di 4 x 6 viene
+ridotta alle dimensioni disponibili.
+E il futuro accesso per i rifornimenti e l'evacuazione dei feriti:
+convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
+
 ### Comandi
 
 | Input | Azione |
@@ -43,7 +53,7 @@ in modo da non mostrare spazio esterno.
 - Oggetto **Map**, componente **Map Prototype**: dimensioni (1-512 per asse),
   seed, scala del rumore e soglie del terreno. La soglia del fango deve essere
   inferiore a quella dell'erba. Una scala del rumore maggiore produce zone piu ampie.
-- Oggetto **Ground**: riferimenti ai tile del terreno, della trincea e della scala.
+- Oggetto **Ground**: riferimenti ai tile del terreno, della strada, della trincea e della scala.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
