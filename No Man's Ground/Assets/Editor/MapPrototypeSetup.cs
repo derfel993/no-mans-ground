@@ -107,6 +107,7 @@ namespace NoMansGround.Editor
             trenches.Configure(prototype, view, roster, camera);
             orders.ConfigureTrenches(trenches);
             view.ConfigureTrench(CreateTile("Trench", new Color(0.19f, 0.13f, 0.08f), CreateSprite()));
+            view.ConfigureLadder(CreateTile("Ladder", Color.white, CreateLadderSprite()));
             var panel = UnityEngine.Object.FindAnyObjectByType<SoldierDetailsPanel>();
             if (panel == null)
                 panel = new GameObject("Soldier Selection", typeof(SoldierDetailsPanel)).GetComponent<SoldierDetailsPanel>();
@@ -130,6 +131,40 @@ namespace NoMansGround.Editor
                         if (distance <= 30)
                             pixels[y * 16 + x] = distance >= 19
                                 ? new Color32(40, 48, 35, 255) : new Color32(155, 168, 116, 255);
+                    }
+                }
+                texture.SetPixels32(pixels);
+                texture.Apply();
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(texture);
+                AssetDatabase.ImportAsset(path);
+                var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spriteImportMode = SpriteImportMode.Single;
+                importer.spritePixelsPerUnit = 16f;
+                importer.filterMode = FilterMode.Point;
+                importer.textureCompression = TextureImporterCompression.Uncompressed;
+                importer.mipmapEnabled = false;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        private static Sprite CreateLadderSprite()
+        {
+            string path = ArtFolder + "/Ladder.png";
+            if (!File.Exists(path))
+            {
+                var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+                var pixels = new Color32[256];
+                for (int y = 0; y < 16; y++)
+                {
+                    for (int x = 0; x < 16; x++)
+                    {
+                        bool rail = (x == 4 || x == 11) && y >= 2 && y <= 13;
+                        bool rung = x >= 4 && x <= 11 && (y == 3 || y == 6 || y == 9 || y == 12);
+                        pixels[y * 16 + x] = rail || rung
+                            ? new Color32(211, 171, 96, 255) : new Color32(44, 30, 18, 255);
                     }
                 }
                 texture.SetPixels32(pixels);

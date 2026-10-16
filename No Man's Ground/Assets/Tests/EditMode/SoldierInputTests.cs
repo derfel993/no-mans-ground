@@ -194,6 +194,26 @@ namespace NoMansGround.Tests
                 Press(keyboard.escapeKey);
                 UpdateTrenches(trenches);
                 Assert.AreEqual(DiggingMode.None, trenches.Mode);
+                Release(keyboard.escapeKey);
+                var ladderCell = new Vector2Int(68, 10);
+                view.CompleteTrench(map.Data, ladderCell);
+                Press(keyboard.lKey);
+                UpdateTrenches(trenches);
+                Release(keyboard.lKey);
+                Assert.AreEqual(DiggingMode.Ladder, trenches.Mode);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(ladderCell.x, ladderCell.y, 0))));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(5, trenches.Jobs.Count);
+                Assert.AreEqual(TrenchJobKind.Ladder, trenches.Jobs[4].Kind);
+                Assert.AreEqual(ladderCell, trenches.Jobs[4].Cell);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(5, trenches.Jobs.Count, "A release must not duplicate the ladder order.");
+                Press(keyboard.lKey);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
             }
             finally
             {

@@ -25,6 +25,7 @@ namespace NoMansGround.Soldiers
         private Text diggingStatus;
         private Text diggingButton;
         private Text cancelButton;
+        private Text ladderButton;
         private SoldierView subscribedMovement;
         private GameObject details;
         private Meter[] needs;
@@ -191,7 +192,9 @@ namespace NoMansGround.Soldiers
 
             Vector2Int target = Selected.Destination;
             activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
-                : Selected.HasWorkAssignment ? $"Scavo: {Selected.DiggingProgress:P0}" : "Disponibile")
+                : Selected.HasWorkAssignment
+                    ? $"{(Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
+                    : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             SoldierNeeds state = Selected.Data.Needs;
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
@@ -235,14 +238,17 @@ namespace NoMansGround.Soldiers
             foreach (TrenchJob job in trenchOrders.Jobs)
             {
                 if (job.Worker != null) active++;
-                else if (job.Status == "Accesso bloccato o occupato") blocked++;
+                if (job.Status == "Accesso bloccato o occupato"
+                    || job.Status == "Attesa: cella o percorso occupato") blocked++;
             }
-            diggingStatus.text = $"Scavi: {trenchOrders.Jobs.Count} | Attivi: {active}\nBloccati: {blocked}\n"
+            diggingStatus.text = $"Lavori: {trenchOrders.Jobs.Count} | Attivi: {active}\nBloccati: {blocked}\n"
                 + trenchOrders.Status;
             diggingButton.text = trenchOrders.Mode == DiggingMode.Dig ? "SCAVA [T] - attivo" : "Scava [T]";
             cancelButton.text = trenchOrders.Mode == DiggingMode.Cancel ? "ANNULLA [X] - attivo" : "Annulla scavi [X]";
+            ladderButton.text = trenchOrders.Mode == DiggingMode.Ladder ? "SCALA [L] - attivo" : "Installa scala [L]";
             diggingButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             cancelButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            ladderButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
         }
 
         private void BuildInterface()
@@ -289,6 +295,7 @@ namespace NoMansGround.Soldiers
             {
                 diggingButton = CreateButton(content, "Scava [T]", DiggingMode.Dig);
                 cancelButton = CreateButton(content, "Annulla scavi [X]", DiggingMode.Cancel);
+                ladderButton = CreateButton(content, "Installa scala [L]", DiggingMode.Ladder);
                 diggingStatus = CreateText(content, "", 10, 66f);
                 RefreshDigging();
             }
@@ -308,7 +315,7 @@ namespace NoMansGround.Soldiers
             skills = new Meter[5];
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = CreateMeter(detailRect, 34f);
-            CreateText(detailRect, "Stati statici. T: scava, X: annulla.\nEsc/destro: esci dalla modalita.", 9, 28f);
+            CreateText(detailRect, "T: scava, L: scala, X: annulla.\nEsc/destro: esci dalla modalita.", 9, 28f);
             Refresh();
         }
 

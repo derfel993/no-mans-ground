@@ -24,6 +24,7 @@ Il terreno viene generato all'avvio, non salvato come migliaia di tile nella sce
 | Clic sinistro sul terreno | Deseleziona |
 | Clic destro sul terreno | Ordina di raggiungere la cella al soldato disponibile piu vicino |
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
+| L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
 | X / pulsante Annulla scavi | Attiva/disattiva la cancellazione lungo una linea |
 | Esc / destro in modalita Scava o Annulla | Esce dalla modalita, senza impartire movimento |
@@ -41,7 +42,7 @@ in modo da non mostrare spazio esterno.
 - Oggetto **Map**, componente **Map Prototype**: dimensioni (1-512 per asse),
   seed, scala del rumore e soglie del terreno. La soglia del fango deve essere
   inferiore a quella dell'erba. Una scala del rumore maggiore produce zone piu ampie.
-- Oggetto **Ground**: riferimenti ai tile del terreno e della trincea.
+- Oggetto **Ground**: riferimenti ai tile del terreno, della trincea e della scala.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
@@ -234,7 +235,8 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   Duplicati, celle gia scavate, bloccate o fuori mappa non generano altri lavori.
   Il rilascio fuori mappa o sopra la UI scarta il trascinamento.
 - **X** o **Annulla scavi** attiva una modalita analoga, con anteprima rossa,
-  che rimuove i lavori lungo la linea. Le trincee completate non vengono rimosse.
+  che rimuove i lavori di scavo o installazione scala lungo la linea.
+  Le trincee e le scale completate non vengono rimosse.
 - **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
   In queste modalita il sinistro non cambia il soldato selezionato.
 - Annullare perde il progresso di quella cella e libera l'assegnazione senza XP.
@@ -256,10 +258,17 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 - Quando un soldato si libera, prende altro lavoro automaticamente. I lavori
   pendenti vengono rivalutati ogni 0,5 secondi; il pannello distingue scavi attivi
   e accessi bloccati/occupati. La scheda del soldato mostra la percentuale di scavo.
+- Una cella con uno scavo pendente non viene scelta come posizione di lavoro
+  per un altro ordine. Se la cella da scavare e occupata da un soldato o serve
+  ancora a un percorso gia assegnato (incluse le celle laterali delle diagonali),
+  il completamento attende e viene indicato come bloccato: nessun soldato cade
+  nella nuova trincea o attraversa una parete. Se un soldato resta fermo sulla
+  cella designata, impartire un ordine per liberarla.
 - Soldati disabilitati rilasciano il lavoro, conservandone il progresso per un
   sostituto. Disabilitare il sistema scavi o rigenerare la mappa annulla la coda,
   rimuove gli indicatori e libera le assegnazioni.
-- Il terreno completato diventa un tile marrone scuro **Trench**, percorribile.
+- Il terreno completato diventa un tile marrone scuro **Trench**, percorribile
+  all'interno ma accessibile dal terreno solo attraverso una **scala**.
   Non conferisce ancora copertura o bonus di combattimento; nessun attrezzo,
   materiale o consumo dei bisogni e richiesto.
 - Gli scavi, come le altre modifiche runtime, durano solo nella sessione Play.
@@ -270,6 +279,44 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 completato. I test verificano durata e XP, accessi adiacenti, prenotazioni,
 coda automatica, cancellazione, ritentativi, input T/X e trascinamento,
 pulsanti runtime, rigenerazione e compatibilita del pannello compatto.
+
+### Scale e accesso alle trincee
+
+Premere **L** o **Installa scala**, quindi cliccare su una cella di trincea
+gia completata. Il clic aggiunge un lavoro alla stessa coda degli scavi, non
+crea subito una scala. **Esc/destro** esce dalla modalita e **X** annulla anche
+le installazioni non terminate. Celle di terreno normale, bloccate, con una
+scala gia presente o con un lavoro gia in coda vengono rifiutate con un messaggio.
+
+Un soldato libero raggiunge una delle quattro celle adiacenti e installa
+la scala senza dover entrare prima nella trincea. Puo lavorare dal terreno
+o da un tratto di trincea gia raggiungibile. Non vengono richiesti materiali.
+Durata: `4 / (1 + Forza / 100)` secondi, escluso il viaggio;
+premio al completamento: **25 XP Forza**, come per lo scavo.
+**Base Ladder Seconds** sul componente **Trench Work Orders** modifica il tempo base.
+Il pannello del soldato mostra **Scala: percentuale**; l'indicatore azzurro
+diventa un tile con pioli visibili solo a installazione conclusa.
+
+Regole applicate sia agli ordini di movimento sia ai percorsi dei lavori:
+
+- L'ingresso e l'uscita tra terreno e trincea sono permessi soltanto attraverso
+  una cella di trincea con scala, con un passo **ortogonale**.
+- Una scala rende raggiungibile tutto il tratto di trincea collegato, non solo
+  la cella che la contiene; non abilita accessi dalle altre celle del bordo.
+- All'interno resta possibile camminare tra celle di trincea senza scala.
+  Le diagonali sono consentite solo sullo stesso livello, con entrambe le
+  celle laterali percorribili e sullo stesso livello: nessun taglio delle pareti.
+  Due tratti che si toccano solo su un angolo non sono collegati.
+- Una trincea senza accessi raggiungibili non e una scorciatoia per attraversare
+  la mappa. Gli ordini irraggiungibili vengono rifiutati o restano in attesa.
+- La rigenerazione elimina anche le scale e gli ordini di installazione.
+
+API: `TrenchWorkOrders.DesignateLadder(cell)` accoda l'installazione;
+`MapTilemapView.CompleteLadder(map, cell)` completa dati e vista;
+`MapData.AddLadder(cell)` modifica soltanto i dati, con validazione esplicita.
+`HasLadder(cell)` legge lo stato. `IsWalkable(cell)` indica che la cella puo
+ospitare un soldato, non che sia raggiungibile dal terreno:
+le transizioni tra livelli sono validate da `CanStep(from, to)`.
 
 ## Step successivi (non implementati)
 

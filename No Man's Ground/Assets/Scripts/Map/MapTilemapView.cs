@@ -11,6 +11,7 @@ namespace NoMansGround.Map
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
         [SerializeField] private TileBase trenchTile;
+        [SerializeField] private TileBase ladderTile;
 
         public Bounds WorldBounds { get; private set; }
         public Tilemap Tilemap => GetComponent<Tilemap>();
@@ -25,6 +26,21 @@ namespace NoMansGround.Map
         public void ConfigureTrench(TileBase trench)
         {
             trenchTile = trench;
+        }
+
+        public void ConfigureLadder(TileBase ladder)
+        {
+            ladderTile = ladder;
+        }
+
+        public void CompleteLadder(MapData map, Vector2Int cell)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (ladderTile == null)
+                throw new InvalidOperationException("Assign a ladder tile before installing ladders.");
+            map.AddLadder(cell);
+            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), ladderTile);
         }
 
         public void CompleteTrench(MapData map, Vector2Int cell)
@@ -59,7 +75,9 @@ namespace NoMansGround.Map
                         case TerrainKind.Trench:
                             if (trenchTile == null)
                                 throw new InvalidOperationException("Assign a trench tile before rendering trenches.");
-                            tiles[y * map.Width + x] = trenchTile;
+                            if (map.HasLadder(new Vector2Int(x, y)) && ladderTile == null)
+                                throw new InvalidOperationException("Assign a ladder tile before rendering ladders.");
+                            tiles[y * map.Width + x] = map.HasLadder(new Vector2Int(x, y)) ? ladderTile : trenchTile;
                             break;
                         default: throw new ArgumentOutOfRangeException(nameof(map), "Unknown terrain kind.");
                     }

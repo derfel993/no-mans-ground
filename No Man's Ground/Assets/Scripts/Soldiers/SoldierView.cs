@@ -16,6 +16,7 @@ namespace NoMansGround.Soldiers
         public bool HasWorkAssignment { get; private set; }
         public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
         public float DiggingProgress { get; private set; }
+        public TrenchJobKind WorkKind { get; private set; }
 
         public SoldierData Data { get; private set; }
         public Vector2Int Cell { get; private set; }
@@ -73,10 +74,11 @@ namespace NoMansGround.Soldiers
             MovementChanged?.Invoke();
         }
 
-        internal void SetWorkAssignment(bool assigned, float progress = 0f)
+        internal void SetWorkAssignment(bool assigned, float progress = 0f, TrenchJobKind kind = TrenchJobKind.Dig)
         {
             HasWorkAssignment = assigned;
             DiggingProgress = progress;
+            WorkKind = kind;
             MovementChanged?.Invoke();
         }
 

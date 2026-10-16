@@ -429,6 +429,7 @@ MonoBehaviour:
   mapCamera: {fileID: 737981058}
   baseDigSeconds: 6
   strengthExperience: 25
+  baseLadderSeconds: 4
 --- !u!1 &1241894001
 GameObject:
   m_ObjectHideFlags: 0
@@ -464,6 +465,7 @@ MonoBehaviour:
   grassTile: {fileID: 11400000, guid: 4c23f7b30725a09478db8b7c52ac2127, type: 2}
   mudTile: {fileID: 11400000, guid: e2264e976335ab0439326c125472c3ad, type: 2}
   trenchTile: {fileID: 11400000, guid: f5ac7af79256eb648a3d3e430a60ffd7, type: 2}
+  ladderTile: {fileID: 11400000, guid: 92c288c3ccc5e7c449f3b5d003d9e797, type: 2}
 --- !u!483693784 &1241894003
 TilemapRenderer:
   serializedVersion: 2

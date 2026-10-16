@@ -226,5 +226,106 @@ namespace NoMansGround.Tests
             LogAssert.Expect(LogType.Warning, "Destinazione gia occupata o prenotata.");
             Assert.IsFalse(movement.IssueMove(reserved));
         }
+
+        [Test]
+        public void LadderWorkUsesAdjacentWorkerExactDurationExperienceAndPersistentTile()
+        {
+            SoldierView worker = roster.Soldiers[0];
+            Vector2Int cell = worker.Cell + Vector2Int.down;
+            view.CompleteTrench(map.Data, cell);
+            Assert.IsFalse(map.Data.CanStep(worker.Cell, cell));
+            Assert.IsTrue(trenches.DesignateLadder(cell));
+            Assert.IsFalse(trenches.DesignateLadder(cell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.AreEqual(TrenchJobKind.Ladder, job.Kind);
+            Assert.AreSame(worker, job.Worker);
+            Assert.IsFalse(worker.IsMoving);
+            Assert.IsTrue(worker.HasWorkAssignment);
+            Assert.AreEqual(TrenchJobKind.Ladder, worker.WorkKind);
+            var strength = worker.Data.GetSkill(SoldierSkill.Strength);
+            int xp = strength.Experience;
+            float duration = 4f / (1f + strength.Value / 100f);
+            trenches.Tick(duration / 2f);
+            Assert.AreEqual(0.5f, job.Progress, 0.0001f);
+            Assert.IsFalse(map.Data.HasLadder(cell));
+            trenches.Tick(duration / 2f + 0.001f);
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(worker.IsAvailable);
+            Assert.AreEqual(xp + 25, strength.Experience);
+            Assert.IsTrue(map.Data.HasLadder(cell));
+            Assert.IsTrue(map.Data.CanStep(worker.Cell, cell));
+            Assert.AreEqual("Ladder", view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            view.Render(map.Data);
+            Assert.AreEqual("Ladder", view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            Assert.IsFalse(trenches.DesignateLadder(cell));
+            Assert.IsTrue(movement.IssueMove(cell));
+            worker.AdvanceMovement(100f);
+            Assert.AreEqual(cell, worker.Cell);
+        }
+
+        [Test]
+        public void LadderCancellationPreservesTrenchAndDoesNotOpenAccessOrAwardExperience()
+        {
+            var worker = roster.Soldiers[0];
+            var cell = worker.Cell + Vector2Int.down;
+            Assert.IsFalse(trenches.DesignateLadder(cell));
+            Assert.IsFalse(trenches.DesignateLadder(new Vector2Int(-1, 0)));
+            view.CompleteTrench(map.Data, cell);
+            Assert.IsTrue(trenches.DesignateLadder(cell));
+            trenches.Tick(0.01f);
+            int xp = worker.Data.GetSkill(SoldierSkill.Strength).Experience;
+            trenches.Tick(1f);
+            Assert.IsTrue(trenches.Cancel(cell));
+            Assert.IsTrue(worker.IsAvailable);
+            Assert.IsTrue(map.Data.IsTrench(cell));
+            Assert.IsFalse(map.Data.HasLadder(cell));
+            Assert.IsFalse(map.Data.CanStep(worker.Cell, cell));
+            Assert.AreEqual(xp, worker.Data.GetSkill(SoldierSkill.Strength).Experience);
+        }
+
+        [Test]
+        public void LadderTravelDoesNotCountAsInstallationAndUnreachableWorkWaits()
+        {
+            var cell = new Vector2Int(50, 10);
+            view.CompleteTrench(map.Data, cell);
+            foreach (Vector2Int delta in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
+                map.Data.SetWalkable(cell + delta, false);
+            trenches.DesignateLadder(cell);
+            trenches.Tick(1f);
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.AreEqual("Accesso bloccato o occupato", trenches.Jobs[0].Status);
+            map.Data.SetWalkable(cell + Vector2Int.down, true);
+            trenches.Tick(1f);
+            var worker = trenches.Jobs[0].Worker;
+            Assert.IsNotNull(worker);
+            Assert.IsTrue(worker.IsMoving);
+            trenches.Tick(10f);
+            Assert.Zero(trenches.Jobs[0].Progress);
+            worker.AdvanceMovement(100f);
+            trenches.Tick(10f);
+            Assert.IsTrue(map.Data.HasLadder(cell));
+        }
+
+        [Test]
+        public void ExcavationWaitsForExistingRouteInsteadOfRemovingEdgesUnderMovingSoldier()
+        {
+            var cell = roster.Soldiers[0].Cell + Vector2Int.down;
+            Assert.IsTrue(trenches.Designate(cell));
+            trenches.Tick(0.01f);
+            var worker = trenches.Jobs[0].Worker;
+            var passer = roster.Soldiers[1];
+            var route = new List<Vector2Int>(GridPathfinder.FindNearest(map.Data, new[] { passer.Cell }, cell).Cells);
+            route.Add(cell + Vector2Int.left);
+            passer.BeginMove(view, route);
+            trenches.Tick(10f);
+            Assert.AreEqual(1f, trenches.Jobs[0].Progress);
+            Assert.AreEqual("Attesa: cella o percorso occupato", trenches.Jobs[0].Status);
+            Assert.IsFalse(map.Data.IsTrench(cell));
+            passer.AdvanceMovement(100f);
+            trenches.Tick(0.1f);
+            Assert.IsTrue(map.Data.IsTrench(cell));
+            Assert.IsTrue(worker.IsAvailable);
+        }
     }
 }

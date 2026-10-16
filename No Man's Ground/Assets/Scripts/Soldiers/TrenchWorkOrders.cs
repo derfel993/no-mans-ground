@@ -7,17 +7,23 @@ using UnityEngine.InputSystem;
 
 namespace NoMansGround.Soldiers
 {
-    public enum DiggingMode { None, Dig, Cancel }
+    public enum DiggingMode { None, Dig, Cancel, Ladder }
+    public enum TrenchJobKind { Dig, Ladder }
 
     public sealed class TrenchJob
     {
         public Vector2Int Cell { get; }
+        public TrenchJobKind Kind { get; }
         public SoldierView Worker { get; internal set; }
         public float Progress { get; internal set; }
         public string Status { get; internal set; } = "In attesa";
         internal SpriteRenderer Marker;
 
-        internal TrenchJob(Vector2Int cell) { Cell = cell; }
+        internal TrenchJob(Vector2Int cell, TrenchJobKind kind = TrenchJobKind.Dig)
+        {
+            Cell = cell;
+            Kind = kind;
+        }
     }
 
     [DefaultExecutionOrder(-100)]
@@ -32,6 +38,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private Camera mapCamera;
         [SerializeField, Min(0.1f)] private float baseDigSeconds = 6f;
         [SerializeField, Min(0)] private int strengthExperience = 25;
+        [SerializeField, Min(0.1f)] private float baseLadderSeconds = 4f;
 
         private readonly List<TrenchJob> jobs = new List<TrenchJob>();
         private IReadOnlyList<TrenchJob> readOnlyJobs;
@@ -45,7 +52,7 @@ namespace NoMansGround.Soldiers
         public DiggingMode Mode { get; private set; }
         public bool BlocksWorldCommands => isActiveAndEnabled
             && (Mode != DiggingMode.None || consumedFrame == Time.frameCount);
-        public string Status { get; private set; } = "T: scava | X: annulla | Esc: esci";
+        public string Status { get; private set; } = "T: scava | L: scala\nX: annulla | Esc: esci";
         public event Action Changed;
 
         public void Configure(MapPrototype prototype, MapTilemapView view, SoldierRoster soldiers, Camera camera)
@@ -59,7 +66,8 @@ namespace NoMansGround.Soldiers
         private void Awake()
         {
             if (map == null || mapView == null || roster == null || mapCamera == null
-                || !float.IsFinite(baseDigSeconds) || baseDigSeconds <= 0f || strengthExperience < 0)
+                || !float.IsFinite(baseDigSeconds) || baseDigSeconds <= 0f || strengthExperience < 0
+                || !float.IsFinite(baseLadderSeconds) || baseLadderSeconds <= 0f)
             {
                 Debug.LogError("TrenchWorkOrders requires map, view, roster, camera and valid work settings.", this);
                 enabled = false;
@@ -95,8 +103,9 @@ namespace NoMansGround.Soldiers
             dragging = false;
             ClearPreview();
             Notify(mode == DiggingMode.Dig ? "SCAVA: trascina una linea.\nEsc o destro: esci."
+                : mode == DiggingMode.Ladder ? "SCALA: clic su una trincea.\nEsc o destro: esci."
                 : mode == DiggingMode.Cancel ? "ANNULLA: trascina sugli scavi.\nEsc o destro: esci."
-                : "T: scava | X: annulla | Esc: esci");
+                : "T: scava | L: scala\nX: annulla | Esc: esci");
         }
 
         private void Update()
@@ -113,6 +122,8 @@ namespace NoMansGround.Soldiers
                     SetMode(Mode == DiggingMode.Dig ? DiggingMode.None : DiggingMode.Dig);
                 if (keyboard.xKey.wasPressedThisFrame)
                     SetMode(Mode == DiggingMode.Cancel ? DiggingMode.None : DiggingMode.Cancel);
+                if (keyboard.lKey.wasPressedThisFrame)
+                    SetMode(Mode == DiggingMode.Ladder ? DiggingMode.None : DiggingMode.Ladder);
                 if (keyboard.escapeKey.wasPressedThisFrame)
                 {
                     if (Mode != DiggingMode.None)
@@ -132,6 +143,14 @@ namespace NoMansGround.Soldiers
                 return;
             }
             bool valid = TryPointerCell(mouse.position.ReadValue(), out Vector2Int cell);
+            if (Mode == DiggingMode.Ladder)
+            {
+                if (valid) ShowPreview(new[] { cell });
+                else ClearPreview();
+                if (valid && mouse.leftButton.wasPressedThisFrame)
+                    DesignateLadder(cell);
+                return;
+            }
             if (mouse.leftButton.wasPressedThisFrame && valid)
             {
                 dragging = true;
@@ -217,6 +236,22 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
+        public bool DesignateLadder(Vector2Int cell)
+        {
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.IsTrench(cell)
+                || !map.Data.IsWalkable(cell) || map.Data.HasLadder(cell) || jobs.Exists(job => job.Cell == cell))
+            {
+                Notify("Scala non valida: serve una trincea\nsenza scala o lavoro gia presente.");
+                return false;
+            }
+            var job = new TrenchJob(cell, TrenchJobKind.Ladder);
+            job.Marker = CreateMarker(cell, new Color(0.3f, 0.8f, 1f, 0.65f), "Ladder designation");
+            jobs.Add(job);
+            retryTimer = 0f;
+            Notify("Installazione scala in coda.");
+            return true;
+        }
+
         public void Tick(float deltaTime)
         {
             if (!float.IsFinite(deltaTime) || deltaTime < 0f)
@@ -242,16 +277,27 @@ namespace NoMansGround.Soldiers
                     continue;
                 if (Mathf.Abs(worker.Cell.x - job.Cell.x) + Mathf.Abs(worker.Cell.y - job.Cell.y) != 1)
                     throw new InvalidOperationException("A trench worker must stand next to the designated cell.");
-                job.Status = "Scavo";
+                job.Status = job.Kind == TrenchJobKind.Dig ? "Scavo" : "Installazione scala";
                 float multiplier = 1f + worker.Data.GetSkill(SoldierSkill.Strength).Value / 100f;
-                job.Progress = Mathf.Min(1f, job.Progress + deltaTime * multiplier / baseDigSeconds);
-                worker.SetWorkAssignment(true, job.Progress);
+                float duration = job.Kind == TrenchJobKind.Dig ? baseDigSeconds : baseLadderSeconds;
+                job.Progress = Mathf.Min(1f, job.Progress + deltaTime * multiplier / duration);
+                worker.SetWorkAssignment(true, job.Progress, job.Kind);
                 job.Marker.color = Color.Lerp(new Color(1f, 0.75f, 0.15f, 0.65f),
                     new Color(0.3f, 0.9f, 0.4f, 0.85f), job.Progress);
                 changed = true;
                 if (job.Progress < 1f)
                     continue;
-                mapView.CompleteTrench(map.Data, job.Cell);
+                if (job.Kind == TrenchJobKind.Dig)
+                {
+                    if (!CanExcavate(job.Cell))
+                    {
+                        job.Status = "Attesa: cella o percorso occupato";
+                        continue;
+                    }
+                    mapView.CompleteTrench(map.Data, job.Cell);
+                }
+                else
+                    mapView.CompleteLadder(map.Data, job.Cell);
                 worker.Data.GetSkill(SoldierSkill.Strength).AddExperience(strengthExperience);
                 Release(job);
                 jobs.RemoveAt(i);
@@ -289,7 +335,8 @@ namespace NoMansGround.Soldiers
             foreach (Vector2Int offset in Neighbours)
             {
                 Vector2Int workCell = job.Cell + offset;
-                if (!map.Data.IsWalkable(workCell))
+                if (!map.Data.IsWalkable(workCell)
+                    || jobs.Exists(other => other.Kind == TrenchJobKind.Dig && other.Cell == workCell))
                     continue;
                 GridPath candidate = GridPathfinder.FindNearest(map.Data, starts, workCell);
                 if (candidate == null || (best != null && candidate.Cost >= best.Cost))
@@ -309,10 +356,35 @@ namespace NoMansGround.Soldiers
                 return changed;
             }
             job.Worker = available[best.StartIndex];
-            job.Worker.SetWorkAssignment(true, job.Progress);
+            job.Worker.SetWorkAssignment(true, job.Progress, job.Kind);
             if (best.Cells.Count > 1)
                 job.Worker.BeginMove(mapView, best.Cells);
-            job.Status = job.Worker.IsMoving ? "In arrivo" : "Scavo";
+            job.Status = job.Worker.IsMoving ? "In arrivo"
+                : job.Kind == TrenchJobKind.Dig ? "Scavo" : "Installazione scala";
+            return true;
+        }
+
+        private bool CanExcavate(Vector2Int cell)
+        {
+            // Completing a trench removes ground-level edges: keep existing routes valid until they clear it.
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                if (soldier == null)
+                    continue;
+                if (soldier.Cell == cell || soldier.Destination == cell)
+                    return false;
+                if (!soldier.IsMoving)
+                    continue;
+                Vector2Int from = soldier.Cell;
+                for (int i = soldier.NextWaypoint; i < soldier.CurrentPath.Count; i++)
+                {
+                    Vector2Int to = soldier.CurrentPath[i];
+                    if (to == cell || (from.x != to.x && from.y != to.y
+                        && (new Vector2Int(from.x, to.y) == cell || new Vector2Int(to.x, from.y) == cell)))
+                        return false;
+                    from = to;
+                }
+            }
             return true;
         }
 
@@ -361,7 +433,8 @@ namespace NoMansGround.Soldiers
             for (int i = 0; i < cells.Count; i++)
             {
                 Color color = Mode == DiggingMode.Dig
-                    ? new Color(0.3f, 0.8f, 1f, 0.6f) : new Color(1f, 0.2f, 0.2f, 0.6f);
+                    || Mode == DiggingMode.Ladder ? new Color(0.3f, 0.8f, 1f, 0.6f)
+                    : new Color(1f, 0.2f, 0.2f, 0.6f);
                 if (i == preview.Count)
                     preview.Add(CreateMarker(cells[i], color, "Dig preview"));
                 SpriteRenderer marker = preview[i];

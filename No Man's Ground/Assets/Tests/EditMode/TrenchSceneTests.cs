@@ -24,7 +24,7 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(2, buttons.Length);
+            Assert.AreEqual(3, buttons.Length);
             buttons[0].onClick.Invoke();
             Assert.AreEqual(DiggingMode.Dig, trenches.Mode);
             buttons[1].onClick.Invoke();
@@ -52,6 +52,31 @@ namespace NoMansGround.Tests
             trenches.Tick(10f);
             Assert.AreEqual(TerrainKind.Trench, map.Data[target.x, target.y]);
             Assert.Zero(trenches.Jobs.Count);
+            buttons[2].onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Ladder, trenches.Mode);
+            Assert.IsTrue(trenches.DesignateLadder(target));
+            yield return null;
+            Assert.AreSame(worker, trenches.Jobs[0].Worker);
+            Assert.IsFalse(map.Data.HasLadder(target));
+            trenches.Tick(1f);
+            AssertTextContains(canvas, "Scala:");
+            trenches.Tick(10f);
+            Assert.IsTrue(map.Data.HasLadder(target));
+            Assert.IsTrue(worker.IsAvailable);
+            var view = map.GetComponentInChildren<MapTilemapView>();
+            Vector2Int inside = target + Vector2Int.left;
+            view.CompleteTrench(map.Data, inside);
+            var orders = roster.GetComponent<SoldierMovementOrders>();
+            Assert.IsTrue(orders.IssueMove(inside));
+            Assert.IsTrue(worker.IsMoving);
+            CollectionAssert.Contains(worker.CurrentPath, target);
+            worker.AdvanceMovement(100f);
+            Assert.AreEqual(inside, worker.Cell);
+            GridPath exit = GridPathfinder.FindNearest(map.Data, new[] { inside }, target + Vector2Int.up);
+            CollectionAssert.Contains(exit.Cells, target);
+            worker.BeginMove(view, exit.Cells);
+            worker.AdvanceMovement(100f);
+            Assert.AreEqual(target + Vector2Int.up, worker.Cell);
             trenches.Designate(new Vector2Int(50, 10));
             trenches.Tick(0.01f);
             trenches.SetMode(DiggingMode.Dig);
@@ -59,6 +84,7 @@ namespace NoMansGround.Tests
             Assert.Zero(trenches.Jobs.Count);
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
             Assert.AreNotEqual(TerrainKind.Trench, map.Data[target.x, target.y]);
+            Assert.IsFalse(map.Data.HasLadder(target));
             yield return null;
             foreach (SpriteRenderer sprite in roster.GetComponentsInChildren<SpriteRenderer>())
                 Assert.AreNotEqual("Dig designation", sprite.name, "Work markers must be removed on regeneration.");
