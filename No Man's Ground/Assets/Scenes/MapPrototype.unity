@@ -150,6 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: NoMansGround.Soldiers::NoMansGround.Soldiers.SoldierDetailsPanel
   roster: {fileID: 911303771}
   mapCamera: {fileID: 737981058}
+  movementOrders: {fileID: 911303773}
 --- !u!4 &51121937
 Transform:
   m_ObjectHideFlags: 0
@@ -351,6 +352,7 @@ GameObject:
   m_Component:
   - component: {fileID: 911303772}
   - component: {fileID: 911303771}
+  - component: {fileID: 911303773}
   m_Layer: 0
   m_Name: Soldiers
   m_TagString: Untagged
@@ -390,6 +392,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &911303773
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 911303770}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a865d374a1c40a59c7fb67867186b67, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: NoMansGround.Soldiers::NoMansGround.Soldiers.SoldierMovementOrders
+  map: {fileID: 557374255}
+  mapView: {fileID: 1241894002}
+  roster: {fileID: 911303771}
+  mapCamera: {fileID: 737981058}
 --- !u!1 &1241894001
 GameObject:
   m_ObjectHideFlags: 0

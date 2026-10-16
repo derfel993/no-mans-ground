@@ -47,12 +47,31 @@ namespace NoMansGround.Map
             tilemap.ClearAllTiles();
             tilemap.SetTilesBlock(new BoundsInt(0, 0, 0, map.Width, map.Height, 1), tiles);
             tilemap.CompressBounds();
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                    if (!map.IsWalkable(new Vector2Int(x, y)))
+                        RefreshWalkability(map, new Vector2Int(x, y));
 
             var bounds = new Bounds(tilemap.CellToWorld(Vector3Int.zero), Vector3.zero);
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(map.Width, 0, 0)));
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(0, map.Height, 0)));
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(map.Width, map.Height, 0)));
             WorldBounds = bounds;
+        }
+
+        public void RefreshWalkability(MapData map, Vector2Int cell)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (!map.Contains(cell))
+                throw new ArgumentOutOfRangeException(nameof(cell));
+            var position = new Vector3Int(cell.x, cell.y, 0);
+            Tilemap.RefreshTile(position);
+            if (!map.IsWalkable(cell))
+            {
+                Tilemap.SetTileFlags(position, TileFlags.None);
+                Tilemap.SetColor(position, new Color(0.20f, 0.13f, 0.13f));
+            }
         }
     }
 }

@@ -22,6 +22,8 @@ Il terreno viene generato all'avvio, non salvato come migliaia di tile nella sce
 | Rotella | Zoom sul punto sotto il cursore |
 | Clic sinistro su un soldato | Seleziona e mostra la scheda |
 | Clic sinistro sul terreno | Deseleziona |
+| Clic destro sul terreno | Ordina di raggiungere la cella al soldato disponibile piu vicino |
+| Maiusc + clic destro sul terreno | Aggiunge/rimuove un ostacolo di debug, a soldati fermi |
 | Rotella sul pannello dei soldati | Nessuno zoom sulla mappa |
 
 In Editor, dare il focus alla finestra Game per usare i comandi.
@@ -119,7 +121,8 @@ Il coraggio e una skill distinta dalla paura attuale.
 
 Le future attivita assegneranno esperienza con
 `soldier.GetSkill(SoldierSkill.Aim).AddExperience(amount)`.
-Per ora nessuna skill cresce da sola e non modifica movimento o combattimento.
+Per ora nessuna skill cresce da sola. Velocita influenza gia lo spostamento;
+le altre skill non modificano ancora attivita o combattimento.
 Per provare la progressione in Play, selezionare un soldato e usare
 **Debug/Add 100 Aim XP to Selected Soldier** nel menu contestuale del componente
 **Soldier Details Panel**, sull'oggetto **Soldier Selection**.
@@ -132,7 +135,7 @@ Il pannello aggiorna immediatamente XP e livello.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
   bordo inferiore, la zona d'arrivo dei soldati. La camera iniziale inquadra
   questa zona rispettando i limiti della mappa. Tutti i terreni
-  attuali sono utilizzabili. Non vengono ancora valutati percorsi o coperture.
+  attuali sono utilizzabili, salvo ostacoli di debug. Non vengono valutate coperture.
 - Se la mappa ha meno celle dei soldati richiesti, il numero viene ridotto alla
   capienza e viene emesso un avviso in Console.
 - **Regenerate Map** ricrea anche i soldati: anagrafica e stato iniziali sono
@@ -155,11 +158,62 @@ all'avvio, riutilizzando un EventSystem esistente se presente.
 I test `SoldierDataTests` verificano generazione, limiti degli stati, soglie XP,
 passaggi multipli di livello e livello massimo. `SoldierSceneTests` entra in Play
 per verificare spawn, selezione, aggiornamento UI e rigenerazione anche su mappa minima.
-`SoldierInputTests` verifica selezione e deselezione tramite clic simulati
+`SoldierInputTests` verifica selezione, ordini condivisi e ostacoli tramite clic simulati
 con il fixture ufficiale Input System.
+
+## Step 3: movimento e pathfinding
+
+Con **clic destro** su una cella viene assegnato un ordine al soldato disponibile
+con il percorso raggiungibile piu breve, indipendentemente da quello selezionato.
+Un soldato in marcia e occupato e non riceve altri ordini fino all'arrivo.
+Se tutti sono occupati, il comando viene rifiutato con un messaggio: non c'e
+ancora una coda di job.
+
+### Percorsi e movimento
+
+- Otto direzioni; una diagonale e consentita solo se entrambe le celle laterali
+  sono percorribili, evitando di tagliare gli angoli degli ostacoli.
+- Ricerca Dijkstra inversa dalla destinazione: una sola ricerca confronta i
+  soldati liberi. Costo di griglia 10 per passo ortogonale e 14 per diagonale.
+  Non viene scelta la distanza in linea retta ne il tempo di arrivo.
+- Movimento continuo tra i centri delle celle, indipendente dal frame rate.
+  La skill Velocita determina la velocita come `1.5 + 3 * valore / 100`
+  unita Unity al secondo; le diagonali non aumentano la velocita fisica.
+- I soldati possono attraversarsi e attraversare le posizioni di altri soldati.
+  Le destinazioni, invece, sono esclusive: una cella finale occupata da un
+  soldato fermo o prenotata da uno in marcia non puo ricevere altri ordini.
+- Quando un soldato parte, la sua vecchia cella diventa disponibile come
+  destinazione; all'arrivo resta riservata la nuova posizione.
+- La scheda mostra disponibilita, destinazione e velocita del soldato selezionato.
+  Il risultato dell'ultimo comando resta visibile anche senza selezione.
+- Una linea gialla mostra il percorso residuo dell'ultimo ordine accettato,
+  con un indicatore sulla destinazione. Gli altri ordini proseguono comunque.
+  La linea scompare all'arrivo e non cambia la selezione del soldato ispezionato.
+
+### Ostacoli di prova
+
+**Maiusc + clic destro** aggiunge/rimuove un blocco sulla cella, colorata di scuro.
+E un comando di debug per verificare deviazioni e destinazioni irraggiungibili,
+non un ordine di costruzione. Non si puo bloccare una cella occupata.
+Per non modificare percorsi in corso, gli ostacoli si possono cambiare solo
+quando tutti i soldati sono fermi. Il ricalcolo per ostacoli dinamici verra
+introdotto con le attivita che modificano la mappa.
+
+I clic sul pannello non impartiscono ordini e non modificano gli ostacoli.
+Destinazioni invalide, prenotate, irraggiungibili o senza soldati disponibili
+producono un messaggio nella scheda e un avviso in Console.
+**Regenerate Map** annulla gli spostamenti e azzera gli ostacoli di debug.
+La scena include gia i componenti; il comando **Add Soldiers to Map Prototype Scene**
+aggiorna anche il collegamento degli ordini alle scene esistenti.
+
+`MapData` conserva la percorribilita separata dal terreno e `GridPathfinder`
+calcola i percorsi. `SoldierMovementOrders` gestisce input e assegnazione;
+`SoldierView` mantiene percorso, stato e spostamento.
+I test verificano costi minimi contro una ricerca di riferimento, deviazioni,
+angoli, destinazioni esclusive, disponibilita, avanzamento per frame e input reali.
 
 ## Step successivo (non implementato)
 
-Movimento dei soldati sulla griglia, quindi lavori condivisi con priorita,
-disponibilita, vicinanza e prenotazione. Evoluzione dei bisogni, effetti delle
-skill e combattimento rimangono fuori da questo step.
+Lavori condivisi con priorita, coda, durata e completamento, a partire dallo scavo.
+Evoluzione dei bisogni, effetti delle altre skill e combattimento rimangono
+fuori da questo step. I bisogni a 100 non impediscono ancora di muoversi.

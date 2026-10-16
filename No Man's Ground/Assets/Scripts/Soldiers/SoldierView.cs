@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using NoMansGround.Map;
 using UnityEngine;
 
 namespace NoMansGround.Soldiers
@@ -8,10 +10,19 @@ namespace NoMansGround.Soldiers
     {
         private SpriteRenderer body;
         private SpriteRenderer selection;
+        private MapTilemapView movementMap;
+        private IReadOnlyList<Vector2Int> path;
+        private int waypoint;
 
         public SoldierData Data { get; private set; }
         public Vector2Int Cell { get; private set; }
         public bool IsSelected { get; private set; }
+        public bool IsMoving => path != null;
+        public IReadOnlyList<Vector2Int> CurrentPath => path;
+        public int NextWaypoint => waypoint;
+        public Vector2Int Destination => IsMoving ? path[path.Count - 1] : Cell;
+        public float MovementSpeed => Mathf.Lerp(1.5f, 4.5f, Data.GetSkill(SoldierSkill.Speed).Value / 100f);
+        public event Action MovementChanged;
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite)
         {
@@ -43,6 +54,54 @@ namespace NoMansGround.Soldiers
                 throw new InvalidOperationException("Initialize the soldier view before selecting it.");
             IsSelected = selected;
             selection.enabled = selected;
+        }
+
+        public void BeginMove(MapTilemapView mapView, IReadOnlyList<Vector2Int> cells)
+        {
+            if (mapView == null)
+                throw new ArgumentNullException(nameof(mapView));
+            if (Data == null || IsMoving)
+                throw new InvalidOperationException("Only initialized, available soldiers can begin moving.");
+            if (cells == null || cells.Count < 2 || cells[0] != Cell)
+                throw new ArgumentException("A movement path must start at the soldier cell and include a destination.", nameof(cells));
+            movementMap = mapView;
+            path = new List<Vector2Int>(cells).AsReadOnly();
+            waypoint = 1;
+            MovementChanged?.Invoke();
+        }
+
+        private void Update()
+        {
+            AdvanceMovement(Time.deltaTime);
+        }
+
+        public void AdvanceMovement(float deltaTime)
+        {
+            if (!float.IsFinite(deltaTime) || deltaTime < 0f)
+                throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            if (!IsMoving)
+                return;
+            float remainingDistance = MovementSpeed * deltaTime;
+            while (IsMoving && remainingDistance > 0f)
+            {
+                Vector2Int cell = path[waypoint];
+                Vector3 target = movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
+                float distance = Vector3.Distance(transform.position, target);
+                if (distance > remainingDistance)
+                {
+                    transform.position = Vector3.MoveTowards(transform.position, target, remainingDistance);
+                    break;
+                }
+                transform.position = target;
+                remainingDistance -= distance;
+                Cell = cell;
+                waypoint++;
+                if (waypoint == path.Count)
+                {
+                    path = null;
+                    MovementChanged?.Invoke();
+                }
+            }
         }
     }
 }

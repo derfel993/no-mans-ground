@@ -13,6 +13,7 @@ namespace NoMansGround.Map
     public sealed class MapData
     {
         private readonly TerrainKind[] cells;
+        private readonly bool[] blocked;
 
         public int Width { get; }
         public int Height { get; }
@@ -25,6 +26,7 @@ namespace NoMansGround.Map
             Width = width;
             Height = height;
             cells = new TerrainKind[checked(width * height)];
+            blocked = new bool[cells.Length];
         }
 
         public TerrainKind this[int x, int y]
@@ -36,6 +38,28 @@ namespace NoMansGround.Map
         public bool Contains(Vector2Int cell)
         {
             return cell.x >= 0 && cell.y >= 0 && cell.x < Width && cell.y < Height;
+        }
+
+        public bool IsWalkable(Vector2Int cell)
+        {
+            return Contains(cell) && !blocked[cell.y * Width + cell.x];
+        }
+
+        public void SetWalkable(Vector2Int cell, bool walkable)
+        {
+            blocked[IndexOf(cell.x, cell.y)] = !walkable;
+        }
+
+        public bool CanStep(Vector2Int from, Vector2Int to)
+        {
+            int dx = to.x - from.x;
+            int dy = to.y - from.y;
+            if (!IsWalkable(from) || !IsWalkable(to) || Mathf.Abs(dx) > 1 || Mathf.Abs(dy) > 1
+                || (dx == 0 && dy == 0))
+                return false;
+            return dx == 0 || dy == 0
+                || (IsWalkable(new Vector2Int(from.x + dx, from.y))
+                    && IsWalkable(new Vector2Int(from.x, from.y + dy)));
         }
 
         private int IndexOf(int x, int y)

@@ -22,10 +22,12 @@ namespace NoMansGround.Tests
             var roster = Object.FindAnyObjectByType<SoldierRoster>();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var map = Object.FindAnyObjectByType<MapPrototype>();
+            var orders = Object.FindAnyObjectByType<SoldierMovementOrders>();
             Assert.IsNotNull(roster);
             Assert.IsNotNull(panel);
             Assert.IsNotNull(map);
             Assert.IsNotNull(map.Data);
+            Assert.IsNotNull(orders);
             Assert.IsNotNull(Camera.main, "The prototype scene must have an enabled MainCamera.");
             Assert.AreEqual(8, roster.Soldiers.Count);
             var cells = new HashSet<Vector2Int>();
@@ -66,17 +68,43 @@ namespace NoMansGround.Tests
             float hunger = selected.Data.Needs.Hunger;
             yield return null;
             Assert.AreEqual(hunger, selected.Data.Needs.Hunger);
+            Vector2Int goal = selected.Cell + Vector2Int.up * 10;
+            Assert.IsTrue(orders.IssueMove(goal));
+            SoldierView moving = null;
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier.IsMoving)
+                    moving = soldier;
+            Assert.IsNotNull(moving);
+            panel.Select(moving);
+            AssertTextExists($"In marcia: ({goal.x}, {goal.y})\nVelocita: {moving.MovementSpeed:0.00} unita/s");
+            Vector3 beforeMove = moving.transform.position;
+            yield return null;
+            yield return null;
+            Assert.Greater(Vector3.Distance(beforeMove, moving.transform.position), 0f);
+            LineRenderer route = orders.GetComponentInChildren<LineRenderer>();
+            Assert.Greater(route.positionCount, 1);
+            moving.AdvanceMovement(1000f);
+            Assert.IsFalse(moving.IsMoving);
+            Assert.AreEqual(goal, moving.Cell);
+            Assert.Zero(route.positionCount);
+            Assert.IsTrue(orders.Status.Contains("Destinazione raggiunta"));
+            panel.Select(selected);
             panel.Select(null);
             Assert.IsFalse(selected.IsSelected);
             Assert.IsNull(panel.Selected);
             panel.Select(selected);
             string firstName = roster.Soldiers[0].Data.FullName;
+            Assert.IsTrue(orders.IssueMove(new Vector2Int(20, 20)));
             map.Regenerate();
             yield return null;
             Assert.AreEqual(8, roster.Soldiers.Count);
             Assert.AreEqual(8, roster.GetComponentsInChildren<SoldierView>().Length);
             Assert.AreEqual(firstName, roster.Soldiers[0].Data.FullName);
             Assert.AreSame(roster.Soldiers[0], panel.Selected);
+            Assert.IsTrue(orders.Status.Contains("Destro"));
+            Assert.Zero(route.positionCount);
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.IsFalse(soldier.IsMoving);
             map.Generation.width = 1;
             map.Generation.height = 16;
             map.Regenerate();

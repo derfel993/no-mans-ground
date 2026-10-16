@@ -3,6 +3,7 @@ using NoMansGround.Map;
 using NoMansGround.Soldiers;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Tilemaps;
@@ -62,6 +63,76 @@ namespace NoMansGround.Tests
         {
             typeof(SoldierDetailsPanel).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(panel, null);
+        }
+
+        [Test]
+        public void RightClickCreatesSharedOrderAndShiftRightClickEditsObstacles()
+        {
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                SoldierMovementOrders orders = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype foundMap))
+                        map = foundMap;
+                    if (root.TryGetComponent(out SoldierRoster foundRoster))
+                    {
+                        roster = foundRoster;
+                        orders = root.GetComponent<SoldierMovementOrders>();
+                    }
+                    if (root.TryGetComponent(out Camera foundCamera))
+                        camera = foundCamera;
+                }
+                Assert.IsNotNull(map);
+                Assert.IsNotNull(orders);
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+                var cell = new Vector2Int(64, 10);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0))));
+                Press(keyboard.leftShiftKey);
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsFalse(map.Data.IsWalkable(cell));
+                Release(mouse.rightButton);
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsTrue(map.Data.IsWalkable(cell));
+                Release(mouse.rightButton);
+                Release(keyboard.leftShiftKey);
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                int moving = 0;
+                foreach (SoldierView soldier in roster.Soldiers)
+                {
+                    if (!soldier.IsMoving)
+                        continue;
+                    moving++;
+                    Assert.AreEqual(cell, soldier.Destination);
+                }
+                Assert.AreEqual(1, moving);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        private static void UpdateOrders(SoldierMovementOrders orders)
+        {
+            typeof(SoldierMovementOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(orders, null);
         }
     }
 }

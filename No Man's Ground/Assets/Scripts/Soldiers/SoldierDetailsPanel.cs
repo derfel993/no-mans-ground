@@ -15,9 +15,13 @@ namespace NoMansGround.Soldiers
 
         [SerializeField] private SoldierRoster roster;
         [SerializeField] private Camera mapCamera;
+        [SerializeField] private SoldierMovementOrders movementOrders;
 
         private Text identity;
         private Text instructions;
+        private Text orderStatus;
+        private Text activity;
+        private SoldierView subscribedMovement;
         private GameObject details;
         private Meter[] needs;
         private Meter[] skills;
@@ -30,10 +34,11 @@ namespace NoMansGround.Soldiers
 
         public SoldierView Selected { get; private set; }
 
-        public void Configure(SoldierRoster soldierRoster, Camera camera)
+        public void Configure(SoldierRoster soldierRoster, Camera camera, SoldierMovementOrders orders = null)
         {
             roster = soldierRoster;
             mapCamera = camera;
+            movementOrders = orders;
         }
 
         private void Awake()
@@ -53,6 +58,8 @@ namespace NoMansGround.Soldiers
                 canvasObject.SetActive(true);
             if (roster != null)
                 roster.Rebuilt += HandleRosterRebuilt;
+            if (movementOrders != null)
+                movementOrders.StatusChanged += RefreshOrderStatus;
             if (canvasObject != null && roster != null)
                 HandleRosterRebuilt();
         }
@@ -67,6 +74,8 @@ namespace NoMansGround.Soldiers
         {
             if (roster != null)
                 roster.Rebuilt -= HandleRosterRebuilt;
+            if (movementOrders != null)
+                movementOrders.StatusChanged -= RefreshOrderStatus;
             Select(null);
             if (canvasObject != null)
                 canvasObject.SetActive(false);
@@ -114,6 +123,8 @@ namespace NoMansGround.Soldiers
 
         public void Select(SoldierView soldier)
         {
+            if (subscribedMovement != null)
+                subscribedMovement.MovementChanged -= Refresh;
             if (Selected != null)
                 Selected.SetSelected(false);
             if (selectedData != null)
@@ -122,9 +133,11 @@ namespace NoMansGround.Soldiers
                     skill.Changed -= Refresh;
             }
             Selected = soldier;
+            subscribedMovement = soldier;
             selectedData = soldier != null ? soldier.Data : null;
             if (Selected != null)
             {
+                Selected.MovementChanged += Refresh;
                 Selected.SetSelected(true);
                 foreach (SkillProgress skill in Selected.Data.Skills)
                     skill.Changed += Refresh;
@@ -156,12 +169,16 @@ namespace NoMansGround.Soldiers
             bool selected = Selected != null;
             identity.text = selected ? Selected.Data.FullName : "Nessun soldato selezionato";
             instructions.text = selected
-                ? "Clic: seleziona un soldato.\nTerreno: deseleziona."
-                : "Clicca su un soldato.\nWASD: camera | Rotella: zoom";
+                ? "Sinistro: ispeziona.\nDestro: ordine condiviso."
+                : "Sinistro: scegli un soldato.\nDestro: ordine condiviso.";
+            RefreshOrderStatus();
             details.SetActive(selected);
             if (!selected)
                 return;
 
+            Vector2Int target = Selected.Destination;
+            activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})" : "Disponibile")
+                + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             SoldierNeeds state = Selected.Data.Needs;
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
                 state.Stress, state.Fear, state.Fatigue };
@@ -187,6 +204,12 @@ namespace NoMansGround.Soldiers
                     skill.IsMaximumLevel ? 1f : (float)skill.Experience / skill.ExperienceToNextLevel,
                     new Color(0.75f, 0.70f, 0.44f));
             }
+        }
+
+        private void RefreshOrderStatus()
+        {
+            if (orderStatus != null)
+                orderStatus.text = movementOrders != null ? movementOrders.Status : "Movimento non configurato.";
         }
 
         private void BuildInterface()
@@ -228,6 +251,7 @@ namespace NoMansGround.Soldiers
             CreateText(content, "SOLDATI", 13, 20f);
             identity = CreateText(content, "", 12, 32f);
             instructions = CreateText(content, "", 10, 28f);
+            orderStatus = CreateText(content, "", 10, 48f);
             var detailRect = CreateRect("Details", content);
             var detailLayout = detailRect.gameObject.AddComponent<VerticalLayoutGroup>();
             detailLayout.spacing = 4f;
@@ -235,6 +259,7 @@ namespace NoMansGround.Soldiers
             detailLayout.childControlWidth = true;
             detailLayout.childForceExpandHeight = false;
             details = detailRect.gameObject;
+            activity = CreateText(detailRect, "", 10, 28f);
             CreateText(detailRect, "STATO: 0 soddisfatto, 100 critico", 10, 28f);
             needs = new Meter[7];
             for (int i = 0; i < needs.Length; i++)
@@ -243,7 +268,7 @@ namespace NoMansGround.Soldiers
             skills = new Meter[5];
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = CreateMeter(detailRect, 34f);
-            CreateText(detailRect, "Stati statici. XP dalle attivita future.\nNessun movimento o job.", 9, 36f);
+            CreateText(detailRect, "Stati statici. Nessun job.\nMaiusc+destro: ostacolo debug.", 9, 28f);
             Refresh();
         }
 

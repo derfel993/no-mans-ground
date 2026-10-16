@@ -96,10 +96,14 @@ namespace NoMansGround.Editor
             if (roster == null)
                 roster = new GameObject("Soldiers", typeof(SoldierRoster)).GetComponent<SoldierRoster>();
             roster.Configure(prototype, view, CreateSoldierSprite());
+            var orders = roster.GetComponent<SoldierMovementOrders>();
+            if (orders == null)
+                orders = roster.gameObject.AddComponent<SoldierMovementOrders>();
+            orders.Configure(prototype, view, roster, camera);
             var panel = UnityEngine.Object.FindAnyObjectByType<SoldierDetailsPanel>();
             if (panel == null)
                 panel = new GameObject("Soldier Selection", typeof(SoldierDetailsPanel)).GetComponent<SoldierDetailsPanel>();
-            panel.Configure(roster, camera);
+            panel.Configure(roster, camera, orders);
         }
 
         private static Sprite CreateSoldierSprite()
