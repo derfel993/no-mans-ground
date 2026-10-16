@@ -1,0 +1,58 @@
+NO MAN'S GROUND - CHANGELOG
+
+Versioni in ordine dalla piu recente alla meno recente.
+Aggiornare questo file solo su richiesta dell'utente, dopo la sua conferma
+di aver effettuato un commit. Ogni voce riporta versione, data e novita.
+Non aggiornare il changelog automaticamente durante lo sviluppo.
+La versione delle voci successive viene concordata con l'utente.
+Le attivita ancora da implementare restano nei TODO del README.
+
+===============================================================================
+0.1.0 - 2026-10-16
+Riepilogo iniziale delle funzionalita implementate fino al commit f9022da.
+===============================================================================
+
+Mappa e navigazione
+- Mappa 2D su Tilemap, generata con seed, con terra, erba e fango.
+- Camera con panning, zoom sul cursore e limiti della mappa.
+- Strada di servizio percorribile, larga 4 tile e lunga 6, centrata sul bordo sud.
+
+Soldati e ordini
+- Squadra iniziale di 8 soldati del Genio e un cuoco, con nomi italiani.
+- Anagrafica, bisogni, skill, esperienza e pannello dettagli compatto.
+- Arrivo dei soldati nella parte bassa della mappa.
+- Pathfinding a otto direzioni, senza tagli degli angoli, e destinazioni prenotate.
+- Stati Guardia e Lavoro, con pulsanti e contatore della squadra.
+- Movimento manuale della guardia selezionata; nuovi ordini durante la marcia
+  sostituiscono la destinazione senza teletrasporti.
+- Richiesta di passaggio a Guardia differita fino al rilascio del job.
+
+Trincee
+- Designazione e cancellazione di scavi e installazioni di scale.
+- Job assegnati ai lavoratori disponibili in base alla distanza raggiungibile.
+- Scavo dalle celle adiacenti, avanzamento del lavoro ed esperienza in Forza.
+- Accesso tra superficie e trincea consentito soltanto tramite scale.
+
+Bisogni e rancio
+- Fame, sete e bisogni fisiologici iniziano a 100 e diminuiscono gradualmente.
+- Esaurimento indipendente di ciascuna riserva in 17-23 minuti di simulazione.
+- Fame sotto 35: attesa del rancio e aumento graduale dello stress.
+- Cucina e deposito iniziale con 1000 viveri.
+- Preparazione di una razione ogni 30 secondi, al costo di 10 viveri.
+- Distribuzione quotidiana alle 13:00: il cuoco raggiunge i soldati e ogni
+  razione consumata riporta la fame a 100; anche il cuoco mangia.
+- Gestione di razioni insufficienti, destinatari in movimento o irraggiungibili
+  e chiusura dei giri incompleti a mezzanotte.
+- Ispezione di cucina e deposito con scorte, progresso e stato della distribuzione.
+
+Tempo e strumenti
+- Orologio visibile con partenza al Giorno 1, ore 09:00.
+- Un giorno di 24 ore dura 40 minuti di simulazione a velocita normale.
+- Rigenerazione della mappa con ripristino di squadra, scorte e orologio.
+- Comandi Editor per creare e aggiornare la scena prototipo.
+- Suite di 110 test superati nell'ultima verifica delle funzionalita del rancio.
+
+Limiti della versione
+- Rifornimenti ed evacuazione dei feriti non ancora implementati.
+- Ritiro fisico dei viveri per ogni razione, controlli 1x/2x/5x/10x, alberi,
+  estrazione di pietra, rifugi e tetti automatici restano attivita pianificate.

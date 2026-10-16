@@ -3,6 +3,15 @@
 Prototipo Unity 6 di un gestionale 2D sulle trincee della prima guerra mondiale,
 con visuale dall'alto. Il progetto Unity si trova in `No Man's Ground`.
 
+## Changelog
+
+Le versioni e le novita implementate sono raccolte in [CHANGELOG.txt](CHANGELOG.txt),
+con la versione piu recente in alto. Il file viene aggiornato soltanto quando
+l'utente lo richiede confermando di aver effettuato un commit, non automaticamente
+a ogni modifica. Ogni voce indica versione, data e novita rispetto alla precedente;
+la prima versione, 0.1.0, riepiloga il prototipo esistente.
+I lavori futuri restano nelle checklist TODO di questo README.
+
 ## Step 1: mappa e navigazione
 
 Aprire il progetto con Unity **6000.6.6f1**, quindi aprire
@@ -461,6 +470,11 @@ Le razioni trasportate sono gia sottratte alle razioni pronte della cucina.
 - [ ] Prevedere le **provvigioni necessarie a creare il rancio** con tipi,
   ricette, approvvigionamento e rifornimento del deposito. Il prototipo
   implementa soltanto il costo fisso di 10 unita per razione.
+- [ ] **Ritiro fisico dei viveri per ogni razione**: dopo aver terminato una
+  razione, il cuoco raggiunge il deposito, preleva **10 viveri** e torna alla
+  cucina per preparare la successiva. Gestire anche il prelievo iniziale prima
+  della prima razione; il viaggio non conta come tempo di cottura e i viveri
+  prelevati non devono essere sottratti nuovamente al completamento.
 - [x] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
 - [ ] Assegnazione e cambio dei mestieri da parte del giocatore.
 
@@ -500,6 +514,27 @@ API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`
 `IssueMove(cell)` valida e muove esclusivamente quella guardia.
 
 ## Step successivi (non implementati)
+
+### TODO velocita della simulazione
+
+- [ ] Aggiungere controlli per selezionare **1x, 2x, 5x e 10x**, mostrando
+  la velocita attiva. L'accelerazione deve applicarsi in modo coerente a
+  orologio, movimento dei soldati, bisogni, lavori, cottura e distribuzione
+  del rancio, senza accelerare i comandi della camera o dell'interfaccia.
+
+### TODO risorse e rifugi
+
+- [ ] **Alberi**: generarli sulla mappa e permettere al giocatore di
+  designarne l'abbattimento come job per ottenere **legna**.
+- [ ] **Massi**: generarli sulla mappa e permettere al giocatore di
+  designarne l'estrazione come job per ottenere **pietra da costruzione**.
+- [ ] **Risorse raccolte**: gestire legna e pietra come materiali disponibili
+  per le costruzioni.
+- [ ] **Rifugi con costruzione a celle, in stile RimWorld**: designare pareti
+  e porte, richiedere materiali e assegnare i lavori di costruzione ai soldati.
+- [ ] **Tetti automatici**: quando le pareti e le porte costruite chiudono
+  un perimetro, riconoscere lo spazio interno e generare automaticamente
+  il tetto del rifugio.
 
 Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
 dei bisogni, evoluzione degli altri stati, copertura e combattimento.
