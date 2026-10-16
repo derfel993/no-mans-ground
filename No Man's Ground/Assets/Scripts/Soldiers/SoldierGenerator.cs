@@ -44,7 +44,7 @@ namespace NoMansGround.Soldiers
                 for (int skill = 0; skill < levels.Length; skill++)
                     levels[skill] = random.Next(1, 11);
                 soldiers[i] = new SoldierData(i, FirstNames[identity / LastNames.Length],
-                    LastNames[identity % LastNames.Length], needs, levels);
+                    LastNames[identity % LastNames.Length], needs, levels, SoldierProfession.Engineer);
             }
             return Array.AsReadOnly(soldiers);
         }

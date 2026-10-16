@@ -122,7 +122,7 @@ namespace NoMansGround.Soldiers
                     continue;
                 if (soldier.Destination == destination)
                     return Reject("Destinazione gia occupata o prenotata.");
-                if (soldier.IsAvailable)
+                if (soldier.CanTakeSharedMove)
                 {
                     available.Add(soldier);
                     starts.Add(soldier.Cell);
@@ -145,6 +145,9 @@ namespace NoMansGround.Soldiers
         {
             if (map.Data == null || !map.Data.Contains(cell))
                 return Reject("Ostacolo fuori dalla mappa.");
+            var kitchen = roster.GetComponent<KitchenSystem>();
+            if (kitchen != null && kitchen.HasFacilities && (cell == kitchen.KitchenCell || cell == kitchen.DepotCell))
+                return Reject("Non puoi modificare gli edifici con gli ostacoli debug.");
             if (trenchOrders != null && trenchOrders.Jobs.Count > 0)
                 return Reject("Ostacoli debug: annulla o completa prima gli scavi.");
             foreach (SoldierView soldier in roster.Soldiers)

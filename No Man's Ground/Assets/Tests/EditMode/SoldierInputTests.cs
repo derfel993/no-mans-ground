@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Reflection;
 using NoMansGround.Map;
 using NoMansGround.Soldiers;
@@ -7,11 +8,56 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Tilemaps;
+using UnityEngine.TestTools;
 
 namespace NoMansGround.Tests
 {
     public sealed class SoldierInputTests : InputTestFixture
     {
+        [UnityTest]
+        public IEnumerator KitchenClickTakesPrecedenceOverNearbyCookAtDistantZoom()
+        {
+            EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath);
+            yield return new EnterPlayMode();
+            yield return null;
+            var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            var view = Object.FindAnyObjectByType<MapTilemapView>();
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(30f);
+            Camera camera = Camera.main;
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                camera.targetTexture = viewport;
+                camera.orthographicSize = 24f;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                Vector2 pointer = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(kitchen.KitchenCell.x, kitchen.KitchenCell.y, 0)));
+                Assert.AreSame(kitchen.Cook, panel.FindAtScreenPosition(pointer),
+                    "The cook must be inside the soldier selection radius for this regression.");
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                InputSystem.QueueStateEvent(mouse, new UnityEngine.InputSystem.LowLevel.MouseState
+                    { position = pointer, buttons = 1 });
+                yield return null;
+                yield return null;
+                Assert.IsNull(panel.Selected, "Clicking the kitchen selects its stock, not the nearby cook.");
+                bool shown = false;
+                foreach (UnityEngine.UI.Text text in GameObject.Find("Soldier Interface")
+                    .GetComponentsInChildren<UnityEngine.UI.Text>())
+                    if (text.text.Contains("Razioni pronte: 1"))
+                        shown = true;
+                Assert.IsTrue(shown);
+                InputSystem.QueueStateEvent(mouse, new UnityEngine.InputSystem.LowLevel.MouseState { position = pointer });
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                Object.DestroyImmediate(viewport);
+            }
+            yield return new ExitPlayMode();
+        }
+
         [Test]
         public void LeftClickSelectsSoldierAndEmptyTerrainClearsSelection()
         {
@@ -68,6 +114,7 @@ namespace NoMansGround.Tests
         [Test]
         public void RightClickCreatesSharedOrderAndShiftRightClickEditsObstacles()
         {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
             var viewport = new RenderTexture(800, 600, 0);
             try
@@ -138,6 +185,7 @@ namespace NoMansGround.Tests
         [Test]
         public void DigModeUsesKeyboardDragAndCancelWithoutLeakingRightClickOrders()
         {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
             var viewport = new RenderTexture(800, 600, 0);
             try

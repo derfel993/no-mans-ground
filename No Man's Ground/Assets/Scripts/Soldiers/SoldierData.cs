@@ -12,6 +12,8 @@ namespace NoMansGround.Soldiers
         Speed
     }
 
+    public enum SoldierProfession { Soldier, Engineer, Cook }
+
     public sealed class SoldierNeeds
     {
         public const float AverageDepletionSeconds = 20f * 60f;
@@ -21,6 +23,7 @@ namespace NoMansGround.Soldiers
         private double hunger;
         private double thirst;
         private double physicalNeeds;
+        private double stress;
 
         public float Hunger => (float)hunger;
         public float Thirst => (float)thirst;
@@ -32,7 +35,8 @@ namespace NoMansGround.Soldiers
         public float ThirstConsumptionPerSecond => 100f / ThirstDepletionSeconds;
         public float PhysicalNeedsConsumptionPerSecond => 100f / PhysicalNeedsDepletionSeconds;
         public float ThermalState { get; }
-        public float Stress { get; }
+        public float Stress => (float)stress;
+        public bool WaitingForRations => hunger < 35d;
         public float Fear { get; }
         public float Fatigue { get; }
         public event Action Changed;
@@ -50,7 +54,7 @@ namespace NoMansGround.Soldiers
             ThirstDepletionSeconds = ValidateDuration(thirstDepletionSeconds, nameof(thirstDepletionSeconds));
             PhysicalNeedsDepletionSeconds = ValidateDuration(physicalNeedsDepletionSeconds, nameof(physicalNeedsDepletionSeconds));
             ThermalState = Validate(thermalState, -100f, nameof(thermalState));
-            Stress = Validate(stress, 0f, nameof(stress));
+            this.stress = Validate(stress, 0f, nameof(stress));
             Fear = Validate(fear, 0f, nameof(fear));
             Fatigue = Validate(fatigue, 0f, nameof(fatigue));
         }
@@ -59,13 +63,22 @@ namespace NoMansGround.Soldiers
         {
             if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)
                 throw new ArgumentOutOfRangeException(nameof(gameSeconds));
-            if (gameSeconds == 0f || (hunger == 0d && thirst == 0d && physicalNeeds == 0d))
+            if (gameSeconds == 0f)
                 return;
 
+            double previousHunger = hunger;
+            double previousThirst = thirst;
+            double previousPhysical = physicalNeeds;
+            double previousStress = stress;
+            double untilHungry = Math.Max(0d, (hunger - 35d) * HungerDepletionSeconds / 100d);
+            double hungrySeconds = Math.Max(0d, gameSeconds - untilHungry);
+            stress = Math.Min(100d, stress + hungrySeconds * 5d / 60d);
             hunger = Math.Max(0d, hunger - 100d * gameSeconds / HungerDepletionSeconds);
             thirst = Math.Max(0d, thirst - 100d * gameSeconds / ThirstDepletionSeconds);
             physicalNeeds = Math.Max(0d, physicalNeeds - 100d * gameSeconds / PhysicalNeedsDepletionSeconds);
-            Changed?.Invoke();
+            if (previousHunger != hunger || previousThirst != thirst
+                || previousPhysical != physicalNeeds || previousStress != stress)
+                Changed?.Invoke();
         }
 
         private static float ValidateDuration(float seconds, string name)
@@ -129,9 +142,10 @@ namespace NoMansGround.Soldiers
         public string FullName => FirstName + " " + LastName;
         public SoldierNeeds Needs { get; }
         public IReadOnlyList<SkillProgress> Skills { get; }
+        public SoldierProfession Profession { get; }
 
         public SoldierData(int id, string firstName, string lastName, SoldierNeeds needs,
-            IReadOnlyList<int> skillLevels)
+            IReadOnlyList<int> skillLevels, SoldierProfession profession = SoldierProfession.Soldier)
         {
             if (id < 0)
                 throw new ArgumentOutOfRangeException(nameof(id));
@@ -141,11 +155,14 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentNullException(nameof(needs));
             if (skillLevels == null || skillLevels.Count != Enum.GetValues(typeof(SoldierSkill)).Length)
                 throw new ArgumentException("Provide one level for each soldier skill.", nameof(skillLevels));
+            if (!Enum.IsDefined(typeof(SoldierProfession), profession))
+                throw new ArgumentOutOfRangeException(nameof(profession));
 
             Id = id;
             FirstName = firstName;
             LastName = lastName;
             Needs = needs;
+            Profession = profession;
             skills = new SkillProgress[skillLevels.Count];
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = new SkillProgress(skillLevels[i]);

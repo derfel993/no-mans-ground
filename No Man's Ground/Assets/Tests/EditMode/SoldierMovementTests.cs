@@ -20,6 +20,7 @@ namespace NoMansGround.Tests
         [SetUp]
         public void SetUp()
         {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene = EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
             foreach (GameObject root in scene.GetRootGameObjects())
             {
@@ -146,7 +147,7 @@ namespace NoMansGround.Tests
         [Test]
         public void BusyAndUnreachableOrdersReportFailureWithoutChangingExistingOrders()
         {
-            for (int i = 0; i < roster.Soldiers.Count; i++)
+            for (int i = 0; i < roster.Soldiers.Count - 1; i++)
                 Assert.IsTrue(orders.IssueMove(new Vector2Int(20 + i, 20)));
             LogAssert.Expect(LogType.Warning, "Nessun soldato disponibile. Attendi un soldato libero.");
             Assert.IsFalse(orders.IssueMove(new Vector2Int(50, 20)));

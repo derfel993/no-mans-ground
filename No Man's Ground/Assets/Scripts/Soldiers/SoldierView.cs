@@ -15,6 +15,8 @@ namespace NoMansGround.Soldiers
         private int waypoint;
         public bool HasWorkAssignment { get; private set; }
         public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
+        public bool CanTakeEngineeringWork => IsAvailable && Data.Profession == SoldierProfession.Engineer;
+        public bool CanTakeSharedMove => IsAvailable && Data.Profession != SoldierProfession.Cook;
         public float DiggingProgress { get; private set; }
         public TrenchJobKind WorkKind { get; private set; }
 
@@ -41,6 +43,8 @@ namespace NoMansGround.Soldiers
             body = GetComponent<SpriteRenderer>();
             body.sprite = sprite;
             body.color = Color.white;
+            if (data.Profession == SoldierProfession.Cook)
+                body.color = new Color(1f, 0.85f, 0.65f);
             body.sortingOrder = 10;
             var highlight = new GameObject("Selection", typeof(SpriteRenderer));
             highlight.transform.SetParent(transform, false);

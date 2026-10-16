@@ -97,6 +97,7 @@ namespace NoMansGround.Editor
             if (roster == null)
                 roster = new GameObject("Soldiers", typeof(SoldierRoster)).GetComponent<SoldierRoster>();
             roster.Configure(prototype, view, CreateSoldierSprite());
+            roster.ConfigureCook(true);
             var orders = roster.GetComponent<SoldierMovementOrders>();
             if (orders == null)
                 orders = roster.gameObject.AddComponent<SoldierMovementOrders>();
@@ -108,10 +109,14 @@ namespace NoMansGround.Editor
             orders.ConfigureTrenches(trenches);
             view.ConfigureTrench(CreateTile("Trench", new Color(0.19f, 0.13f, 0.08f), CreateSprite()));
             view.ConfigureLadder(CreateTile("Ladder", Color.white, CreateLadderSprite()));
+            var kitchen = roster.GetComponent<KitchenSystem>();
+            if (kitchen == null)
+                kitchen = roster.gameObject.AddComponent<KitchenSystem>();
+            kitchen.Configure(prototype, view, roster, CreateSprite());
             var panel = UnityEngine.Object.FindAnyObjectByType<SoldierDetailsPanel>();
             if (panel == null)
                 panel = new GameObject("Soldier Selection", typeof(SoldierDetailsPanel)).GetComponent<SoldierDetailsPanel>();
-            panel.Configure(roster, camera, orders, trenches);
+            panel.Configure(roster, camera, orders, trenches, kitchen);
         }
 
         private static Sprite CreateSoldierSprite()

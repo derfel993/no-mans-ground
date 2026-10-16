@@ -95,7 +95,7 @@ namespace NoMansGround.Tests
         }
 
         [Test]
-        public void NeedsDeclineAtIndependentRatesAndClampAtZeroWithoutChangingOtherStates()
+        public void NeedsDeclineAtIndependentRatesAndClampAtZeroWhileHungerRaisesStress()
         {
             var state = new SoldierNeeds(100, 100, 100, -12, 25, 30, 40, 1020, 1200, 1380);
             Assert.AreEqual(100f / 1020f, state.HungerConsumptionPerSecond);
@@ -119,7 +119,7 @@ namespace NoMansGround.Tests
             Assert.Zero(state.Thirst);
             Assert.Zero(state.PhysicalNeeds);
             Assert.AreEqual(-12, state.ThermalState);
-            Assert.AreEqual(25, state.Stress);
+            Assert.AreEqual(100, state.Stress);
             Assert.AreEqual(30, state.Fear);
             Assert.AreEqual(40, state.Fatigue);
         }
@@ -143,7 +143,26 @@ namespace NoMansGround.Tests
             Assert.AreEqual(36000, notifications);
             stepped.AdvanceTime(601f);
             stepped.AdvanceTime(10f);
-            Assert.AreEqual(36001, notifications);
+            Assert.AreEqual(36002, notifications);
+        }
+
+        [Test]
+        public void HungerThresholdIsStrictAndStressOnlyCountsTimeBelowThirtyFive()
+        {
+            var needs = new SoldierNeeds(36, 100, 100, 0, 10, 0, 0);
+            needs.AdvanceTime(12f);
+            Assert.AreEqual(35f, needs.Hunger);
+            Assert.IsFalse(needs.WaitingForRations);
+            Assert.AreEqual(10f, needs.Stress);
+            needs.AdvanceTime(60f);
+            Assert.IsTrue(needs.WaitingForRations);
+            Assert.AreEqual(15f, needs.Stress, 0.00001f);
+            var crossing = new SoldierNeeds(40, 100, 100, 0, 0, 0, 0);
+            crossing.AdvanceTime(90f);
+            Assert.AreEqual(2.5f, crossing.Stress, 0.00001f);
+            crossing.AdvanceTime(10000f);
+            Assert.AreEqual(100f, crossing.Stress);
+            Assert.IsTrue(crossing.WaitingForRations);
         }
 
         [Test]

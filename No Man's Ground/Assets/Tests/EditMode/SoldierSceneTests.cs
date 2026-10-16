@@ -29,7 +29,7 @@ namespace NoMansGround.Tests
             Assert.IsNotNull(map.Data);
             Assert.IsNotNull(orders);
             Assert.IsNotNull(Camera.main, "The prototype scene must have an enabled MainCamera.");
-            Assert.AreEqual(8, roster.Soldiers.Count);
+            Assert.AreEqual(9, roster.Soldiers.Count);
             var cells = new HashSet<Vector2Int>();
             foreach (SoldierView soldier in roster.Soldiers)
             {
@@ -72,7 +72,7 @@ namespace NoMansGround.Tests
             Assert.IsTrue(orders.IssueMove(goal));
             SoldierView moving = null;
             foreach (SoldierView soldier in roster.Soldiers)
-                if (soldier.IsMoving)
+                if (soldier.IsMoving && soldier.Data.Profession != SoldierProfession.Cook)
                     moving = soldier;
             Assert.IsNotNull(moving);
             panel.Select(moving);
@@ -97,14 +97,15 @@ namespace NoMansGround.Tests
             Assert.IsTrue(orders.IssueMove(new Vector2Int(20, 20)));
             map.Regenerate();
             yield return null;
-            Assert.AreEqual(8, roster.Soldiers.Count);
-            Assert.AreEqual(8, roster.GetComponentsInChildren<SoldierView>().Length);
+            Assert.AreEqual(9, roster.Soldiers.Count);
+            Assert.AreEqual(9, roster.GetComponentsInChildren<SoldierView>().Length);
             Assert.AreEqual(firstName, roster.Soldiers[0].Data.FullName);
             Assert.AreSame(roster.Soldiers[0], panel.Selected);
             Assert.IsTrue(orders.Status.Contains("Destro"));
             Assert.Zero(route.positionCount);
             foreach (SoldierView soldier in roster.Soldiers)
-                Assert.IsFalse(soldier.IsMoving);
+                if (soldier.Data.Profession != SoldierProfession.Cook)
+                    Assert.IsFalse(soldier.IsMoving);
             map.Generation.width = 1;
             map.Generation.height = 16;
             map.Regenerate();
@@ -114,7 +115,7 @@ namespace NoMansGround.Tests
             {
                 Assert.IsTrue(map.Data.Contains(soldier.Cell));
                 Assert.IsTrue(cells.Add(soldier.Cell));
-                Assert.That(soldier.Cell.y, Is.InRange(1, 8));
+                Assert.That(soldier.Cell.y, Is.InRange(1, 9));
             }
             map.Generation.width = 1;
             map.Generation.height = 1;

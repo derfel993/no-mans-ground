@@ -17,6 +17,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private Camera mapCamera;
         [SerializeField] private SoldierMovementOrders movementOrders;
         [SerializeField] private TrenchWorkOrders trenchOrders;
+        [SerializeField] private KitchenSystem kitchen;
 
         private Text identity;
         private Text instructions;
@@ -26,6 +27,10 @@ namespace NoMansGround.Soldiers
         private Text diggingButton;
         private Text cancelButton;
         private Text ladderButton;
+        private Text mealStatus;
+        private Text facilityStatus;
+        private bool facilitySelected;
+        private bool depotSelected;
         private SoldierView subscribedMovement;
         private GameObject details;
         private Meter[] needs;
@@ -40,12 +45,13 @@ namespace NoMansGround.Soldiers
         public SoldierView Selected { get; private set; }
 
         public void Configure(SoldierRoster soldierRoster, Camera camera, SoldierMovementOrders orders = null,
-            TrenchWorkOrders trenches = null)
+            TrenchWorkOrders trenches = null, KitchenSystem kitchenSystem = null)
         {
             roster = soldierRoster;
             mapCamera = camera;
             movementOrders = orders;
             trenchOrders = trenches;
+            kitchen = kitchenSystem;
         }
 
         private void Awake()
@@ -69,6 +75,8 @@ namespace NoMansGround.Soldiers
                 movementOrders.StatusChanged += RefreshOrderStatus;
             if (trenchOrders != null)
                 trenchOrders.Changed += RefreshDigging;
+            if (kitchen != null)
+                kitchen.Changed += RefreshFacility;
             RefreshDigging();
             if (canvasObject != null && roster != null)
                 HandleRosterRebuilt();
@@ -88,6 +96,8 @@ namespace NoMansGround.Soldiers
                 movementOrders.StatusChanged -= RefreshOrderStatus;
             if (trenchOrders != null)
                 trenchOrders.Changed -= RefreshDigging;
+            if (kitchen != null)
+                kitchen.Changed -= RefreshFacility;
             Select(null);
             if (canvasObject != null)
                 canvasObject.SetActive(false);
@@ -113,7 +123,10 @@ namespace NoMansGround.Soldiers
             if (!mapCamera.pixelRect.Contains(pointer)
                 || (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
                 return;
-            Select(FindAtScreenPosition(pointer));
+            if (kitchen != null && kitchen.TrySelectAt(mapCamera, pointer, out bool depot))
+                SelectFacility(depot);
+            else
+                Select(FindAtScreenPosition(pointer));
         }
 
         public SoldierView FindAtScreenPosition(Vector2 pointer)
@@ -137,6 +150,7 @@ namespace NoMansGround.Soldiers
 
         public void Select(SoldierView soldier)
         {
+            facilitySelected = false;
             if (subscribedMovement != null)
                 subscribedMovement.MovementChanged -= Refresh;
             if (Selected != null)
@@ -162,6 +176,27 @@ namespace NoMansGround.Soldiers
                 Refresh();
         }
 
+        public void SelectFacility(bool depot = false)
+        {
+            Select(null);
+            facilitySelected = true;
+            depotSelected = depot;
+            RefreshFacility();
+        }
+
+        private void RefreshFacility()
+        {
+            if (!facilitySelected || facilityStatus == null || kitchen == null)
+                return;
+            identity.text = depotSelected ? "DEPOSITO VIVERI" : "CUCINA";
+            instructions.text = "Sinistro: ispeziona.\nRancio non ancora distribuito.";
+            facilityStatus.gameObject.SetActive(true);
+            facilityStatus.text = depotSelected
+                ? $"Viveri: {kitchen.Stock.Provisions}/1000\nConsumo: 10 per razione."
+                : $"Razioni pronte: {kitchen.Stock.ReadyRations}\nViveri: {kitchen.Stock.Provisions}/1000\n"
+                    + $"Razione: {kitchen.Stock.Progress:P0}\n{kitchen.Status}";
+        }
+
         [ContextMenu("Debug/Add 100 Aim XP to Selected Soldier")]
         public void AddDebugAimExperience()
         {
@@ -183,6 +218,8 @@ namespace NoMansGround.Soldiers
         private void Refresh()
         {
             bool selected = Selected != null;
+            if (facilityStatus != null)
+                facilityStatus.gameObject.SetActive(false);
             identity.text = selected ? Selected.Data.FullName : "Nessun soldato selezionato";
             instructions.text = selected
                 ? "Sinistro: ispeziona.\nDestro: ordine condiviso."
@@ -195,7 +232,7 @@ namespace NoMansGround.Soldiers
             Vector2Int target = Selected.Destination;
             activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
-                    ? $"{(Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
+                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             RefreshNeeds();
@@ -215,6 +252,10 @@ namespace NoMansGround.Soldiers
             if (Selected == null || needs == null)
                 return;
             SoldierNeeds state = Selected.Data.Needs;
+            string profession = Selected.Data.Profession == SoldierProfession.Cook ? "Cuoco"
+                : Selected.Data.Profession == SoldierProfession.Engineer ? "Genio" : "Soldato";
+            mealStatus.text = profession + (state.WaitingForRations
+                ? " | Attende rancio\nStress fame: +5/min" : " | Rancio non richiesto");
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
                 state.Stress, state.Fear, state.Fatigue };
             for (int i = 0; i < needs.Length; i++)
@@ -301,6 +342,8 @@ namespace NoMansGround.Soldiers
             identity = CreateText(content, "", 12, 32f);
             instructions = CreateText(content, "", 10, 28f);
             orderStatus = CreateText(content, "", 10, 48f);
+            facilityStatus = CreateText(content, "", 10, 100f);
+            facilityStatus.gameObject.SetActive(false);
             if (trenchOrders != null)
             {
                 diggingButton = CreateButton(content, "Scava [T]", DiggingMode.Dig);
@@ -317,6 +360,7 @@ namespace NoMansGround.Soldiers
             detailLayout.childForceExpandHeight = false;
             details = detailRect.gameObject;
             activity = CreateText(detailRect, "", 10, 28f);
+            mealStatus = CreateText(detailRect, "", 10, 28f);
             CreateText(detailRect, "Riserve: 100 pieno, 0 esaurito\nStress/paura/fatica: 100 critico", 10, 28f);
             needs = new Meter[7];
             for (int i = 0; i < needs.Length; i++)

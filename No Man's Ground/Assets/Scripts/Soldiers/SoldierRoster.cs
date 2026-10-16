@@ -12,12 +12,18 @@ namespace NoMansGround.Soldiers
         [SerializeField] private Sprite soldierSprite;
         [SerializeField, Range(1, SoldierGenerator.MaximumSoldiers)] private int soldierCount = 8;
         [SerializeField] private int seed = 1917;
+        [SerializeField] private bool spawnCook;
 
         private readonly List<SoldierView> soldiers = new List<SoldierView>();
         private IReadOnlyList<SoldierView> readOnlySoldiers;
 
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
         public event Action Rebuilt;
+
+        public void ConfigureCook(bool includeCook)
+        {
+            spawnCook = includeCook;
+        }
 
         public void Configure(MapPrototype prototype, MapTilemapView view, Sprite sprite)
         {
@@ -54,9 +60,13 @@ namespace NoMansGround.Soldiers
             if (mapView == null || soldierSprite == null)
                 throw new InvalidOperationException("Configure the roster before spawning soldiers.");
             int count = Mathf.Min(soldierCount, data.Width * data.Height);
-            IReadOnlyList<SoldierData> generated = SoldierGenerator.Generate(count, seed);
             if (count != soldierCount)
                 Debug.LogWarning($"Map has room for only {count} of the requested {soldierCount} soldiers.", this);
+            bool includeCook = spawnCook && count < SoldierGenerator.MaximumSoldiers && count < data.Width * data.Height;
+            int engineerCount = count;
+            if (includeCook)
+                count++;
+            IReadOnlyList<SoldierData> generated = SoldierGenerator.Generate(count, seed);
 
             foreach (SoldierView soldier in soldiers)
             {
@@ -91,7 +101,16 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
-                soldier.Initialize(generated[i], cell, soldierSprite);
+                SoldierData person = generated[i];
+                if (includeCook && i == engineerCount)
+                {
+                    var levels = new int[5];
+                    for (int skill = 0; skill < levels.Length; skill++)
+                        levels[skill] = person.GetSkill((SoldierSkill)skill).Level;
+                    person = new SoldierData(person.Id, person.FirstName, person.LastName,
+                        person.Needs, levels, SoldierProfession.Cook);
+                }
+                soldier.Initialize(person, cell, soldierSprite);
                 soldiers.Add(soldier);
             }
             Rebuilt?.Invoke();

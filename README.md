@@ -79,7 +79,8 @@ soltanto i test di No Man's Ground.
 
 ## Step 2: soldati, stato e skill
 
-La stessa scena include **8 soldati italiani**, visibili con sprite provvisori.
+La stessa scena include **8 soldati italiani del Genio e un cuoco aggiuntivo**,
+visibili con sprite provvisori.
 Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
 La scheda sulla destra mostra nome, cognome, stato e tutte le skill senza scroll.
 La larghezza e dimezzata (167 unita UI anziche 334), con caratteri e spaziature
@@ -98,8 +99,8 @@ I dati del soldato sono separati dal suo sprite e dal pannello.
 Fame, sete e bisogni fisiologici sono **riserve che diminuiscono nel tempo**.
 Alla nascita sono sempre **100/100**, cioe completamente soddisfatti:
 la barra e piena e verde. A **0** il bisogno deve essere soddisfatto.
-Temperatura, stress, paura e stanchezza restano statici.
-Nessuno stato produce ancora effetti sulle attivita.
+Temperatura, paura e stanchezza restano statici.
+Lo stress cresce con la fame sotto 35, senza impedire il lavoro.
 
 | Indicatore | Significato |
 | --- | --- |
@@ -135,7 +136,7 @@ Non viene ancora aggiunta un'interfaccia per pausa o velocita.
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione
 frazionaria e non scende mai sotto zero. Non sono ancora presenti recupero,
-cibo, acqua, servizi igienici, penalita o interruzioni automatiche dei lavori.
+consumo delle razioni, acqua, servizi igienici o interruzioni automatiche dei lavori.
 La rigenerazione ripristina le tre riserve a 100 e ricrea gli stessi rate.
 
 `SoldierNeeds` espone le durate `HungerDepletionSeconds`,
@@ -166,8 +167,9 @@ Il pannello aggiorna immediatamente XP e livello.
 
 ### Configurazione e limiti
 
-- Oggetto **Soldiers**, componente **Soldier Roster**: numero di soldati (1-64),
-  seed e sprite. Cambiare questi parametri prima di Play oppure rigenerare la mappa.
+- Oggetto **Soldiers**, componente **Soldier Roster**: numero di soldati del Genio,
+  seed e sprite. **Spawn Cook** aggiunge un cuoco, entro il limite totale di 64
+  personaggi e la capienza della mappa. Cambiare prima di Play o rigenerare.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
   bordo inferiore, la zona d'arrivo dei soldati. La camera iniziale inquadra
   questa zona rispettando i limiti della mappa. Tutti i terreni
@@ -348,6 +350,63 @@ API: `TrenchWorkOrders.DesignateLadder(cell)` accoda l'installazione;
 `HasLadder(cell)` legge lo stato. `IsWalkable(cell)` indica che la cella puo
 ospitare un soldato, non che sia raggiungibile dal terreno:
 le transizioni tra livelli sono validate da `CanStep(from, to)`.
+
+## Step 5: fame, mestieri, cucina e deposito viveri
+
+Con fame **strettamente sotto 35/100**, il soldato risulta **in attesa del rancio**:
+non cerca cibo, non va alla cucina e continua a muoversi e lavorare normalmente.
+Lo stress aumenta di **5 punti per minuto di gioco**, fino a 100, soltanto
+per il tempo passato sotto soglia (anche nei frame che attraversano la soglia).
+A 35 esatti non e ancora in attesa. Per ora lo stress non cala automaticamente.
+L'attesa e indicata sulla scheda, insieme al mestiere.
+
+### Mestieri iniziali
+
+- **Genio**: gli 8 soldati iniziali eseguono scavi e installazioni di scale.
+- **Cuoco**: un nono personaggio con nome italiano e tinta chiara raggiunge
+  la cucina e produce soltanto rancio. Non riceve scavi, scale o spostamenti
+  condivisi con il destro; la sua posizione resta prenotata per gli altri.
+- **Soldato**: ruolo previsto per il solo combattimento futuro, escluso dai
+  lavori del Genio. Il combattimento non e ancora implementato.
+
+Il mestiere appartiene a `SoldierData.Profession`. Non e ancora presente
+un'interfaccia per scegliere o cambiare il mestiere dei soldati.
+
+### Cucina e produzione
+
+La scena genera una **CUCINA** e un **DEPOSITO VIVERI** vicino alla zona di arrivo.
+I rispettivi ingombri non sono percorribili o scavabili; il cuoco lavora da una
+cella adiacente ortogonale, raggiunta con il normale pathfinding e prenotata.
+Se manca spazio o l'accesso e occupato/bloccato, il sistema lo segnala;
+gli accessi vengono ritentati automaticamente ogni mezzo secondo.
+Su mappe senza capienza per il cuoco la cucina non viene generata.
+
+- Il deposito parte con **1000 viveri** e la cucina con **0 razioni pronte**.
+- La produzione e continua, indipendente dal numero di soldati affamati.
+- Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
+- Al completamento si sottraggono **10 viveri** e si aggiunge **1 razione**.
+  Prima del completamento i viveri non vengono scalati.
+- Il viaggio non conta come preparazione. Pausa, assenza o disabilitazione
+  del cuoco sospendono la produzione conservando il progresso.
+- Con meno di 10 viveri il cuoco si ferma. Il deposito iniziale consente
+  **100 razioni**, per 50 minuti di preparazione effettiva.
+- **Clic sinistro sulla cucina**: mostra razioni pronte, viveri, avanzamento
+  della razione e stato del cuoco. Sul deposito mostra i viveri residui.
+  Uscire prima dalle modalita Scava/Scala/Annulla con Esc.
+- Rigenerare ricrea cuoco, edifici e scorte iniziali, azzerando razioni,
+  progresso e stress accumulato.
+
+`RationStock` gestisce tempi e contabilita; `KitchenSystem` gestisce strutture,
+prenotazione del cuoco e preparazione. Nessuna razione viene distribuita o
+consumata: la fame continua quindi a diminuire anche con razioni disponibili.
+
+### TODO rancio
+
+- [ ] Prevedere le **provvigioni necessarie a creare il rancio** con tipi,
+  ricette, approvvigionamento e rifornimento del deposito. Il prototipo
+  implementa soltanto il costo fisso di 10 unita per razione.
+- [ ] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
+- [ ] Assegnazione e cambio dei mestieri da parte del giocatore.
 
 ## Step successivi (non implementati)
 

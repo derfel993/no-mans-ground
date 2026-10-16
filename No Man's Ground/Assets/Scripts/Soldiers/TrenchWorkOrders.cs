@@ -320,7 +320,7 @@ namespace NoMansGround.Soldiers
             var available = new List<SoldierView>();
             var starts = new List<Vector2Int>();
             foreach (SoldierView soldier in roster.Soldiers)
-                if (soldier != null && soldier.IsAvailable)
+                if (soldier != null && soldier.CanTakeEngineeringWork)
                 {
                     available.Add(soldier);
                     starts.Add(soldier.Cell);
