@@ -8,6 +8,15 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.1.1 - 2026-10-17
+===============================================================================
+
+Tempo e strumenti
+- Aggiunto l'orologio di simulazione, con partenza al Giorno 1 alle 09:00.
+- Aggiunti i controlli 1x, 2x e 5x: accelerano insieme orologio e movimento
+  dei soldati.
+
+===============================================================================
 0.1.0 - 2026-10-16
 Riepilogo iniziale delle funzionalita implementate fino al commit f9022da.
 ===============================================================================

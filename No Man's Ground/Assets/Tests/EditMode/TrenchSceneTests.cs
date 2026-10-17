@@ -24,18 +24,23 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(5, buttons.Length);
-            buttons[0].onClick.Invoke();
+            Assert.AreEqual(8, buttons.Length);
+            FindButton(canvas, "2x").onClick.Invoke();
+            Assert.AreEqual(2, Time.timeScale);
+            Assert.AreEqual(2, map.SimulationSpeed);
+            FindButton(canvas, "1x").onClick.Invoke();
+            Assert.AreEqual(1, Time.timeScale);
+            FindButton(canvas, "Scava").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Dig, trenches.Mode);
-            buttons[1].onClick.Invoke();
+            FindButton(canvas, "Annulla scavi").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Cancel, trenches.Mode);
-            buttons[1].onClick.Invoke();
+            FindButton(canvas, "Annulla scavi").onClick.Invoke();
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
             SoldierView worker = roster.Soldiers[0];
-            buttons[3].onClick.Invoke();
+            FindButton(canvas, "Guardia").onClick.Invoke();
             Assert.AreEqual(SoldierDuty.Guard, worker.Duty);
             AssertTextContains(canvas, "Lavoro: 8 | Guardia: 1");
-            buttons[4].onClick.Invoke();
+            FindButton(canvas, "Lavoro").onClick.Invoke();
             Assert.AreEqual(SoldierDuty.Work, worker.Duty);
             AssertTextContains(canvas, "Lavoro: 9 | Guardia: 0");
             Vector2Int target = worker.Cell + Vector2Int.down;
@@ -58,7 +63,7 @@ namespace NoMansGround.Tests
             trenches.Tick(10f);
             Assert.AreEqual(TerrainKind.Trench, map.Data[target.x, target.y]);
             Assert.Zero(trenches.Jobs.Count);
-            buttons[2].onClick.Invoke();
+            FindButton(canvas, "Installa scala").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Ladder, trenches.Mode);
             Assert.IsTrue(trenches.DesignateLadder(target));
             yield return null;
@@ -104,12 +109,12 @@ namespace NoMansGround.Tests
             trenches.enabled = false;
             Assert.IsFalse(worker.HasWorkAssignment);
             Assert.Zero(trenches.Jobs.Count);
-            Assert.IsFalse(buttons[0].interactable);
+            Assert.IsFalse(FindButton(canvas, "Scava").interactable);
             trenches.SetMode(DiggingMode.Dig);
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
             Assert.IsFalse(trenches.BlocksWorldCommands);
             trenches.enabled = true;
-            Assert.IsTrue(buttons[0].interactable);
+            Assert.IsTrue(FindButton(canvas, "Scava").interactable);
             trenches.Designate(new Vector2Int(50, 10));
             trenches.Tick(0.01f);
             roster.enabled = false;
@@ -124,6 +129,15 @@ namespace NoMansGround.Tests
                 if (text.text.Contains(fragment))
                     return;
             Assert.Fail("No UI text contains: " + fragment);
+        }
+
+        private static Button FindButton(Canvas canvas, string label)
+        {
+            foreach (Button button in canvas.GetComponentsInChildren<Button>())
+                if (button.GetComponentInChildren<Text>().text.IndexOf(label, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return button;
+            Assert.Fail("No button contains: " + label);
+            return null;
         }
     }
 }

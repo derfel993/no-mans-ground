@@ -12,12 +12,34 @@ namespace NoMansGround.Map
         public MapData Data { get; private set; }
         public MapGenerationSettings Generation => generation;
         public GameClock Clock { get; } = new GameClock();
+        public int SimulationSpeed { get; private set; } = 1;
         public event Action<MapData> Generated;
+        public event Action<int> SimulationSpeedChanged;
 
         public void Configure(MapTilemapView view, MapCameraController controller)
         {
             mapView = view;
             cameraController = controller;
+        }
+
+        public void SetSimulationSpeed(int multiplier)
+        {
+            if (multiplier != 1 && multiplier != 2 && multiplier != 5)
+                throw new ArgumentOutOfRangeException(nameof(multiplier));
+            SimulationSpeed = multiplier;
+            Time.timeScale = multiplier;
+            SimulationSpeedChanged?.Invoke(multiplier);
+        }
+
+        private void Awake()
+        {
+            SetSimulationSpeed(1);
+        }
+
+        private void OnDisable()
+        {
+            Time.timeScale = 1f;
+            SimulationSpeed = 1;
         }
 
         private void Start()

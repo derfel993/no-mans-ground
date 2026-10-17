@@ -107,6 +107,8 @@ Il giorno aumenta a mezzanotte; la prima arriva dopo 25 minuti, perche si parte
 dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
 
 Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
+I pulsanti 1x, 2x e 5x sotto l'orologio accelerano insieme orologio, movimento
+dei soldati e sistemi che usano il tempo scalato.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
 Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
 durata dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
@@ -163,10 +165,11 @@ squadra non ha necessariamente questa media esatta.
 
 Le durate sono generate con il seed dei soldati e restano costanti nella
 sessione, senza alterare anagrafica, skill e altri stati generati.
-Il consumo avviene sia da fermi sia in marcia o al lavoro, senza moltiplicatori.
-Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x un secondo reale
-corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende il consumo.
-Non viene ancora aggiunta un'interfaccia per pausa o velocita.
+Il consumo avviene sia da fermi sia in marcia o al lavoro e segue la velocita
+della simulazione. Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x
+un secondo reale corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende
+il consumo. I pulsanti 1x, 2x e 5x sotto l'orologio cambiano la velocita;
+un controllo di pausa dedicato non e ancora disponibile.
 
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione
@@ -517,10 +520,7 @@ API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`
 
 ### TODO velocita della simulazione
 
-- [ ] Aggiungere controlli per selezionare **1x, 2x, 5x e 10x**, mostrando
-  la velocita attiva. L'accelerazione deve applicarsi in modo coerente a
-  orologio, movimento dei soldati, bisogni, lavori, cottura e distribuzione
-  del rancio, senza accelerare i comandi della camera o dell'interfaccia.
+- [ ] Estendere i controlli della velocita simulata con l'opzione **10x**.
 
 ### TODO risorse e rifugi
 

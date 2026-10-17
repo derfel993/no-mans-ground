@@ -35,6 +35,7 @@ namespace NoMansGround.Soldiers
         private Text dutyStatus;
         private Button guardButton;
         private Button workButton;
+        private Button[] speedButtons;
         private bool facilitySelected;
         private bool depotSelected;
         private SoldierView subscribedMovement;
@@ -83,8 +84,12 @@ namespace NoMansGround.Soldiers
             }
             RefreshDutyCounts();
             if (gameMap != null)
+            {
                 gameMap.Clock.Changed += RefreshClock;
+                gameMap.SimulationSpeedChanged += RefreshSpeedButtons;
+            }
             RefreshClock();
+            RefreshSpeedButtons();
             if (movementOrders != null)
                 movementOrders.StatusChanged += RefreshOrderStatus;
             if (trenchOrders != null)
@@ -105,7 +110,10 @@ namespace NoMansGround.Soldiers
         private void OnDisable()
         {
             if (gameMap != null)
+            {
                 gameMap.Clock.Changed -= RefreshClock;
+                gameMap.SimulationSpeedChanged -= RefreshSpeedButtons;
+            }
             if (roster != null)
             {
                 roster.Rebuilt -= HandleRosterRebuilt;
@@ -379,7 +387,19 @@ namespace NoMansGround.Soldiers
             layout.childForceExpandHeight = false;
             content.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             if (gameMap != null)
+            {
                 clockText = CreateText(content, gameMap.Clock.Display, 12, 22f);
+                var speedRow = CreateRect("Time speed controls", content);
+                speedRow.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
+                var speedLayout = speedRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+                speedLayout.spacing = 3f;
+                speedLayout.childForceExpandWidth = true;
+                speedButtons = new Button[3];
+                speedButtons[0] = CreateSpeedButton(speedRow, 1);
+                speedButtons[1] = CreateSpeedButton(speedRow, 2);
+                speedButtons[2] = CreateSpeedButton(speedRow, 5);
+                RefreshSpeedButtons();
+            }
             CreateText(content, "SOLDATI", 13, 20f);
             dutyCounts = CreateText(content, "", 10, 20f);
             RefreshDutyCounts();
@@ -451,6 +471,31 @@ namespace NoMansGround.Soldiers
             Text text = CreateText(rect, label, 10, 0f);
             Stretch(text.rectTransform, 2f);
             return button;
+        }
+
+        private Button CreateSpeedButton(Transform parent, int multiplier)
+        {
+            string label = multiplier + "x";
+            var rect = CreateRect(label, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => gameMap.SetSimulationSpeed(multiplier));
+            Text text = CreateText(rect, label, 10, 0f);
+            Stretch(text.rectTransform, 2f);
+            return button;
+        }
+
+        private void RefreshSpeedButtons(int speed = -1)
+        {
+            if (speedButtons == null || gameMap == null)
+                return;
+            int selectedSpeed = speed < 0 ? gameMap.SimulationSpeed : speed;
+            int[] speeds = { 1, 2, 5 };
+            for (int i = 0; i < speedButtons.Length; i++)
+                speedButtons[i].GetComponent<Image>().color = speeds[i] == selectedSpeed
+                    ? new Color(0.48f, 0.58f, 0.34f)
+                    : new Color(0.26f, 0.32f, 0.22f);
         }
 
         private void FitContent()

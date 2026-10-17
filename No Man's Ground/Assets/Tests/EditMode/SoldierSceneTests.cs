@@ -23,6 +23,7 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var map = Object.FindAnyObjectByType<MapPrototype>();
             var orders = Object.FindAnyObjectByType<SoldierMovementOrders>();
+            var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             Assert.IsNotNull(roster);
             Assert.IsNotNull(panel);
             Assert.IsNotNull(map);
@@ -35,6 +36,11 @@ namespace NoMansGround.Tests
             yield return null;
             yield return null;
             Assert.Greater(map.Clock.ElapsedSeconds, clockBefore);
+            FindButton(canvas, "2x").onClick.Invoke();
+            clockBefore = map.Clock.ElapsedSeconds;
+            yield return null;
+            Assert.Greater(map.Clock.ElapsedSeconds - clockBefore, Time.unscaledDeltaTime * 1.5d);
+            FindButton(canvas, "1x").onClick.Invoke();
             float previousTimeScale = Time.timeScale;
             try
             {
@@ -102,10 +108,12 @@ namespace NoMansGround.Tests
             Assert.IsNotNull(moving);
             panel.Select(moving);
             AssertTextExists($"In marcia: ({goal.x}, {goal.y})\nVelocita: {moving.MovementSpeed:0.00} unita/s");
+            FindButton(canvas, "5x").onClick.Invoke();
             Vector3 beforeMove = moving.transform.position;
             yield return null;
-            yield return null;
-            Assert.Greater(Vector3.Distance(beforeMove, moving.transform.position), 0f);
+            Assert.That(Vector3.Distance(beforeMove, moving.transform.position),
+                Is.EqualTo(moving.MovementSpeed * Time.deltaTime).Within(0.01f));
+            FindButton(canvas, "1x").onClick.Invoke();
             LineRenderer route = orders.GetComponentInChildren<LineRenderer>();
             Assert.Greater(route.positionCount, 1);
             Vector3 redirectPosition = moving.transform.position;
@@ -227,6 +235,15 @@ namespace NoMansGround.Tests
                     return;
             }
             Assert.Fail("Missing soldier panel text: " + value);
+        }
+
+        private static Button FindButton(Canvas canvas, string label)
+        {
+            foreach (Button button in canvas.GetComponentsInChildren<Button>())
+                if (button.GetComponentInChildren<Text>().text.Contains(label))
+                    return button;
+            Assert.Fail("No button contains: " + label);
+            return null;
         }
     }
 }
