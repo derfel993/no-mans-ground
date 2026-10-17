@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Tilemaps;
 using UnityEngine.TestTools;
 
 namespace NoMansGround.Tests
@@ -40,7 +41,20 @@ namespace NoMansGround.Tests
             }
             Assert.IsNotNull(trenches);
             map.Regenerate();
+            for (int x = 45; x < 70; x++)
+            {
+                var cell = new Vector2Int(x, 10);
+                map.Data[x, 10] = TerrainKind.Dirt;
+                map.Data.SetTree(cell, false);
+                map.Data.SetWalkable(cell, true);
+            }
+            view.Render(map.Data);
             roster.Spawn(map.Data);
+            for (int i = 0; i < 2; i++)
+            {
+                Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Shovel, 1));
+                roster.Soldiers[i].Data.Inventory.Add(ItemType.Shovel, 1);
+            }
         }
 
         [TearDown]
@@ -94,6 +108,189 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void DigJobSendsUnequippedWorkerToCollectShovelAndAddsItToInventory()
+        {
+            ReturnShovelsToDepot();
+            var cell = roster.Soldiers[0].Cell + Vector2Int.down;
+            Assert.IsTrue(trenches.Designate(cell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.IsNotNull(job.Worker);
+            Assert.AreEqual(ItemType.Shovel, job.PickingTool);
+            SoldierView picker = job.Worker;
+            Assert.Zero(picker.Data.Inventory.Count(ItemType.Shovel));
+            Assert.AreEqual(6, map.Data.StorageStockpile.Count(ItemType.Shovel));
+
+            picker.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.AreEqual(1, picker.Data.Inventory.Count(ItemType.Shovel));
+            Assert.AreEqual(5, map.Data.StorageStockpile.Count(ItemType.Shovel));
+            Assert.AreEqual(2, map.Data.StorageStockpile.Count(ItemType.Axe));
+            Assert.AreEqual(2, map.Data.StorageStockpile.Count(ItemType.Pickaxe));
+            Assert.IsFalse(job.PickingTool.HasValue);
+            Transform depotDisplay = view.transform.Find("Depot stockpile items");
+            Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+            var labels = new HashSet<string>();
+            foreach (TextMesh label in depotDisplay.GetComponentsInChildren<TextMesh>())
+                labels.Add(label.text);
+            CollectionAssert.Contains(labels, "Pala x5");
+            CollectionAssert.Contains(labels, "Accetta x2");
+            CollectionAssert.Contains(labels, "Piccone x2");
+
+            trenches.Tick(0.5f);
+            Assert.AreSame(picker, job.Worker);
+            Assert.IsTrue(picker.IsMoving || picker.HasWorkAssignment);
+        }
+
+        [Test]
+        public void DigJobWaitsWhenNoShovelIsCarriedOrAvailableInTheDepot()
+        {
+            ReturnShovelsToDepot();
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Shovel, 6));
+            Assert.IsTrue(trenches.Designate(new Vector2Int(50, 10)));
+            trenches.Tick(0.01f);
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.AreEqual("Nessuna pala disponibile", trenches.Jobs[0].Status);
+            Assert.Zero(trenches.Jobs[0].Progress);
+        }
+
+        [Test]
+        public void TreeCutCollectsAnAxeAndReplacesTheTreeWithWood()
+        {
+            var cell = new Vector2Int(50, 10);
+            map.Data.SetTree(cell, true);
+            view.Render(map.Data);
+            Assert.IsTrue(trenches.DesignateTree(cell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.IsTrue(job.PickingTool.HasValue);
+            Assert.AreEqual(ItemType.Axe, job.PickingTool.Value);
+            SoldierView cutter = job.Worker;
+            cutter.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.AreEqual(1, cutter.Data.Inventory.Count(ItemType.Axe));
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.Axe));
+
+            for (int i = 0; i < 20 && trenches.Jobs.Count > 0; i++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(1f);
+            }
+
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsFalse(map.Data.HasTree(cell));
+            Assert.IsTrue(map.Data.TryGetGroundItem(cell, out ItemType drop));
+            Assert.AreEqual(ItemType.Wood, drop);
+            Assert.AreEqual(1, map.Data.GroundItemCount);
+            Tilemap nature = view.transform.Find("Trees").GetComponent<Tilemap>();
+            Assert.AreEqual("Legna", nature.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            Assert.IsTrue(map.Data.IsWalkable(cell));
+        }
+
+        [Test]
+        public void TreeCutWaitsWhenNoAxeIsAvailable()
+        {
+            var cell = new Vector2Int(50, 10);
+            map.Data.SetTree(cell, true);
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Axe, 2));
+            Assert.IsTrue(trenches.DesignateTree(cell));
+            trenches.Tick(0.01f);
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.AreEqual("Nessuna accetta disponibile", trenches.Jobs[0].Status);
+            Assert.AreEqual(TerrainKind.Dirt, map.Data[cell.x, cell.y]);
+            Assert.IsTrue(map.Data.HasTree(cell));
+        }
+
+        [Test]
+        public void MineJobCollectsPickaxeWorksTenSecondsAndDropsBuildingStoneOnGravel()
+        {
+            var cell = new Vector2Int(50, 10);
+            map.Data[cell.x, cell.y] = TerrainKind.Rock;
+            foreach (Vector2Int offset in new[]
+                { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
+            {
+                Vector2Int adjacent = cell + offset;
+                map.Data[adjacent.x, adjacent.y] = TerrainKind.Dirt;
+                map.Data.SetTree(adjacent, false);
+                map.Data.SetWalkable(adjacent, true);
+            }
+            view.Render(map.Data);
+            Assert.IsTrue(trenches.DesignateMine(cell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.IsNotNull(job.Worker);
+            Assert.AreEqual(ItemType.Pickaxe, job.PickingTool);
+            SoldierView miner = job.Worker;
+
+            for (int i = 0; i < 30 && (job.PickingTool.HasValue || miner.IsMoving); i++)
+            {
+                miner.AdvanceMovement(1000f);
+                trenches.Tick(0.01f);
+                if (job.Worker != null)
+                    miner = job.Worker;
+            }
+            Assert.IsFalse(job.PickingTool.HasValue);
+            Assert.IsNotNull(job.Worker);
+            Assert.IsFalse(job.Worker.IsMoving);
+            Assert.AreEqual(1, miner.Data.Inventory.Count(ItemType.Pickaxe));
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.Pickaxe));
+            Assert.Less(job.Progress, 1f);
+
+            float remainingWork = 10f * (1f - job.Progress);
+            trenches.Tick(remainingWork - 0.01f);
+            Assert.AreEqual(TerrainKind.Rock, map.Data[cell.x, cell.y]);
+            Assert.IsFalse(map.Data.TryGetGroundItem(cell, out _));
+            trenches.Tick(0.02f);
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.AreEqual(TerrainKind.Gravel, map.Data[cell.x, cell.y]);
+            Assert.IsTrue(map.Data.TryGetGroundItem(cell, out ItemType drop));
+            Assert.AreEqual(ItemType.BuildingStone, drop);
+            Assert.AreEqual("Gravel", view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            Tilemap nature = view.transform.Find("Trees").GetComponent<Tilemap>();
+            Assert.AreEqual("Pietra da costruzione", nature.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+        }
+
+        [Test]
+        public void CollectJobPicksUpGroundResourceAndDeliversItToTheDepot()
+        {
+            var cell = new Vector2Int(50, 10);
+            map.Data.AddGroundItem(cell, ItemType.Wood);
+            view.Render(map.Data);
+            Assert.IsTrue(trenches.DesignateCollection(cell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.AreEqual(TrenchJobKind.CollectItem, job.Kind);
+            Assert.IsNotNull(job.Worker);
+            SoldierView collector = job.Worker;
+
+            for (int i = 0; i < 20 && !job.CollectedItem.HasValue; i++)
+            {
+                collector.AdvanceMovement(1000f);
+                trenches.Tick(0.01f);
+            }
+            Assert.AreEqual(ItemType.Wood, job.CollectedItem);
+            Assert.IsFalse(map.Data.TryGetGroundItem(cell, out _));
+            Assert.AreEqual(1, job.Worker.Data.Inventory.Count(ItemType.Wood));
+
+            for (int i = 0; i < 30 && trenches.Jobs.Count > 0; i++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(0.01f);
+            }
+
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.Wood));
+            Assert.AreEqual(0, collector.Data.Inventory.Count(ItemType.Wood));
+            Transform depotDisplay = view.transform.Find("Depot stockpile items");
+            var labels = new HashSet<string>();
+            foreach (TextMesh label in depotDisplay.GetComponentsInChildren<TextMesh>())
+                labels.Add(label.text);
+            CollectionAssert.Contains(labels, "Legna x1");
+        }
+
+        [Test]
         public void QueuedJobsReserveDistinctWorkersAndAdjacentEndpointsAndContinueAutomatically()
         {
             for (int x = 50; x < 62; x++)
@@ -110,7 +307,7 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(1, Mathf.Abs(job.Cell.x - job.Worker.Destination.x)
                     + Mathf.Abs(job.Cell.y - job.Worker.Destination.y));
             }
-            Assert.AreEqual(8, workers.Count);
+            Assert.AreEqual(2, workers.Count);
             for (int step = 0; step < 60 && trenches.Jobs.Count > 0; step++)
             {
                 foreach (SoldierView soldier in roster.Soldiers)
@@ -120,6 +317,19 @@ namespace NoMansGround.Tests
             Assert.Zero(trenches.Jobs.Count);
             for (int x = 50; x < 62; x++)
                 Assert.AreEqual(TerrainKind.Trench, map.Data[x, 10]);
+        }
+
+        private void ReturnShovelsToDepot()
+        {
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                int count = soldier.Data.Inventory.Count(ItemType.Shovel);
+                if (count > 0)
+                {
+                    Assert.IsTrue(soldier.Data.Inventory.TryTake(ItemType.Shovel, count));
+                    map.Data.StorageStockpile.Add(ItemType.Shovel, count);
+                }
+            }
         }
 
         [Test]

@@ -17,7 +17,8 @@ namespace NoMansGround.Map
         Mud,
         Trench,
         Road,
-        Rock
+        Rock,
+        Gravel
     }
 
     public sealed class MapData
@@ -28,11 +29,13 @@ namespace NoMansGround.Map
         private readonly bool[] trees;
         private readonly bool[] storageCells;
         private readonly bool[] pantryCells;
+        private readonly ItemType?[] groundItems;
         private readonly MapZoneKind?[] zones;
 
         public int Width { get; }
         public int Height { get; }
         public int TreeCount { get; private set; }
+        public int GroundItemCount { get; private set; }
         public bool HasStorageArea { get; private set; }
         public Vector2Int StorageOrigin { get; private set; }
         public int StorageWidth { get; private set; }
@@ -57,6 +60,7 @@ namespace NoMansGround.Map
             trees = new bool[cells.Length];
             storageCells = new bool[cells.Length];
             pantryCells = new bool[cells.Length];
+            groundItems = new ItemType?[cells.Length];
             zones = new MapZoneKind?[cells.Length];
         }
 
@@ -66,7 +70,8 @@ namespace NoMansGround.Map
             set
             {
                 int index = IndexOf(x, y);
-                if (value == TerrainKind.Rock && (storageCells[index] || pantryCells[index]))
+                if (value == TerrainKind.Rock && (storageCells[index] || pantryCells[index]
+                    || groundItems[index].HasValue))
                     throw new InvalidOperationException("Storage areas cannot contain rock.");
                 cells[index] = value;
                 if (value != TerrainKind.Trench)
@@ -261,11 +266,48 @@ namespace NoMansGround.Map
             return Contains(cell) && trees[cell.y * Width + cell.x];
         }
 
+        public bool TryGetGroundItem(Vector2Int cell, out ItemType item)
+        {
+            item = default;
+            if (!Contains(cell) || !groundItems[cell.y * Width + cell.x].HasValue)
+                return false;
+            item = groundItems[cell.y * Width + cell.x].Value;
+            return true;
+        }
+
+        public bool TryTakeGroundItem(Vector2Int cell, out ItemType item)
+        {
+            item = default;
+            if (!Contains(cell))
+                return false;
+            int index = cell.y * Width + cell.x;
+            if (!groundItems[index].HasValue)
+                return false;
+            item = groundItems[index].Value;
+            groundItems[index] = null;
+            GroundItemCount--;
+            return true;
+        }
+
+        public void AddGroundItem(Vector2Int cell, ItemType item)
+        {
+            int index = IndexOf(cell.x, cell.y);
+            if (!Enum.IsDefined(typeof(ItemType), item))
+                throw new ArgumentOutOfRangeException(nameof(item));
+            if (trees[index] || cells[index] == TerrainKind.Rock || storageCells[index] || pantryCells[index])
+                throw new InvalidOperationException("An item cannot be dropped on a tree, rock or storage area.");
+            if (groundItems[index].HasValue)
+                throw new InvalidOperationException("This cell already contains a ground item.");
+            groundItems[index] = item;
+            GroundItemCount++;
+        }
+
         public void SetTree(Vector2Int cell, bool hasTree)
         {
             int index = IndexOf(cell.x, cell.y);
-            if (hasTree && (cells[index] == TerrainKind.Rock || storageCells[index] || pantryCells[index]))
-                throw new InvalidOperationException("A tree cannot be placed on rock or in a storage area.");
+            if (hasTree && (cells[index] == TerrainKind.Rock || storageCells[index] || pantryCells[index]
+                || groundItems[index].HasValue))
+                throw new InvalidOperationException("A tree cannot be placed on rock, items or a storage area.");
             if (trees[index] != hasTree)
                 TreeCount += hasTree ? 1 : -1;
             trees[index] = hasTree;

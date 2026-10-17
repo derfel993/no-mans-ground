@@ -59,6 +59,9 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 | Pulsanti Guardia / Lavoro nella scheda | Cambia lo stato del soldato selezionato |
 | Clic destro sul terreno | Muove soltanto il soldato selezionato in Guardia |
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
+| A / pulsante Taglia | Attiva/disattiva il taglio degli alberi lungo una linea |
+| M / pulsante Mina | Attiva/disattiva la designazione di rocce da minare |
+| C / pulsante Raccogli | Attiva/disattiva la raccolta di una risorsa cliccata |
 | L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
 | Pulsanti Discarica / Materiali / Cimitero | Seleziona il tipo di zona da disegnare |
@@ -143,8 +146,9 @@ Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
 Il pannello del soldato compare in basso a sinistra e offre quattro tab:
 **Info** (identita, istruzioni, lavoro/guardia e carico massimo), **Stato**
 (fame, sete, bisogni fisiologici, termico, stress, paura e stanchezza),
-**Skill** e **Inventario**. Il tab Inventario e vuoto; la gestione degli oggetti
-non e ancora implementata. Il pannello laterale destro mantiene orologio,
+**Skill** e **Inventario**. Il tab Inventario mostra la Pala quando il soldato
+lo raccoglie per un job di scavo; gli altri trasferimenti non sono ancora
+implementati. Il pannello laterale destro mantiene orologio,
 comandi, zone e informazioni sulle strutture.
 Selezionare un altro soldato con clic sinistro o il terreno per deselezionare.
 Zoom e panning restano disponibili; i clic sul pannello non selezionano soldati
@@ -344,6 +348,13 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   Le trincee e le scale completate non vengono rimosse.
 - **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
   In queste modalita il sinistro non cambia il soldato selezionato.
+- **A** o **Taglia** attiva la designazione degli alberi lungo una linea. Il job
+  richiede un'**Accetta**: il lavoratore la ritira dal deposito se non l'ha gia
+  nell'inventario. Senza Accette il lavoro resta in attesa. Completato il taglio,
+  l'albero viene sostituito da un item **Legna** sulla stessa cella.
+- **C** o **Raccogli** attiva la raccolta: cliccare un item Resource a terra.
+  Un lavoratore in Lavoro lo prende, lo mostra nell'Inventario e lo porta al
+  deposito; la quantita compare nello stockpile.
 - Annullare perde il progresso di quella cella e libera l'assegnazione senza XP.
   Un soldato gia in marcia raggiunge la posizione prenotata prima di tornare
   disponibile: nessun teletrasporto o interruzione a meta cella.
@@ -354,6 +365,14 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   libero con il percorso piu breve verso una delle **quattro celle adiacenti
   ortogonali**, mai la cella da scavare. I lavori irraggiungibili non impediscono
   l'assegnazione di quelli successivi.
+- Per iniziare uno scavo il soldato deve avere una **Pala** nell'inventario.
+  Se non la possiede, raggiunge il deposito e ne prende una se disponibile;
+  senza Pale lo scavo resta in attesa. L'attrezzo raccolto resta nel suo
+  inventario e appare nel tab **Inventario**.
+- **M** o **Mina** designa le rocce lungo una linea. Un lavoratore con Piccone
+  raggiunge una cella adiacente; se non lo possiede lo ritira dal deposito.
+  Dopo **10 secondi di lavoro**, la roccia diventa Gravel e lascia **Pietra da
+  costruzione** sulla stessa cella. Il viaggio al deposito e al lavoro non conta.
 - Lavoro e posizione finale sono esclusivi. Un soldato non riceve due lavori,
   ne un ordine manuale durante lo scavo. Gli attraversamenti restano consentiti.
 - Il tempo avanza soltanto dopo l'arrivo. Durata per cella:
@@ -591,13 +610,14 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 
 ### TODO risorse e rifugi
 
-- [ ] **Alberi**: permettere al giocatore di designarne l'abbattimento come job
-  per ottenere **legna**. La generazione e il rendering degli alberi sono presenti;
-  non si potra scavare una trincea in una cella che contiene un albero.
-- [ ] **Estrazione della roccia**: designare celle Rock per ottenere
-  **pietra da costruzione** tramite un job del Genio.
-- [ ] **Risorse raccolte**: gestire legna e pietra come materiali disponibili
-  per le costruzioni.
+- [x] **Alberi**: generazione e rendering, taglio tramite job **Taglia** con
+  Accetta e drop di **Legna** sulla cella. Non si puo scavare una trincea in una
+  cella che contiene un albero.
+- [x] **Estrazione della roccia**: il job Mina richiede un Piccone, trasforma
+  Rock in Gravel dopo 10 secondi di lavoro e lascia Pietra da costruzione a terra.
+- [x] **Raccolta risorse**: cliccare un item a terra e assegnare un job che lo
+  porta al deposito. Legna e Pietra da costruzione sono registrate nello stockpile.
+- [ ] Usare legna e pietra come materiali per le costruzioni e automatizzare la raccolta.
 - [ ] **Rifugi con costruzione a celle, in stile RimWorld**: designare pareti
   e porte, richiedere materiali e assegnare i lavori di costruzione ai soldati.
 - [ ] **Tetti automatici**: quando le pareti e le porte costruite chiudono
@@ -612,8 +632,9 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
   soltanto quando la fame scende sotto 35.
 - [ ] **Paura**: definire cause, variazione e gestione del valore.
 - [ ] **Stanchezza**: implementare consumo, riposo e recupero.
-- [ ] **Inventario**: introdurre gli oggetti trasportabili, il peso corrente e
-  le regole di carico usando la capacita massima gia mostrata in Info.
+- [ ] **Inventario**: calcolare il peso corrente e applicare il limite di carico;
+  estendere raccolta e assegnazione agli altri utensili, cibo e armi.
+- [ ] **Peso dei tool e oggetti**: definire il peso unitario e conteggiarlo nel carico.
 
 Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
 dei bisogni, evoluzione degli altri stati, copertura e combattimento.

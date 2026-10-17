@@ -109,6 +109,7 @@ namespace NoMansGround.Editor
             orders.ConfigureTrenches(trenches);
             view.ConfigureTrench(CreateTile("Trench", new Color(0.19f, 0.13f, 0.08f), CreateSprite()));
             view.ConfigureRock(CreateTile("Rock", new Color(0.34f, 0.35f, 0.36f), CreateSprite()));
+            view.ConfigureGravel(CreateTile("Gravel", new Color(0.53f, 0.52f, 0.47f), CreateSprite()));
             view.ConfigureLadder(CreateTile("Ladder", Color.white, CreateLadderSprite()));
             view.ConfigureRoad(CreateTile("Road", new Color(0.56f, 0.54f, 0.49f), CreateSprite()));
             var kitchen = roster.GetComponent<KitchenSystem>();

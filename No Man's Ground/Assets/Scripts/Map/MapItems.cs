@@ -7,7 +7,8 @@ namespace NoMansGround.Map
     {
         Tool,
         Weapon,
-        Food
+        Food,
+        Resource
     }
 
     public enum ItemType
@@ -15,7 +16,9 @@ namespace NoMansGround.Map
         Shovel,
         Axe,
         Pickaxe,
-        Rations
+        Rations,
+        Wood,
+        BuildingStone
     }
 
     public enum ItemAction
@@ -54,6 +57,9 @@ namespace NoMansGround.Map
                 case ItemType.Axe: return new ItemDefinition(type, "Accetta", ItemCategory.Tool, ItemAction.CutTree, 1);
                 case ItemType.Pickaxe: return new ItemDefinition(type, "Piccone", ItemCategory.Tool, ItemAction.BreakRock, 1);
                 case ItemType.Rations: return new ItemDefinition(type, "Razioni", ItemCategory.Food, null, 250);
+                case ItemType.Wood: return new ItemDefinition(type, "Legna", ItemCategory.Resource, null, 250);
+                case ItemType.BuildingStone:
+                    return new ItemDefinition(type, "Pietra da costruzione", ItemCategory.Resource, null, 250);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

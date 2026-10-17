@@ -28,8 +28,12 @@ namespace NoMansGround.Soldiers
         private Text orderStatus;
         private Text activity;
         private Text carryCapacity;
+        private Text inventoryStatus;
         private Text diggingStatus;
         private Text diggingButton;
+        private Text cutButton;
+        private Text mineButton;
+        private Text collectButton;
         private Text cancelButton;
         private Text ladderButton;
         private Text mealStatus;
@@ -85,11 +89,12 @@ namespace NoMansGround.Soldiers
                 enabled = false;
                 return;
             }
-            BuildInterface();
+            EnsureInterface();
         }
 
         private void OnEnable()
         {
+            EnsureInterface();
             if (canvasObject != null)
                 canvasObject.SetActive(true);
             if (roster != null)
@@ -114,6 +119,16 @@ namespace NoMansGround.Soldiers
             RefreshDigging();
             if (canvasObject != null && roster != null)
                 HandleRosterRebuilt();
+        }
+
+        private void EnsureInterface()
+        {
+            if (canvasObject != null || roster == null || mapCamera == null)
+                return;
+            GameObject staleCanvas = GameObject.Find("Soldier Interface");
+            if (staleCanvas != null)
+                Destroy(staleCanvas);
+            BuildInterface();
         }
 
         private void Start()
@@ -214,6 +229,7 @@ namespace NoMansGround.Soldiers
             if (selectedData != null)
             {
                 selectedData.Needs.Changed -= RefreshNeeds;
+                selectedData.Inventory.Changed -= RefreshInventory;
                 foreach (SkillProgress skill in selectedData.Skills)
                     skill.Changed -= Refresh;
             }
@@ -225,6 +241,7 @@ namespace NoMansGround.Soldiers
             if (Selected != null)
             {
                 selectedData.Needs.Changed += RefreshNeeds;
+                selectedData.Inventory.Changed += RefreshInventory;
                 Selected.MovementChanged += Refresh;
                 Selected.SetSelected(true);
                 foreach (SkillProgress skill in Selected.Data.Skills)
@@ -418,9 +435,22 @@ namespace NoMansGround.Soldiers
                 ? "Sinistro: ispeziona.\nDestro: muovi solo in Guardia."
                 : "Sinistro: scegli un soldato.\nDestro: muovi solo in Guardia.";
             RefreshOrderStatus();
-            details.SetActive(selected);
+            details.SetActive(true);
             if (!selected)
+            {
+                dutyStatus.text = string.Empty;
+                guardButton.interactable = false;
+                workButton.interactable = false;
+                activity.text = string.Empty;
+                carryCapacity.text = string.Empty;
+                inventoryStatus.text = string.Empty;
+                mealStatus.text = string.Empty;
+                foreach (Meter need in needs)
+                    need.Set(string.Empty, 0f, Color.clear);
+                foreach (Meter skill in skills)
+                    skill.Set(string.Empty, 0f, Color.clear);
                 return;
+            }
             dutyStatus.text = Selected.GuardRequested ? "Lavoro -> Guardia a fine job"
                 : Selected.Duty == SoldierDuty.Guard ? "Stato: Guardia" : "Stato: Lavoro";
             guardButton.interactable = Selected.Data.Profession != SoldierProfession.Cook
@@ -430,10 +460,11 @@ namespace NoMansGround.Soldiers
             Vector2Int target = Selected.Destination;
             activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
-                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
+                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             carryCapacity.text = $"Carico massimo: {Selected.Data.MaxCarryWeightKg:0.0} kg";
+            RefreshInventory();
             RefreshNeeds();
             for (int i = 0; i < skills.Length; i++)
             {
@@ -473,6 +504,22 @@ namespace NoMansGround.Soldiers
             }
         }
 
+        private void RefreshInventory()
+        {
+            if (inventoryStatus == null)
+                return;
+            inventoryStatus.text = string.Empty;
+            if (Selected == null)
+                return;
+            foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations })
+            {
+                int count = Selected.Data.Inventory.Count(type);
+                if (count > 0)
+                    inventoryStatus.text += $"{ItemCatalog.Get(type).DisplayName} x{count}\n";
+            }
+            inventoryStatus.text = inventoryStatus.text.TrimEnd();
+        }
+
         private void RefreshOrderStatus()
         {
             if (orderStatus != null)
@@ -494,9 +541,15 @@ namespace NoMansGround.Soldiers
             diggingStatus.text = $"Lavori: {trenchOrders.Jobs.Count} | Attivi: {active}\nBloccati: {blocked}\n"
                 + trenchOrders.Status;
             diggingButton.text = trenchOrders.Mode == DiggingMode.Dig ? "SCAVA [T] - attivo" : "Scava [T]";
+            cutButton.text = trenchOrders.Mode == DiggingMode.Cut ? "TAGLIA [A] - attivo" : "Taglia [A]";
+            mineButton.text = trenchOrders.Mode == DiggingMode.Mine ? "MINA [M] - attivo" : "Mina [M]";
+            collectButton.text = trenchOrders.Mode == DiggingMode.Collect ? "RACCOGLI [C] - attivo" : "Raccogli [C]";
             cancelButton.text = trenchOrders.Mode == DiggingMode.Cancel ? "ANNULLA [X] - attivo" : "Annulla scavi [X]";
             ladderButton.text = trenchOrders.Mode == DiggingMode.Ladder ? "SCALA [L] - attivo" : "Installa scala [L]";
             diggingButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            cutButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            mineButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            collectButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             cancelButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             ladderButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
         }
@@ -560,6 +613,9 @@ namespace NoMansGround.Soldiers
             if (trenchOrders != null)
             {
                 diggingButton = CreateButton(content, "Scava [T]", DiggingMode.Dig);
+                cutButton = CreateButton(content, "Taglia [A]", DiggingMode.Cut);
+                mineButton = CreateButton(content, "Mina [M]", DiggingMode.Mine);
+                collectButton = CreateButton(content, "Raccogli [C]", DiggingMode.Collect);
                 cancelButton = CreateButton(content, "Annulla scavi [X]", DiggingMode.Cancel);
                 ladderButton = CreateButton(content, "Installa scala [L]", DiggingMode.Ladder);
                 diggingStatus = CreateText(content, "", 10, 66f);
@@ -648,6 +704,8 @@ namespace NoMansGround.Soldiers
             skills = new Meter[5];
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = CreateMeter(skill, 34f);
+
+            inventoryStatus = CreateText(soldierTabPages[3].transform, "", 10, 24f);
 
             SetSoldierTab(0);
         }

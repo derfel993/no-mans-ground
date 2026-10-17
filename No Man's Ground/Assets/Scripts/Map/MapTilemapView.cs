@@ -14,15 +14,17 @@ namespace NoMansGround.Map
         private Tile runtimeTreeTile;
         private Sprite runtimeTreeSprite;
         private Texture2D runtimeTreeTexture;
+        private readonly Tile[] runtimeGroundItemTiles = new Tile[Enum.GetValues(typeof(ItemType)).Length];
         private MapData stockpileMap;
         private GameObject storageItemsRoot;
-        private readonly GameObject[] storageItemDisplays = new GameObject[4];
-        private readonly Sprite[] runtimeItemSprites = new Sprite[4];
-        private readonly Texture2D[] runtimeItemTextures = new Texture2D[4];
+        private readonly GameObject[] storageItemDisplays = new GameObject[6];
+        private readonly Sprite[] runtimeItemSprites = new Sprite[Enum.GetValues(typeof(ItemType)).Length];
+        private readonly Texture2D[] runtimeItemTextures = new Texture2D[Enum.GetValues(typeof(ItemType)).Length];
         [SerializeField] private TileBase dirtTile;
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
         [SerializeField] private TileBase rockTile;
+        [SerializeField] private TileBase gravelTile;
         [SerializeField] private TileBase treeTile;
         [SerializeField] private TileBase trenchTile;
         [SerializeField] private TileBase ladderTile;
@@ -51,6 +53,11 @@ namespace NoMansGround.Map
         public void ConfigureRock(TileBase rock)
         {
             rockTile = rock;
+        }
+
+        public void ConfigureGravel(TileBase gravel)
+        {
+            gravelTile = gravel;
         }
 
         public void ConfigureLadder(TileBase ladder)
@@ -82,6 +89,41 @@ namespace NoMansGround.Map
             Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), trenchTile);
         }
 
+        public void CompleteTreeCut(MapData map, Vector2Int cell)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (!map.HasTree(cell))
+                throw new InvalidOperationException("A tree must exist before it can be cut.");
+            map.SetTree(cell, false);
+            map.AddGroundItem(cell, ItemType.Wood);
+            RenderTrees(map);
+        }
+
+        public void RefreshGroundItems(MapData map)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            RenderTrees(map);
+        }
+
+        public void CompleteRockMine(MapData map, Vector2Int cell)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (!map.Contains(cell) || map[cell.x, cell.y] != TerrainKind.Rock)
+                throw new InvalidOperationException("Rock must exist before it can be mined.");
+            if (gravelTile == null)
+                throw new InvalidOperationException("Assign a gravel tile before mining rock.");
+            map[cell.x, cell.y] = TerrainKind.Gravel;
+            map.AddGroundItem(cell, ItemType.BuildingStone);
+            var position = new Vector3Int(cell.x, cell.y, 0);
+            Tilemap.SetTile(position, gravelTile);
+            Tilemap.SetTileFlags(position, TileFlags.None);
+            Tilemap.SetColor(position, Color.white);
+            RenderTrees(map);
+        }
+
         public void Render(MapData map)
         {
             if (map == null)
@@ -104,6 +146,11 @@ namespace NoMansGround.Map
                             if (rockTile == null)
                                 throw new InvalidOperationException("Assign a rock tile before rendering rocks.");
                             tiles[y * map.Width + x] = rockTile;
+                            break;
+                        case TerrainKind.Gravel:
+                            if (gravelTile == null)
+                                throw new InvalidOperationException("Assign a gravel tile before rendering gravel.");
+                            tiles[y * map.Width + x] = gravelTile;
                             break;
                         case TerrainKind.Road:
                             if (roadTile == null)
@@ -201,7 +248,13 @@ namespace NoMansGround.Map
             }
             storageItemsRoot.SetActive(true);
 
-            ItemType[] types = { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations };
+            ItemType[] types =
+                { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations, ItemType.Wood, ItemType.BuildingStone };
+            Vector2Int[] depotSlots =
+            {
+                new Vector2Int(0, 2), new Vector2Int(1, 2), new Vector2Int(2, 2),
+                Vector2Int.zero, new Vector2Int(0, 1), new Vector2Int(1, 1)
+            };
             for (int i = 0; i < types.Length; i++)
             {
                 bool isFood = types[i] == ItemType.Rations;
@@ -224,7 +277,7 @@ namespace NoMansGround.Map
                 renderer.sprite = runtimeItemSprites[i];
                 Vector2Int cell = isFood
                     ? map.PantryOrigin + new Vector2Int(0, 2)
-                    : map.StorageOrigin + new Vector2Int(i, 2);
+                    : map.StorageOrigin + depotSlots[i];
                 display.transform.position = Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 display.transform.localScale = Vector3.one * 0.8f;
                 display.transform.GetChild(0).localPosition = new Vector3(0f, -0.58f, 0f);
@@ -325,6 +378,27 @@ namespace NoMansGround.Map
                     SetPixel(pixels, 7, 9, new Color32(231, 216, 174, 255));
                     SetPixel(pixels, 8, 9, new Color32(231, 216, 174, 255));
                     break;
+                case ItemType.Wood:
+                    for (int y = 3; y <= 12; y += 4)
+                        for (int x = 2; x <= 13; x++)
+                        {
+                            SetPixel(pixels, x, y, new Color32(82, 53, 31, 255));
+                            SetPixel(pixels, x, y + 1, new Color32(150, 102, 55, 255));
+                            SetPixel(pixels, x, y + 2, x == 2 || x == 13
+                                ? new Color32(205, 166, 102, 255) : new Color32(82, 53, 31, 255));
+                        }
+                    break;
+                case ItemType.BuildingStone:
+                    for (int y = 3; y <= 12; y++)
+                        for (int x = 3; x <= 12; x++)
+                        {
+                            bool edge = x == 3 || x == 12 || y == 3 || y == 12;
+                            bool highlight = (x + y) % 4 == 0;
+                            SetPixel(pixels, x, y, edge ? new Color32(65, 68, 67, 255)
+                                : highlight ? new Color32(161, 160, 146, 255)
+                                : new Color32(112, 115, 111, 255));
+                        }
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(type));
             }
@@ -342,25 +416,30 @@ namespace NoMansGround.Map
 
         private void RenderTrees(MapData map)
         {
-            if (map.TreeCount == 0)
+            if (map.TreeCount == 0 && map.GroundItemCount == 0)
             {
                 if (treeTilemap != null)
                     treeTilemap.ClearAllTiles();
                 return;
             }
 
-            EnsureTreeLayer();
+            EnsureTreeLayer(map);
             var tiles = new TileBase[map.Width * map.Height];
             for (int y = 0; y < map.Height; y++)
                 for (int x = 0; x < map.Width; x++)
-                    if (map.HasTree(new Vector2Int(x, y)))
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (map.HasTree(cell))
                         tiles[y * map.Width + x] = treeTile;
+                    else if (map.TryGetGroundItem(cell, out ItemType item))
+                        tiles[y * map.Width + x] = GetGroundItemTile(item);
+                }
             treeTilemap.ClearAllTiles();
             treeTilemap.SetTilesBlock(new BoundsInt(0, 0, 0, map.Width, map.Height, 1), tiles);
             treeTilemap.CompressBounds();
         }
 
-        private void EnsureTreeLayer()
+        private void EnsureTreeLayer(MapData map)
         {
             if (treeTilemap == null)
             {
@@ -372,8 +451,24 @@ namespace NoMansGround.Map
                 treeRenderer.sortingLayerID = baseRenderer.sortingLayerID;
                 treeRenderer.sortingOrder = baseRenderer.sortingOrder + 1;
             }
-            if (treeTile == null)
+            if (treeTile == null && map.TreeCount > 0)
                 treeTile = CreateRuntimeTreeTile();
+        }
+
+        private Tile GetGroundItemTile(ItemType item)
+        {
+            int index = (int)item;
+            if (runtimeGroundItemTiles[index] != null)
+                return runtimeGroundItemTiles[index];
+            if (runtimeItemSprites[index] == null)
+                runtimeItemSprites[index] = CreateItemSprite(item, index);
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.name = ItemCatalog.Get(item).DisplayName;
+            tile.sprite = runtimeItemSprites[index];
+            tile.colliderType = Tile.ColliderType.None;
+            tile.flags = TileFlags.None;
+            runtimeGroundItemTiles[index] = tile;
+            return tile;
         }
 
         private Tile CreateRuntimeTreeTile()
@@ -422,6 +517,9 @@ namespace NoMansGround.Map
                 DestroyGeneratedObject(runtimeTreeSprite);
             if (runtimeTreeTexture != null)
                 DestroyGeneratedObject(runtimeTreeTexture);
+            foreach (Tile itemTile in runtimeGroundItemTiles)
+                if (itemTile != null)
+                    DestroyGeneratedObject(itemTile);
             if (storageItemsRoot != null)
                 DestroyGeneratedObject(storageItemsRoot);
             for (int i = 0; i < runtimeItemSprites.Length; i++)

@@ -8,6 +8,23 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.2.1 - 2026-10-17
+===============================================================================
+
+Lavori e raccolta risorse
+- Gli scavi richiedono una Pala: se manca nell'inventario, un lavoratore la
+  ritira dal deposito; il job resta in attesa se non ce ne sono.
+- Aggiunto il job **Taglia**: richiede un'Accetta e sostituisce l'albero abbattuto
+  con un item Legna sulla stessa cella.
+- Aggiunto il job **Mina**: richiede un Piccone; dopo 10 secondi Rock diventa
+  Gravel e lascia Pietra da costruzione sulla cella.
+- Aggiunta l'azione **Raccogli**: un lavoratore trasferisce gli item a terra
+  nell'inventario e poi al deposito.
+- Il tab Inventario mostra gli item raccolti; il deposito aggiorna gli stockpile
+  e le sprite delle risorse consegnate.
+- La dispensa è generata automaticamente sotto il deposito con 1000 Razioni.
+
+===============================================================================
 0.2.0 - 2026-10-17
 ===============================================================================
 

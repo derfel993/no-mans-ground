@@ -24,7 +24,7 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(9, buttons.Length);
+            Assert.AreEqual(19, buttons.Length);
             FindButton(canvas, "2x").onClick.Invoke();
             Assert.AreEqual(2, Time.timeScale);
             Assert.AreEqual(2, map.SimulationSpeed);
@@ -39,6 +39,18 @@ namespace NoMansGround.Tests
             Assert.AreEqual(DiggingMode.Cancel, trenches.Mode);
             FindButton(canvas, "Annulla scavi").onClick.Invoke();
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            FindButton(canvas, "Taglia").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Cut, trenches.Mode);
+            FindButton(canvas, "Taglia").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            FindButton(canvas, "Mina").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Mine, trenches.Mode);
+            FindButton(canvas, "Mina").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            FindButton(canvas, "Raccogli").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Collect, trenches.Mode);
+            FindButton(canvas, "Raccogli").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.None, trenches.Mode);
             SoldierView worker = roster.Soldiers[0];
             FindButton(canvas, "Guardia").onClick.Invoke();
             Assert.AreEqual(SoldierDuty.Guard, worker.Duty);
@@ -46,6 +58,8 @@ namespace NoMansGround.Tests
             FindButton(canvas, "Lavoro").onClick.Invoke();
             Assert.AreEqual(SoldierDuty.Work, worker.Duty);
             AssertTextContains(canvas, "Lavoro: 9 | Guardia: 0");
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Shovel, 1));
+            worker.Data.Inventory.Add(ItemType.Shovel, 1);
             Vector2Int target = worker.Cell + Vector2Int.down;
             panel.Select(worker);
             Assert.IsTrue(trenches.Designate(target));

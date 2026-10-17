@@ -24,6 +24,8 @@ namespace NoMansGround.Tests
             var map = Object.FindAnyObjectByType<MapPrototype>();
             var orders = Object.FindAnyObjectByType<SoldierMovementOrders>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
+            Assert.IsTrue(canvas.transform.Find("Soldier Panel").gameObject.activeInHierarchy);
+            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel").gameObject.activeInHierarchy);
             Assert.IsNotNull(roster);
             Assert.IsNotNull(panel);
             Assert.IsNotNull(map);
@@ -96,9 +98,15 @@ namespace NoMansGround.Tests
             Assert.AreEqual(Vector2.zero, soldierPanel.anchorMax);
             Assert.IsTrue(canvas.transform.Find("Soldier Details Panel/Info content").gameObject.activeSelf);
             FindButton(canvas, "Inventario").onClick.Invoke();
-            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel/Inventario content").gameObject.activeSelf);
-            Assert.Zero(canvas.transform.Find("Soldier Details Panel/Inventario content")
-                .GetComponentsInChildren<Text>(true).Length);
+            Transform inventoryPage = canvas.transform.Find("Soldier Details Panel/Inventario content");
+            Assert.IsTrue(inventoryPage.gameObject.activeSelf);
+            Text inventoryText = inventoryPage.GetComponentInChildren<Text>(true);
+            Assert.IsNotNull(inventoryText);
+            Assert.IsEmpty(inventoryText.text);
+            selected.Data.Inventory.Add(ItemType.Pickaxe, 1);
+            Assert.AreEqual("Piccone x1", inventoryText.text);
+            Assert.IsTrue(selected.Data.Inventory.TryTake(ItemType.Pickaxe, 1));
+            Assert.IsEmpty(inventoryText.text);
             FindButton(canvas, "Info").onClick.Invoke();
             SkillProgress strength = selected.Data.GetSkill(SoldierSkill.Strength);
             float initialCarryWeight = selected.Data.MaxCarryWeightKg;
@@ -159,6 +167,7 @@ namespace NoMansGround.Tests
             panel.Select(null);
             Assert.IsFalse(selected.IsSelected);
             Assert.IsNull(panel.Selected);
+            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel").gameObject.activeInHierarchy);
             AssertTextExists(map.Clock.Display);
             panel.Select(selected);
             string firstName = roster.Soldiers[0].Data.FullName;

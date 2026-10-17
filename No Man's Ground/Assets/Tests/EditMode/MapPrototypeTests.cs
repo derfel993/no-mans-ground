@@ -222,11 +222,13 @@ namespace NoMansGround.Tests
             var mud = ScriptableObject.CreateInstance<Tile>();
             var road = ScriptableObject.CreateInstance<Tile>();
             var rock = ScriptableObject.CreateInstance<Tile>();
+            var gravel = ScriptableObject.CreateInstance<Tile>();
             try
             {
                 var map = new MapData(3, 2);
                 map[1, 0] = TerrainKind.Grass;
                 map[2, 1] = TerrainKind.Mud;
+                map[2, 0] = TerrainKind.Gravel;
                 map[0, 1] = TerrainKind.Road;
                 map[1, 1] = TerrainKind.Rock;
                 map.SetTree(new Vector2Int(1, 0), true);
@@ -236,10 +238,13 @@ namespace NoMansGround.Tests
                 view.ConfigureRoad(road);
                 Assert.Throws<InvalidOperationException>(() => view.Render(map));
                 view.ConfigureRock(rock);
+                Assert.Throws<InvalidOperationException>(() => view.Render(map));
+                view.ConfigureGravel(gravel);
                 view.Render(map);
                 Assert.AreEqual(dirt, view.Tilemap.GetTile(Vector3Int.zero));
                 Assert.AreEqual(grass, view.Tilemap.GetTile(new Vector3Int(1, 0, 0)));
                 Assert.AreEqual(mud, view.Tilemap.GetTile(new Vector3Int(2, 1, 0)));
+                Assert.AreEqual(gravel, view.Tilemap.GetTile(new Vector3Int(2, 0, 0)));
                 Assert.AreEqual(road, view.Tilemap.GetTile(new Vector3Int(0, 1, 0)));
                 Assert.AreEqual(rock, view.Tilemap.GetTile(new Vector3Int(1, 1, 0)));
                 Assert.IsFalse(map.IsWalkable(new Vector2Int(1, 1)));
@@ -248,6 +253,12 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(treeTilemap.GetTile(new Vector3Int(1, 0, 0)));
                 Assert.AreEqual(new Vector3(10f, 20f, 0f), view.WorldBounds.min);
                 Assert.AreEqual(new Vector3(13f, 22f, 0f), view.WorldBounds.max);
+                view.CompleteRockMine(map, new Vector2Int(1, 1));
+                Assert.AreEqual(TerrainKind.Gravel, map[1, 1]);
+                Assert.IsTrue(map.IsWalkable(new Vector2Int(1, 1)));
+                Assert.IsTrue(map.TryGetGroundItem(new Vector2Int(1, 1), out ItemType resource));
+                Assert.AreEqual(ItemType.BuildingStone, resource);
+                Assert.AreEqual("Pietra da costruzione", treeTilemap.GetTile(new Vector3Int(1, 1, 0)).name);
                 view.Render(new MapData(1, 1));
                 Assert.IsNull(view.Tilemap.GetTile(new Vector3Int(2, 1, 0)));
                 Assert.IsNull(treeTilemap.GetTile(new Vector3Int(1, 0, 0)));
@@ -260,6 +271,7 @@ namespace NoMansGround.Tests
                 Object.DestroyImmediate(mud);
                 Object.DestroyImmediate(road);
                 Object.DestroyImmediate(rock);
+                Object.DestroyImmediate(gravel);
             }
         }
 
@@ -356,8 +368,10 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(5, view.Tilemap.GetUsedTilesCount());
                 Tile road = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Road.asset");
                 Tile rock = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Rock.asset");
+                Tile gravel = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Gravel.asset");
                 Assert.IsNotNull(road);
                 Assert.IsNotNull(rock);
+                Assert.IsNotNull(gravel);
                 Assert.IsNotNull(road.sprite);
                 Assert.IsNotNull(rock.sprite);
                 Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
@@ -368,6 +382,17 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(depotDisplay);
                 Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
                 Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<TextMesh>().Length);
+                Assert.IsTrue(prototype.Data.StorageStockpile.TryTake(ItemType.Pickaxe, 1));
+                Assert.AreEqual(6, prototype.Data.StorageStockpile.Count(ItemType.Shovel));
+                Assert.AreEqual(2, prototype.Data.StorageStockpile.Count(ItemType.Axe));
+                Assert.AreEqual(1, prototype.Data.StorageStockpile.Count(ItemType.Pickaxe));
+                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+                var labels = new HashSet<string>();
+                foreach (TextMesh label in depotDisplay.GetComponentsInChildren<TextMesh>())
+                    labels.Add(label.text);
+                CollectionAssert.Contains(labels, "Pala x6");
+                CollectionAssert.Contains(labels, "Accetta x2");
+                CollectionAssert.Contains(labels, "Piccone x1");
                 int rockCells = 0;
                 for (int y = 0; y < prototype.Data.Height; y++)
                     for (int x = 0; x < prototype.Data.Width; x++)

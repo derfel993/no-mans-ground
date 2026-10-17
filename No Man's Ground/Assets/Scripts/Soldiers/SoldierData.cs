@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NoMansGround.Map;
 
 namespace NoMansGround.Soldiers
 {
@@ -149,6 +150,7 @@ namespace NoMansGround.Soldiers
         public string LastName { get; }
         public string FullName => FirstName + " " + LastName;
         public SoldierNeeds Needs { get; }
+        public ItemStockpile Inventory { get; } = new ItemStockpile();
         public IReadOnlyList<SkillProgress> Skills { get; }
         public SoldierProfession Profession { get; }
         public float MaxCarryWeightKg => MinimumCarryWeightKg
