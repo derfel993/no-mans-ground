@@ -63,10 +63,14 @@ namespace NoMansGround.Map
                 for (int x = roadStartX; x < roadStartX + roadWidth; x++)
                     map[x, y] = TerrainKind.Road;
 
+            CreateStorageArea(map, roadStartX, roadWidth, roadLength);
+
             var treeCandidates = new List<Vector2Int>();
             for (int y = 0; y < map.Height; y++)
                 for (int x = 0; x < map.Width; x++)
-                    if (map[x, y] != TerrainKind.Rock)
+                    if (map[x, y] != TerrainKind.Rock
+                        && !map.IsStorageCell(new Vector2Int(x, y))
+                        && !map.IsPantryCell(new Vector2Int(x, y)))
                         treeCandidates.Add(new Vector2Int(x, y));
 
             int treeCount = treeCandidates.Count * 2 / 5;
@@ -80,6 +84,41 @@ namespace NoMansGround.Map
             }
 
             return map;
+        }
+
+        private static void CreateStorageArea(MapData map, int roadStartX, int roadWidth, int roadLength)
+        {
+            const int storageSize = 4;
+            int sideY = Mathf.Max(4, roadLength - storageSize + 1);
+            if (sideY + storageSize <= map.Height)
+            {
+                int rightX = roadStartX + roadWidth;
+                if (rightX + storageSize <= map.Width
+                    && CreateDepotAndPantry(map, new Vector2Int(rightX, sideY)))
+                    return;
+                int leftX = roadStartX - storageSize;
+                if (leftX >= 0
+                    && CreateDepotAndPantry(map, new Vector2Int(leftX, sideY)))
+                    return;
+            }
+        }
+
+        private static bool CreateDepotAndPantry(MapData map, Vector2Int depotOrigin)
+        {
+            if (depotOrigin.y < 4
+                || !map.CreateStorageArea(depotOrigin, 4, 4)
+                || !map.CreatePantryArea(new Vector2Int(depotOrigin.x, depotOrigin.y - 4), 2, 4))
+                return false;
+            AddStartingTools(map.StorageStockpile);
+            map.PantryStockpile.Add(ItemType.Rations, 1000);
+            return true;
+        }
+
+        private static void AddStartingTools(ItemStockpile stockpile)
+        {
+            stockpile.Add(ItemType.Shovel, 6);
+            stockpile.Add(ItemType.Axe, 2);
+            stockpile.Add(ItemType.Pickaxe, 2);
         }
     }
 }

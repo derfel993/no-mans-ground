@@ -347,7 +347,7 @@ namespace NoMansGround.Soldiers
             if (zoneButtons == null)
                 return;
             MapZoneKind[] kinds =
-                { MapZoneKind.Dump, MapZoneKind.MaterialsDepot, MapZoneKind.Pantry, MapZoneKind.Cemetery };
+                { MapZoneKind.Dump, MapZoneKind.MaterialsDepot, MapZoneKind.Cemetery };
             for (int i = 0; i < zoneButtons.Length; i++)
                 zoneButtons[i].GetComponent<Image>().color = activeZone == kinds[i]
                     ? MapTilemapView.ZoneColor(kinds[i]) : new Color(0.26f, 0.32f, 0.22f);
@@ -363,7 +363,6 @@ namespace NoMansGround.Soldiers
             {
                 case MapZoneKind.Dump: return "DISCARICA";
                 case MapZoneKind.MaterialsDepot: return "DEPOSITO MATERIALI";
-                case MapZoneKind.Pantry: return "DISPENSA";
                 case MapZoneKind.Cemetery: return "CIMITERO";
                 default: return "ZONA";
             }
@@ -578,7 +577,6 @@ namespace NoMansGround.Soldiers
                 {
                     CreateZoneButton(zoneRow, "Discarica", MapZoneKind.Dump),
                     CreateZoneButton(zoneRow, "Materiali", MapZoneKind.MaterialsDepot),
-                    CreateZoneButton(zoneRow, "Dispensa", MapZoneKind.Pantry),
                     CreateZoneButton(zoneRow, "Cimitero", MapZoneKind.Cemetery)
                 };
                 zoneStatus = CreateText(content, DescribeZones(), 9, 32f);
@@ -742,7 +740,7 @@ namespace NoMansGround.Soldiers
                 return "Nessuna zona designata.";
             return $"Discarica: {(gameMap.Data.HasZone(MapZoneKind.Dump) ? "attiva" : "assente")}\n"
                 + $"Deposito: {(gameMap.Data.HasZone(MapZoneKind.MaterialsDepot) ? "attivo" : "assente")} | "
-                + $"Dispensa: {(gameMap.Data.HasZone(MapZoneKind.Pantry) ? "attiva" : "assente")} | "
+                + $"Dispensa: {(gameMap.Data.HasPantryArea ? "attiva" : "assente")} | "
                 + $"Cimitero: {(gameMap.Data.HasZone(MapZoneKind.Cemetery) ? "attivo" : "assente")}";
         }
 

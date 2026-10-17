@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NoMansGround.Editor;
 using NoMansGround.Map;
@@ -40,8 +41,10 @@ namespace NoMansGround.Tests
             settings.seed++;
             MapData second = MapGenerator.Generate(settings);
             int differences = 0;
-            int nonRockCells = 0;
+            int treeEligibleCells = 0;
             int treeCells = 0;
+            Assert.IsTrue(first.HasStorageArea);
+            Assert.IsTrue(first.HasPantryArea);
             var counts = new int[Enum.GetValues(typeof(TerrainKind)).Length];
             for (int y = 0; y < first.Height; y++)
             {
@@ -49,12 +52,14 @@ namespace NoMansGround.Tests
                 {
                     counts[(int)first[x, y]]++;
                     var cell = new Vector2Int(x, y);
-                    if (first[x, y] != TerrainKind.Rock)
-                        nonRockCells++;
+                    if (first[x, y] != TerrainKind.Rock
+                        && !first.IsStorageCell(cell) && !first.IsPantryCell(cell))
+                        treeEligibleCells++;
                     if (first.HasTree(cell))
                     {
                         treeCells++;
                         Assert.AreNotEqual(TerrainKind.Rock, first[x, y]);
+                        Assert.IsFalse(first.IsStorageCell(cell));
                         Assert.IsTrue(first.IsWalkable(cell));
                     }
                     if (first[x, y] != second[x, y])
@@ -62,12 +67,81 @@ namespace NoMansGround.Tests
                 }
             }
             Assert.Greater(differences, first.Width * first.Height / 10);
-            Assert.AreEqual(nonRockCells * 2 / 5, treeCells);
+            Assert.AreEqual(treeEligibleCells * 2 / 5, treeCells);
             foreach (TerrainKind terrain in new[]
                 { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road, TerrainKind.Rock })
                 Assert.Greater(counts[(int)terrain], 0);
             Assert.AreEqual(24, counts[(int)TerrainKind.Road]);
             Assert.Zero(counts[(int)TerrainKind.Trench]);
+        }
+
+        [Test]
+        public void GeneratedDepotIsFourByFourBesideRoadAndHasStartingTools()
+        {
+            MapData map = MapGenerator.Generate(new MapGenerationSettings());
+            Assert.IsTrue(map.HasStorageArea);
+            Assert.AreEqual(4, map.StorageWidth);
+            Assert.AreEqual(4, map.StorageHeight);
+            Assert.IsTrue(map.HasPantryArea);
+            Assert.AreEqual(2, map.PantryWidth);
+            Assert.AreEqual(4, map.PantryHeight);
+            Assert.AreEqual(map.StorageOrigin.x, map.PantryOrigin.x);
+            Assert.AreEqual(map.StorageOrigin.y, map.PantryOrigin.y + map.PantryHeight);
+            Assert.GreaterOrEqual(map.StorageOrigin.y, 4);
+            Assert.AreEqual(10, map.StorageStockpile.TotalCount);
+            Assert.AreEqual(6, map.StorageStockpile.Count(ItemType.Shovel));
+            Assert.AreEqual(2, map.StorageStockpile.Count(ItemType.Axe));
+            Assert.AreEqual(2, map.StorageStockpile.Count(ItemType.Pickaxe));
+            Assert.AreEqual(1000, map.PantryStockpile.Count(ItemType.Rations));
+            Assert.AreEqual(ItemCategory.Food, ItemCatalog.Get(ItemType.Rations).Category);
+            Assert.AreEqual(250, ItemCatalog.Get(ItemType.Rations).StackSize);
+            IReadOnlyList<ItemStack> rationStacks = map.PantryStockpile.GetStacks(ItemType.Rations);
+            Assert.AreEqual(4, rationStacks.Count);
+            foreach (ItemStack stack in rationStacks)
+                Assert.AreEqual(250, stack.Count);
+            Assert.IsFalse(map.StorageStockpile.TryTake(ItemType.Shovel, 7));
+            Assert.AreEqual(6, map.StorageStockpile.Count(ItemType.Shovel));
+            Assert.IsTrue(map.StorageStockpile.TryTake(ItemType.Shovel, 1));
+            Assert.AreEqual(5, map.StorageStockpile.Count(ItemType.Shovel));
+
+            int roadWidth = Mathf.Min(4, map.Width);
+            int roadStartX = (map.Width - roadWidth) / 2;
+            Assert.IsTrue(map.StorageOrigin.x + map.StorageWidth == roadStartX
+                || map.StorageOrigin.x == roadStartX + roadWidth);
+            bool adjacentToRoad = false;
+            for (int y = map.StorageOrigin.y; y < map.StorageOrigin.y + map.StorageHeight; y++)
+                for (int x = map.StorageOrigin.x; x < map.StorageOrigin.x + map.StorageWidth; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    Assert.IsTrue(map.IsStorageCell(cell));
+                    Assert.IsTrue(map.IsWalkable(cell));
+                    Assert.IsFalse(map.HasTree(cell));
+                    Assert.AreNotEqual(TerrainKind.Rock, map[cell.x, cell.y]);
+                    foreach (Vector2Int direction in new[]
+                        { Vector2Int.down, Vector2Int.left, Vector2Int.right, Vector2Int.up })
+                        if (map.Contains(cell + direction) && map[cell.x + direction.x, cell.y + direction.y] == TerrainKind.Road)
+                            adjacentToRoad = true;
+                }
+            Assert.IsTrue(adjacentToRoad);
+            for (int y = map.PantryOrigin.y; y < map.PantryOrigin.y + map.PantryHeight; y++)
+                for (int x = map.PantryOrigin.x; x < map.PantryOrigin.x + map.PantryWidth; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    Assert.IsTrue(map.IsPantryCell(cell));
+                    Assert.IsTrue(map.IsWalkable(cell));
+                    Assert.IsFalse(map.HasTree(cell));
+                    Assert.AreNotEqual(TerrainKind.Road, map[cell.x, cell.y]);
+                }
+
+            ItemDefinition shovel = ItemCatalog.Get(ItemType.Shovel);
+            ItemDefinition axe = ItemCatalog.Get(ItemType.Axe);
+            ItemDefinition pickaxe = ItemCatalog.Get(ItemType.Pickaxe);
+            Assert.AreEqual(ItemCategory.Tool, shovel.Category);
+            Assert.AreEqual(ItemCategory.Tool, axe.Category);
+            Assert.AreEqual(ItemCategory.Tool, pickaxe.Category);
+            Assert.AreEqual(ItemAction.DigTrench, shovel.Action);
+            Assert.AreEqual(ItemAction.CutTree, axe.Action);
+            Assert.AreEqual(ItemAction.BreakRock, pickaxe.Action);
         }
 
         [TestCase(128, 128, 1916)]
@@ -288,6 +362,12 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(rock.sprite);
                 Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
                 Assert.AreEqual(Tile.ColliderType.None, rock.colliderType);
+                Assert.IsTrue(prototype.Data.HasStorageArea);
+                Assert.AreEqual(10, prototype.Data.StorageStockpile.TotalCount);
+                Transform depotDisplay = view.transform.Find("Depot stockpile items");
+                Assert.IsNotNull(depotDisplay);
+                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<TextMesh>().Length);
                 int rockCells = 0;
                 for (int y = 0; y < prototype.Data.Height; y++)
                     for (int x = 0; x < prototype.Data.Width; x++)

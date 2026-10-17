@@ -45,7 +45,7 @@ namespace NoMansGround.Tests
                 bool shown = false;
                 foreach (UnityEngine.UI.Text text in GameObject.Find("Soldier Interface")
                     .GetComponentsInChildren<UnityEngine.UI.Text>())
-                    if (text.text.Contains("Dispensa non designata"))
+                    if (text.text.Contains("Razioni pronte: 0"))
                         shown = true;
                 Assert.IsTrue(shown);
                 InputSystem.QueueStateEvent(mouse, new UnityEngine.InputSystem.LowLevel.MouseState { position = pointer });

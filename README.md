@@ -20,9 +20,20 @@ La scena originale `SampleScene` non viene modificata.
 
 La mappa iniziale misura 128 x 128 celle sul piano XY; ogni cella occupa
 1 unita Unity. Terra, erba, fango e roccia sono generati con tile provvisori.
-La roccia e non percorribile; la fascia iniziale resta libera per gli arrivi.
-Gli alberi coprono il 40% delle celle non rocciose, sono disegnati sopra il
-terreno e restano percorribili; il seed rende riproducibile la loro posizione.
+La roccia e non percorribile; la fascia di arrivo resta libera.
+Gli alberi coprono il 40% delle celle non rocciose fuori dalle aree riservate; sono
+disegnati sopra il terreno e restano percorribili; il seed rende riproducibile
+la loro posizione.
+Accanto alla strada viene creato un deposito di **4 x 4 celle**; nella mappa
+standard si trova sul lato destro della strada (a sinistra se manca spazio).
+Subito sotto c'e una dispensa automatica di **2 x 4 celle**. Entrambe le aree
+restano percorribili e libere da rocce e alberi; mappe troppo piccole possono
+non avere spazio per crearle. Nel deposito ci sono **6 pale, 2 accette e 2
+picconi**; nella dispensa **1000 Razioni**, in quattro stack da **250**.
+Gli item hanno categorie **Tool**, **Weapon** e **Food**. Per ora i Tool sono
+Pala (**Scava trincea**), Piccone (**Rompi roccia**) e Accetta (**Taglia albero**);
+Food contiene Razioni. Le associazioni azione-utensile sono definite, ma non
+vengono ancora consumati dagli ordini.
 Il terreno viene generato all'avvio, non salvato come migliaia di tile nella scena.
 
 Sul bordo inferiore viene generata una **strada larga 4 tile e lunga 6 tile**
@@ -50,7 +61,7 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
 | L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
-| Pulsanti Discarica / Materiali / Dispensa / Cimitero | Seleziona il tipo di zona da disegnare |
+| Pulsanti Discarica / Materiali / Cimitero | Seleziona il tipo di zona da disegnare |
 | Sinistro + trascinamento in modalita zona | Designa un rettangolo di celle |
 | Esc / destro in modalita zona | Esce dalla modalita senza impartire ordini |
 | X / pulsante Annulla scavi | Attiva/disattiva la cancellazione lungo una linea |
@@ -89,6 +100,7 @@ La scena non viene inserita automaticamente nelle Build Profiles.
 ### Organizzazione
 
 - `Assets/Scripts/Map/MapData.cs`: dati del terreno, indipendenti dalla Tilemap.
+- `Assets/Scripts/Map/MapItems.cs`: categorie, definizioni, azioni e stockpile degli item.
 - `Assets/Scripts/Map/MapGenerator.cs`: generazione con seed e rumore Perlin.
 - `Assets/Scripts/Map/MapTilemapView.cs`: disegno del terreno e colori persistenti delle zone.
 - `Assets/Scripts/Map/MapCameraController.cs`: input tramite Input System.
@@ -225,7 +237,9 @@ Il pannello aggiorna immediatamente XP e livello.
   personaggi e la capienza della mappa. Cambiare prima di Play o rigenerare.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
   bordo inferiore, la zona d'arrivo dei soldati. La camera iniziale inquadra
-  questa zona rispettando i limiti della mappa. Terra, erba, fango e strada sono
+  questa zona rispettando i limiti della mappa. Lo spawn e spostato sei tile
+  verso nord (y 7-9 sulla mappa standard), evitando le aree di deposito. Terra,
+  erba, fango e strada sono
   percorribili; la roccia blocca movimento e scavi, mentre la trincea segue le
   regole di accesso tramite scala. Non vengono valutate coperture.
 - Se la mappa ha meno celle dei soldati richiesti, il numero viene ridotto alla
@@ -432,17 +446,17 @@ un'interfaccia per scegliere o cambiare il mestiere dei soldati.
 
 ### Cucina e produzione
 
-La scena genera automaticamente la sola **CUCINA**, con ingombro non percorribile
-e non scavabile. Il giocatore deve disegnare una zona **Dispensa** sulla mappa:
-le sue celle restano percorribili e il cuoco raggiunge una cella al suo interno
-con il normale pathfinding. Senza dispensa non ci sono viveri e la produzione
-resta ferma. La dispensa designata riceve le scorte iniziali di **1000 viveri**.
+La scena genera automaticamente la **CUCINA**, il **DEPOSITO** 4x4 e la
+**DISPENSA** 2x4 sotto al deposito. Le celle di deposito e dispensa sono
+percorribili e il cuoco raggiunge la dispensa con il normale pathfinding.
+La dispensa contiene **1000 Razioni** in stack da 250; il cuoco preleva da qui
+10 viveri per ciclo.
 Se manca spazio per la cucina o il suo accesso e occupato/bloccato, il sistema
 lo segnala; gli accessi vengono ritentati automaticamente ogni mezzo secondo.
 Su mappe senza capienza per il cuoco la cucina non viene generata.
 
-- La cucina parte con **0 razioni pronte**; i viveri sono disponibili solo dopo
-  aver designato la dispensa.
+- La cucina parte con **0 razioni pronte**; le Razioni sono gia presenti nella
+  dispensa dalla generazione della mappa.
 - La produzione e continua, indipendente dal numero di soldati affamati,
   tranne durante gli spostamenti e il giro di distribuzione.
 - Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
@@ -459,7 +473,8 @@ Su mappe senza capienza per il cuoco la cucina non viene generata.
   Sulla dispensa mostra i viveri residui e quelli in trasporto.
   Uscire prima dalle modalita Scava/Scala/Annulla con Esc.
 - Rigenerare ricrea cuoco e cucina, rimuove le zone designate e azzera scorte,
-  razioni, progresso e stress accumulato.
+  razioni, progresso e stress accumulato. Deposito, dispensa e stock iniziale
+  vengono ricreati.
 
 `RationStock` gestisce tempi e contabilita; `KitchenSystem` gestisce strutture,
 prenotazione del cuoco, preparazione e distribuzione.
@@ -539,21 +554,20 @@ API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`
 
 ## Step 7: zone designate
 
-I pulsanti **Discarica**, **Materiali**, **Dispensa** e **Cimitero** attivano
+I pulsanti **Discarica**, **Materiali** e **Cimitero** attivano
 la modalita di designazione. Trascinare con il sinistro dal tile iniziale a
 quello finale per creare un rettangolo; il verso del trascinamento non conta.
 L'anteprima segue il cursore e, al rilascio, il colore viene applicato ai tile
-e resta visibile: grigio per la discarica, rosso per i materiali, verde per la
-dispensa e grigio scuro per il cimitero. **Esc** o destro escono dalla modalita.
+e resta visibile: grigio per la discarica, rosso per i materiali e grigio scuro
+per il cimitero. **Esc** o destro escono dalla modalita.
 
 Si possono aggiungere piu rettangoli dello stesso tipo. Le zone di tipo diverso
 non si sovrappongono; celle fuori mappa, bloccate o in trincea non sono valide.
 Le zone restano percorribili. Per ora non si possono cancellare e durano solo
 fino alla rigenerazione della mappa.
 
-- **Dispensa**: il cuoco non ha viveri finche non viene designata. La prima
-  dispensa fornisce le scorte iniziali di 1000 viveri; il cuoco raggiunge una
-  sua cella e la usa come origine del prelievo.
+- **Dispensa**: area automatica 2x4 sotto il deposito, con 1000 Razioni in stack
+  da 250. Il cuoco raggiunge una sua cella e la usa come origine del prelievo.
 - **Discarica**: area disponibile per future consegne di detriti e rifiuti.
 - **Deposito materiali**: destinazione disponibile per futuri materiali da
   costruzione e rifornimenti dalle retrovie.

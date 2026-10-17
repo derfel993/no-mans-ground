@@ -158,6 +158,8 @@ namespace NoMansGround.Soldiers
                 return Reject("Non puoi modificare gli edifici con gli ostacoli debug.");
             if (map.Data.TryGetZone(cell, out _))
                 return Reject("Non puoi bloccare una cella assegnata a una zona.");
+            if (map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell))
+                return Reject("Non puoi modificare le aree di deposito.");
             if (trenchOrders != null && trenchOrders.Jobs.Count > 0)
                 return Reject("Ostacoli debug: annulla o completa prima gli scavi.");
             foreach (SoldierView soldier in roster.Soldiers)

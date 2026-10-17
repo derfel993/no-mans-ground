@@ -8,6 +8,20 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.2.0 - 2026-10-17
+===============================================================================
+
+Item e logistica
+- Introdotte le categorie **Tool**, **Weapon** e **Food**; Pala, Piccone e
+  Accetta sono associate rispettivamente a scavo trincea, rottura roccia e
+  taglio alberi.
+- Aggiunto un deposito 4x4 accanto alla strada, con 6 pale, 2 accette e
+  2 picconi visualizzati con sprite e quantita.
+- Aggiunta la dispensa automatica 2x4 sotto al deposito, con 1000 Razioni in
+  quattro stack da 250. Il cuoco preleva dallo stockpile della dispensa.
+- Spostati gli spawn dei soldati sei tile verso nord, evitando le aree riservate.
+
+===============================================================================
 0.1.6 - 2026-10-17
 ===============================================================================
 

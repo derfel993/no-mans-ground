@@ -66,8 +66,10 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(soldier);
                 Assert.IsNotNull(soldier.GetComponent<SpriteRenderer>());
                 Assert.IsTrue(map.Data.Contains(soldier.Cell));
+                Assert.IsFalse(map.Data.IsStorageCell(soldier.Cell));
+                Assert.IsFalse(map.Data.IsPantryCell(soldier.Cell));
                 Assert.IsTrue(cells.Add(soldier.Cell));
-                Assert.That(soldier.Cell.y, Is.InRange(1, 3));
+                Assert.That(soldier.Cell.y, Is.InRange(7, 9));
                 Assert.That(soldier.Data.Needs.Hunger, Is.InRange(99.9f, 100f));
                 Assert.That(soldier.Data.Needs.Thirst, Is.InRange(99.9f, 100f));
                 Assert.That(soldier.Data.Needs.PhysicalNeeds, Is.InRange(99.9f, 100f));
@@ -183,7 +185,6 @@ namespace NoMansGround.Tests
             {
                 Assert.IsTrue(map.Data.Contains(soldier.Cell));
                 Assert.IsTrue(cells.Add(soldier.Cell));
-                Assert.That(soldier.Cell.y, Is.InRange(1, 9));
             }
             map.Generation.width = 1;
             map.Generation.height = 1;

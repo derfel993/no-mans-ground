@@ -14,6 +14,11 @@ namespace NoMansGround.Map
         private Tile runtimeTreeTile;
         private Sprite runtimeTreeSprite;
         private Texture2D runtimeTreeTexture;
+        private MapData stockpileMap;
+        private GameObject storageItemsRoot;
+        private readonly GameObject[] storageItemDisplays = new GameObject[4];
+        private readonly Sprite[] runtimeItemSprites = new Sprite[4];
+        private readonly Texture2D[] runtimeItemTextures = new Texture2D[4];
         [SerializeField] private TileBase dirtTile;
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
@@ -69,6 +74,8 @@ namespace NoMansGround.Map
                 throw new ArgumentNullException(nameof(map));
             if (!map.IsWalkable(cell))
                 throw new InvalidOperationException("A trench requires a walkable cell.");
+            if (map.IsStorageCell(cell) || map.IsPantryCell(cell))
+                throw new InvalidOperationException("Storage areas cannot be excavated.");
             if (trenchTile == null)
                 throw new InvalidOperationException("Assign a trench tile before digging.");
             map[cell.x, cell.y] = TerrainKind.Trench;
@@ -79,6 +86,7 @@ namespace NoMansGround.Map
         {
             if (map == null)
                 throw new ArgumentNullException(nameof(map));
+            BindStockpiles(map);
             if (dirtTile == null || grassTile == null || mudTile == null)
                 throw new InvalidOperationException("Assign all three terrain tiles to the MapTilemapView.");
 
@@ -130,7 +138,206 @@ namespace NoMansGround.Map
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(map.Width, map.Height, 0)));
             WorldBounds = bounds;
             RenderZones(map);
+            RenderStorageArea(map);
             RenderTrees(map);
+        }
+
+        private void RenderStorageArea(MapData map)
+        {
+            if (!map.HasStorageArea && !map.HasPantryArea)
+            {
+                if (storageItemsRoot != null)
+                    storageItemsRoot.SetActive(false);
+                return;
+            }
+
+            if (map.HasStorageArea)
+                TintArea(map.StorageOrigin, map.StorageWidth, map.StorageHeight,
+                    Color.Lerp(Color.white, new Color(0.76f, 0.66f, 0.38f), 0.45f));
+            if (map.HasPantryArea)
+                TintArea(map.PantryOrigin, map.PantryWidth, map.PantryHeight,
+                    Color.Lerp(Color.white, new Color(0.42f, 0.65f, 0.38f), 0.4f));
+
+            RenderStorageItems(map);
+    }
+
+        private void TintArea(Vector2Int origin, int width, int height, Color tint)
+        {
+            for (int y = origin.y; y < origin.y + height; y++)
+                for (int x = origin.x; x < origin.x + width; x++)
+                {
+                    var position = new Vector3Int(x, y, 0);
+                    Tilemap.SetTileFlags(position, TileFlags.None);
+                    Tilemap.SetColor(position, tint);
+                }
+        }
+
+        private void BindStockpiles(MapData map)
+        {
+            if (stockpileMap == map)
+                return;
+            if (stockpileMap != null)
+            {
+                stockpileMap.StorageStockpile.Changed -= RefreshStorageItems;
+                stockpileMap.PantryStockpile.Changed -= RefreshStorageItems;
+            }
+            stockpileMap = map;
+            stockpileMap.StorageStockpile.Changed += RefreshStorageItems;
+            stockpileMap.PantryStockpile.Changed += RefreshStorageItems;
+        }
+
+        private void RefreshStorageItems()
+        {
+            if (stockpileMap != null)
+                RenderStorageItems(stockpileMap);
+        }
+
+        private void RenderStorageItems(MapData map)
+        {
+            if (storageItemsRoot == null)
+            {
+                storageItemsRoot = new GameObject("Depot stockpile items");
+                storageItemsRoot.transform.SetParent(transform, false);
+            }
+            storageItemsRoot.SetActive(true);
+
+            ItemType[] types = { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations };
+            for (int i = 0; i < types.Length; i++)
+            {
+                bool isFood = types[i] == ItemType.Rations;
+                ItemStockpile stockpile = isFood ? map.PantryStockpile : map.StorageStockpile;
+                int count = stockpile.Count(types[i]);
+                if (count == 0)
+                {
+                    if (storageItemDisplays[i] != null)
+                        storageItemDisplays[i].SetActive(false);
+                    continue;
+                }
+
+                if (runtimeItemSprites[i] == null)
+                    runtimeItemSprites[i] = CreateItemSprite(types[i], i);
+                if (storageItemDisplays[i] == null)
+                    storageItemDisplays[i] = CreateStorageItemDisplay(types[i]);
+                GameObject display = storageItemDisplays[i];
+                display.SetActive(true);
+                SpriteRenderer renderer = display.GetComponent<SpriteRenderer>();
+                renderer.sprite = runtimeItemSprites[i];
+                Vector2Int cell = isFood
+                    ? map.PantryOrigin + new Vector2Int(0, 2)
+                    : map.StorageOrigin + new Vector2Int(i, 2);
+                display.transform.position = Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
+                display.transform.localScale = Vector3.one * 0.8f;
+                display.transform.GetChild(0).localPosition = new Vector3(0f, -0.58f, 0f);
+                string quantity = isFood ? GetStackSummary(stockpile, types[i]) : $"x{count}";
+                display.GetComponentInChildren<TextMesh>().text = $"{ItemCatalog.Get(types[i]).DisplayName} {quantity}";
+            }
+        }
+
+        private static string GetStackSummary(ItemStockpile stockpile, ItemType type)
+        {
+            IReadOnlyList<ItemStack> stacks = stockpile.GetStacks(type);
+            string summary = string.Empty;
+            for (int i = 0; i < stacks.Count; i++)
+                summary += (i == 0 ? string.Empty : "+") + stacks[i].Count;
+            return $"{stockpile.Count(type)} ({summary})";
+        }
+
+        private GameObject CreateStorageItemDisplay(ItemType type)
+        {
+            var display = new GameObject(type.ToString(), typeof(SpriteRenderer));
+            display.transform.SetParent(storageItemsRoot.transform, false);
+            display.GetComponent<SpriteRenderer>().sortingOrder = 5;
+            var labelObject = new GameObject("Count", typeof(TextMesh));
+            labelObject.transform.SetParent(display.transform, false);
+            TextMesh label = labelObject.GetComponent<TextMesh>();
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.fontSize = 32;
+            label.characterSize = 0.055f;
+            label.color = new Color(0.95f, 0.94f, 0.83f);
+            label.GetComponent<MeshRenderer>().sortingOrder = 6;
+            return display;
+        }
+
+        private Sprite CreateItemSprite(ItemType type, int index)
+        {
+            runtimeItemTextures[index] = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            Texture2D texture = runtimeItemTextures[index];
+            texture.name = ItemCatalog.Get(type).DisplayName + " Sprite";
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            var pixels = new Color32[256];
+            Color32 wood = new Color32(112, 73, 39, 255);
+            Color32 woodLight = new Color32(170, 119, 61, 255);
+            Color32 metal = new Color32(190, 197, 190, 255);
+            Color32 metalDark = new Color32(91, 105, 108, 255);
+
+            switch (type)
+            {
+                case ItemType.Shovel:
+                    for (int y = 2; y <= 11; y++)
+                    {
+                        int x = 6 + (y - 2) / 2;
+                        SetPixel(pixels, x, y, wood);
+                        SetPixel(pixels, x + 1, y, woodLight);
+                    }
+                    for (int y = 12; y <= 14; y++)
+                        for (int x = 4 + (y - 12); x <= 10 - (y - 12); x++)
+                            SetPixel(pixels, x, y, x == 4 + (y - 12) ? metalDark : metal);
+                    break;
+                case ItemType.Axe:
+                    for (int y = 2; y <= 12; y++)
+                    {
+                        SetPixel(pixels, 7, y, wood);
+                        SetPixel(pixels, 8, y, woodLight);
+                    }
+                    for (int y = 10; y <= 14; y++)
+                        for (int x = 8; x <= 13 - Mathf.Abs(y - 12); x++)
+                            SetPixel(pixels, x, y, y == 12 ? metal : metalDark);
+                    break;
+                case ItemType.Pickaxe:
+                    for (int y = 2; y <= 11; y++)
+                    {
+                        int x = 7 + (y > 7 ? 1 : 0);
+                        SetPixel(pixels, x, y, wood);
+                        SetPixel(pixels, x + 1, y, woodLight);
+                    }
+                    for (int x = 2; x <= 13; x++)
+                    {
+                        SetPixel(pixels, x, 12, metalDark);
+                        SetPixel(pixels, x, 13, metal);
+                    }
+                    SetPixel(pixels, 1, 14, metalDark);
+                    SetPixel(pixels, 2, 14, metal);
+                    SetPixel(pixels, 13, 14, metal);
+                    SetPixel(pixels, 14, 14, metalDark);
+                    break;
+                case ItemType.Rations:
+                    for (int y = 3; y <= 12; y++)
+                        for (int x = 3; x <= 12; x++)
+                            SetPixel(pixels, x, y, x == 3 || x == 12 || y == 3 || y == 12
+                                ? new Color32(77, 66, 44, 255) : new Color32(190, 156, 99, 255));
+                    for (int x = 4; x <= 11; x++)
+                    {
+                        SetPixel(pixels, x, 7, new Color32(106, 129, 71, 255));
+                        SetPixel(pixels, x, 8, new Color32(106, 129, 71, 255));
+                    }
+                    SetPixel(pixels, 7, 9, new Color32(231, 216, 174, 255));
+                    SetPixel(pixels, 8, 9, new Color32(231, 216, 174, 255));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(type));
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return Sprite.Create(texture, new Rect(0f, 0f, 16f, 16f), new Vector2(0.5f, 0.5f), 16f);
+        }
+
+        private static void SetPixel(Color32[] pixels, int x, int y, Color32 color)
+        {
+            if (x >= 0 && x < 16 && y >= 0 && y < 16)
+                pixels[y * 16 + x] = color;
         }
 
         private void RenderTrees(MapData map)
@@ -202,6 +409,11 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            if (stockpileMap != null)
+            {
+                stockpileMap.StorageStockpile.Changed -= RefreshStorageItems;
+                stockpileMap.PantryStockpile.Changed -= RefreshStorageItems;
+            }
             if (treeLayer != null)
                 DestroyGeneratedObject(treeLayer);
             if (runtimeTreeTile != null)
@@ -210,6 +422,15 @@ namespace NoMansGround.Map
                 DestroyGeneratedObject(runtimeTreeSprite);
             if (runtimeTreeTexture != null)
                 DestroyGeneratedObject(runtimeTreeTexture);
+            if (storageItemsRoot != null)
+                DestroyGeneratedObject(storageItemsRoot);
+            for (int i = 0; i < runtimeItemSprites.Length; i++)
+            {
+                if (runtimeItemSprites[i] != null)
+                    DestroyGeneratedObject(runtimeItemSprites[i]);
+                if (runtimeItemTextures[i] != null)
+                    DestroyGeneratedObject(runtimeItemTextures[i]);
+            }
         }
 
         private static void DestroyGeneratedObject(UnityEngine.Object obj)
@@ -253,7 +474,6 @@ namespace NoMansGround.Map
             {
                 case MapZoneKind.Dump: return new Color(0.58f, 0.60f, 0.58f);
                 case MapZoneKind.MaterialsDepot: return new Color(0.82f, 0.24f, 0.20f);
-                case MapZoneKind.Pantry: return new Color(0.35f, 0.67f, 0.44f);
                 case MapZoneKind.Cemetery: return new Color(0.22f, 0.23f, 0.24f);
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
             }

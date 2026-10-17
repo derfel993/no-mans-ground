@@ -104,7 +104,7 @@ namespace NoMansGround.Soldiers
             }
             soldiers.Clear();
 
-            // Keep arrivals centred horizontally in the lowest available rows.
+            // Keep arrivals centred horizontally six tiles above the road when possible.
             int columns = Mathf.Min(data.Width, Mathf.CeilToInt(Mathf.Sqrt(count)));
             int rows = Mathf.CeilToInt((float)count / columns);
             if (rows > data.Height)
@@ -115,11 +115,15 @@ namespace NoMansGround.Soldiers
             int spacingX = Mathf.Min(3, Mathf.Max(1, (data.Width - 1) / Mathf.Max(1, columns - 1)));
             const int spacingY = 1;
             int startX = (data.Width - 1 - (columns - 1) * spacingX) / 2;
-            int startY = Mathf.Min(1, data.Height - 1 - (rows - 1) * spacingY);
+            int startY = Mathf.Min(7, data.Height - rows);
+            var spawnCells = new HashSet<Vector2Int>();
 
             for (int i = 0; i < count; i++)
             {
-                var cell = new Vector2Int(startX + i % columns * spacingX, startY + i / columns * spacingY);
+                var desiredCell = new Vector2Int(startX + i % columns * spacingX,
+                    startY + i / columns * spacingY);
+                Vector2Int cell = FindSpawnCell(data, desiredCell, spawnCells);
+                spawnCells.Add(cell);
                 var soldierObject = new GameObject(generated[i].FullName, typeof(SpriteRenderer), typeof(SoldierView));
                 soldierObject.transform.SetParent(transform, false);
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
@@ -140,6 +144,31 @@ namespace NoMansGround.Soldiers
             }
             Rebuilt?.Invoke();
             DutiesChanged?.Invoke();
+        }
+
+        private static Vector2Int FindSpawnCell(MapData data, Vector2Int desired, HashSet<Vector2Int> occupied)
+        {
+            int maximumRadius = data.Width + data.Height;
+            for (int radius = 0; radius <= maximumRadius; radius++)
+                for (int offsetY = -radius; offsetY <= radius; offsetY++)
+                {
+                    int offsetX = radius - Mathf.Abs(offsetY);
+                    var left = new Vector2Int(desired.x - offsetX, desired.y + offsetY);
+                    if (IsAvailableSpawnCell(data, left, occupied))
+                        return left;
+                    if (offsetX == 0)
+                        continue;
+                    var right = new Vector2Int(desired.x + offsetX, desired.y + offsetY);
+                    if (IsAvailableSpawnCell(data, right, occupied))
+                        return right;
+                }
+            return desired;
+        }
+
+        private static bool IsAvailableSpawnCell(MapData data, Vector2Int cell, HashSet<Vector2Int> occupied)
+        {
+            return data.IsWalkable(cell) && !data.IsStorageCell(cell) && !data.IsPantryCell(cell)
+                && !occupied.Contains(cell);
         }
     }
 }

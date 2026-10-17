@@ -27,7 +27,6 @@ namespace NoMansGround.Tests
             {
                 Time.timeScale = 0f;
                 yield return null;
-                DesignatePantry(map, kitchen);
                 kitchen.Cook.AdvanceMovement(1000f);
                 kitchen.Stock.StoreKitchenProvisions(kitchen.Stock.TakeProvisions(kitchen.Stock.Provisions));
                 kitchen.Stock.AdvanceTime(270f);
@@ -91,9 +90,7 @@ namespace NoMansGround.Tests
             var map = Object.FindAnyObjectByType<MapPrototype>();
             Assert.IsTrue(kitchen.HasFacilities);
             Assert.IsNotNull(kitchen.Cook);
-            Assert.IsFalse(kitchen.HasPantry);
-            Assert.Zero(kitchen.Stock.Provisions);
-            DesignatePantry(map, kitchen);
+            Assert.IsTrue(kitchen.HasPantry);
             Assert.AreEqual(RationStock.InitialProvisions, kitchen.Stock.Provisions);
             kitchen.Tick(1f);
             kitchen.Cook.AdvanceMovement(1000f);
@@ -143,11 +140,10 @@ namespace NoMansGround.Tests
                 orders.Tick(1f);
                 Assert.IsNotNull(orders.Jobs[0].Worker);
                 map.Regenerate();
-                Assert.Zero(kitchen.Stock.Provisions);
+                Assert.AreEqual(RationStock.InitialProvisions, kitchen.Stock.Provisions);
                 Assert.Zero(kitchen.Stock.ReadyRations);
                 Assert.AreEqual(9, roster.Soldiers.Count);
                 Assert.IsFalse(roster.Soldiers[0].Data.Needs.WaitingForRations);
-                DesignatePantry(map, kitchen);
                 kitchen.Tick(1f);
                 kitchen.Cook.AdvanceMovement(100f);
                 kitchen.Tick(1f);
@@ -168,9 +164,9 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(kitchen.Cook);
                 Assert.IsTrue(kitchen.HasFacilities);
                 Assert.IsFalse(map.Data.IsWalkable(kitchen.KitchenCell));
-                Assert.IsFalse(kitchen.HasPantry);
+                Assert.IsTrue(kitchen.HasPantry);
                 Assert.Zero(kitchen.Stock.ReadyRations);
-                Assert.Zero(kitchen.Stock.Provisions);
+                Assert.AreEqual(RationStock.InitialProvisions, kitchen.Stock.Provisions);
             }
             finally { Time.timeScale = scale; }
             yield return new ExitPlayMode();
@@ -183,27 +179,5 @@ namespace NoMansGround.Tests
             Assert.Fail("UI text missing: " + fragment);
         }
 
-        private static void DesignatePantry(MapPrototype map, KitchenSystem kitchen)
-        {
-            SoldierRoster roster = map.GetComponentInChildren<SoldierRoster>();
-            for (int y = 8; y < map.Data.Height; y++)
-                for (int x = 8; x < map.Data.Width; x++)
-                {
-                    var cell = new Vector2Int(x, y);
-                    if (!map.Data.IsWalkable(cell) || map.Data.IsTrench(cell)
-                        || map.Data[cell.x, cell.y] == TerrainKind.Road)
-                        continue;
-                    bool occupied = false;
-                    foreach (SoldierView soldier in roster.Soldiers)
-                        if (soldier.Cell == cell || soldier.Destination == cell)
-                            occupied = true;
-                    if (occupied || !map.Data.TryDesignateZone(MapZoneKind.Pantry, cell, cell, out _))
-                        continue;
-                    map.GetComponentInChildren<MapTilemapView>().RenderZones(map.Data);
-                    kitchen.HandleZonesChanged();
-                    return;
-                }
-            Assert.Fail("No available cell for pantry zone.");
-        }
     }
 }
