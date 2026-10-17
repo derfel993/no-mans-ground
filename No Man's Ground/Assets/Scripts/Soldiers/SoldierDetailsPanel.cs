@@ -1,4 +1,5 @@
 using NoMansGround.Map;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -19,6 +20,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private TrenchWorkOrders trenchOrders;
         [SerializeField] private KitchenSystem kitchen;
         [SerializeField] private MapPrototype gameMap;
+        [SerializeField] private MapTilemapView mapView;
 
         private Text clockText;
         private Text identity;
@@ -33,8 +35,10 @@ namespace NoMansGround.Soldiers
         private Text facilityStatus;
         private Text dutyCounts;
         private Text dutyStatus;
+        private Text zoneStatus;
         private Button guardButton;
         private Button workButton;
+        private Button[] zoneButtons;
         private Button[] speedButtons;
         private bool facilitySelected;
         private bool depotSelected;
@@ -48,6 +52,10 @@ namespace NoMansGround.Soldiers
         private SoldierData selectedData;
         private RectTransform panelRect;
         private RectTransform contentRect;
+        private readonly List<SpriteRenderer> zonePreview = new List<SpriteRenderer>();
+        private MapZoneKind? activeZone;
+        private bool zoneDragging;
+        private Vector2Int zoneDragStart;
 
         public SoldierView Selected { get; private set; }
 
@@ -60,10 +68,13 @@ namespace NoMansGround.Soldiers
             trenchOrders = trenches;
             kitchen = kitchenSystem;
             gameMap = prototype;
+            mapView = prototype != null ? prototype.GetComponentInChildren<MapTilemapView>() : null;
         }
 
         private void Awake()
         {
+            if (mapView == null && gameMap != null)
+                mapView = gameMap.GetComponentInChildren<MapTilemapView>();
             if (roster == null || mapCamera == null)
             {
                 Debug.LogError("SoldierDetailsPanel requires a roster and a map camera.", this);
@@ -128,6 +139,9 @@ namespace NoMansGround.Soldiers
             Select(null);
             if (canvasObject != null)
                 canvasObject.SetActive(false);
+            activeZone = null;
+            zoneDragging = false;
+            ClearZonePreview();
         }
 
         private void RefreshClock()
@@ -149,6 +163,11 @@ namespace NoMansGround.Soldiers
             FitContent();
             if (trenchOrders != null && trenchOrders.BlocksWorldCommands)
                 return;
+            if (activeZone.HasValue)
+            {
+                HandleZoneInput();
+                return;
+            }
             Mouse mouse = Mouse.current;
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
                 return;
@@ -219,11 +238,138 @@ namespace NoMansGround.Soldiers
             RefreshFacility();
         }
 
+        public void SetZoneMode(MapZoneKind? kind)
+        {
+            activeZone = activeZone == kind ? null : kind;
+            zoneDragging = false;
+            ClearZonePreview();
+            if (activeZone.HasValue && trenchOrders != null)
+                trenchOrders.SetMode(DiggingMode.None);
+            UpdateZoneControls();
+        }
+
+        private void HandleZoneInput()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+                || (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame))
+            {
+                SetZoneMode(null);
+                return;
+            }
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+                return;
+            bool valid = TryGetZonePointerCell(mouse.position.ReadValue(), out Vector2Int cell);
+            if (mouse.leftButton.wasPressedThisFrame && valid)
+            {
+                zoneDragging = true;
+                zoneDragStart = cell;
+            }
+            if (zoneDragging && valid)
+                ShowZonePreview(zoneDragStart, cell);
+            if (!zoneDragging || !mouse.leftButton.wasReleasedThisFrame)
+                return;
+            zoneDragging = false;
+            ClearZonePreview();
+            if (!valid || !activeZone.HasValue || gameMap == null || gameMap.Data == null)
+                return;
+            if (gameMap.Data.TryDesignateZone(activeZone.Value, zoneDragStart, cell, out int changed))
+            {
+                mapView.RenderZones(gameMap.Data);
+                if (kitchen != null)
+                    kitchen.HandleZonesChanged();
+                if (zoneStatus != null)
+                    zoneStatus.text = changed > 0
+                        ? $"{ZoneName(activeZone.Value)}: {changed} celle aggiunte."
+                        : $"{ZoneName(activeZone.Value)}: area gia presente.";
+            }
+            else if (zoneStatus != null)
+                zoneStatus.text = "Area non valida: fuori mappa, bloccata o sovrapposta.";
+        }
+
+        private bool TryGetZonePointerCell(Vector2 pointer, out Vector2Int cell)
+        {
+            cell = default;
+            if (gameMap == null || gameMap.Data == null || mapView == null
+                || !mapCamera.pixelRect.Contains(pointer)
+                || (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
+                return false;
+            Vector3 world = mapCamera.ScreenToWorldPoint(new Vector3(pointer.x, pointer.y,
+                mapView.transform.position.z - mapCamera.transform.position.z));
+            Vector3Int position = mapView.Tilemap.WorldToCell(world);
+            cell = new Vector2Int(position.x, position.y);
+            return gameMap.Data.Contains(cell);
+        }
+
+        private void ShowZonePreview(Vector2Int from, Vector2Int to)
+        {
+            int minX = Mathf.Min(from.x, to.x);
+            int maxX = Mathf.Max(from.x, to.x);
+            int minY = Mathf.Min(from.y, to.y);
+            int maxY = Mathf.Max(from.y, to.y);
+            int index = 0;
+            Color color = MapTilemapView.ZoneColor(activeZone.Value);
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    if (index == zonePreview.Count)
+                    {
+                        var previewObject = new GameObject("Zone preview", typeof(SpriteRenderer));
+                        previewObject.transform.SetParent(transform, false);
+                        zonePreview.Add(previewObject.GetComponent<SpriteRenderer>());
+                    }
+                    SpriteRenderer renderer = zonePreview[index++];
+                    var position = new Vector3Int(x, y, 0);
+                    renderer.sprite = mapView.Tilemap.GetSprite(position);
+                    renderer.color = new Color(color.r, color.g, color.b, 0.48f);
+                    renderer.sortingOrder = 3;
+                    renderer.transform.position = mapView.Tilemap.GetCellCenterWorld(position);
+                    renderer.enabled = renderer.sprite != null;
+                }
+            for (int i = index; i < zonePreview.Count; i++)
+                zonePreview[i].enabled = false;
+        }
+
+        private void ClearZonePreview()
+        {
+            foreach (SpriteRenderer renderer in zonePreview)
+                if (renderer != null)
+                    renderer.enabled = false;
+        }
+
+        private void UpdateZoneControls()
+        {
+            if (zoneButtons == null)
+                return;
+            MapZoneKind[] kinds =
+                { MapZoneKind.Dump, MapZoneKind.MaterialsDepot, MapZoneKind.Pantry, MapZoneKind.Cemetery };
+            for (int i = 0; i < zoneButtons.Length; i++)
+                zoneButtons[i].GetComponent<Image>().color = activeZone == kinds[i]
+                    ? MapTilemapView.ZoneColor(kinds[i]) : new Color(0.26f, 0.32f, 0.22f);
+            if (zoneStatus != null && activeZone.HasValue)
+                zoneStatus.text = $"{ZoneName(activeZone.Value)}: trascina un rettangolo. Esc/destro: esci.";
+            else if (zoneStatus != null)
+                zoneStatus.text = DescribeZones();
+        }
+
+        private static string ZoneName(MapZoneKind kind)
+        {
+            switch (kind)
+            {
+                case MapZoneKind.Dump: return "DISCARICA";
+                case MapZoneKind.MaterialsDepot: return "DEPOSITO MATERIALI";
+                case MapZoneKind.Pantry: return "DISPENSA";
+                case MapZoneKind.Cemetery: return "CIMITERO";
+                default: return "ZONA";
+            }
+        }
+
         private void RefreshFacility()
         {
             if (!facilitySelected || facilityStatus == null || kitchen == null)
                 return;
-            identity.text = depotSelected ? "DEPOSITO VIVERI" : "CUCINA";
+            identity.text = depotSelected ? "DISPENSA" : "CUCINA";
             instructions.text = "Sinistro: ispeziona.\nRancio: ogni giorno alle 13.";
             facilityStatus.gameObject.SetActive(true);
             facilityStatus.text = depotSelected
@@ -418,6 +564,24 @@ namespace NoMansGround.Soldiers
                 diggingStatus = CreateText(content, "", 10, 66f);
                 RefreshDigging();
             }
+            if (gameMap != null)
+            {
+                CreateText(content, "ZONE", 12, 20f);
+                var zoneRow = CreateRect("Zone controls", content);
+                zoneRow.gameObject.AddComponent<LayoutElement>().preferredHeight = 24f;
+                var zoneLayout = zoneRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+                zoneLayout.spacing = 2f;
+                zoneLayout.childForceExpandWidth = true;
+                zoneButtons = new[]
+                {
+                    CreateZoneButton(zoneRow, "Discarica", MapZoneKind.Dump),
+                    CreateZoneButton(zoneRow, "Materiali", MapZoneKind.MaterialsDepot),
+                    CreateZoneButton(zoneRow, "Dispensa", MapZoneKind.Pantry),
+                    CreateZoneButton(zoneRow, "Cimitero", MapZoneKind.Cemetery)
+                };
+                zoneStatus = CreateText(content, DescribeZones(), 9, 32f);
+                UpdateZoneControls();
+            }
             var detailRect = CreateRect("Details", content);
             var detailLayout = detailRect.gameObject.AddComponent<VerticalLayoutGroup>();
             detailLayout.spacing = 4f;
@@ -473,6 +637,29 @@ namespace NoMansGround.Soldiers
             Text text = CreateText(rect, label, 10, 0f);
             Stretch(text.rectTransform, 2f);
             return button;
+        }
+
+        private Button CreateZoneButton(Transform parent, string label, MapZoneKind kind)
+        {
+            var rect = CreateRect(label, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = new Color(0.26f, 0.32f, 0.22f);
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => SetZoneMode(kind));
+            Text text = CreateText(rect, label, 8, 0f);
+            Stretch(text.rectTransform, 1f);
+            return button;
+        }
+
+        private string DescribeZones()
+        {
+            if (gameMap == null || gameMap.Data == null)
+                return "Nessuna zona designata.";
+            return $"Discarica: {(gameMap.Data.HasZone(MapZoneKind.Dump) ? "attiva" : "assente")}\n"
+                + $"Deposito: {(gameMap.Data.HasZone(MapZoneKind.MaterialsDepot) ? "attivo" : "assente")} | "
+                + $"Dispensa: {(gameMap.Data.HasZone(MapZoneKind.Pantry) ? "attiva" : "assente")} | "
+                + $"Cimitero: {(gameMap.Data.HasZone(MapZoneKind.Cemetery) ? "attivo" : "assente")}";
         }
 
         private Button CreateSpeedButton(Transform parent, int multiplier)

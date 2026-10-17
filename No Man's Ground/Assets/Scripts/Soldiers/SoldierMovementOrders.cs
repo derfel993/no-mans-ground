@@ -156,6 +156,8 @@ namespace NoMansGround.Soldiers
             var kitchen = roster.GetComponent<KitchenSystem>();
             if (kitchen != null && kitchen.HasFacilities && (cell == kitchen.KitchenCell || cell == kitchen.DepotCell))
                 return Reject("Non puoi modificare gli edifici con gli ostacoli debug.");
+            if (map.Data.TryGetZone(cell, out _))
+                return Reject("Non puoi bloccare una cella assegnata a una zona.");
             if (trenchOrders != null && trenchOrders.Jobs.Count > 0)
                 return Reject("Ostacoli debug: annulla o completa prima gli scavi.");
             foreach (SoldierView soldier in roster.Soldiers)

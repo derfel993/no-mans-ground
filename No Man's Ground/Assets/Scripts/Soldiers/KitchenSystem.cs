@@ -11,10 +11,24 @@ namespace NoMansGround.Soldiers
         public const int ProvisionsPerRation = 10;
         public const float SecondsPerRation = 30f;
         private double elapsed;
-        public int Provisions { get; private set; } = InitialProvisions;
+        public int Provisions { get; private set; }
         public int KitchenProvisions { get; private set; }
         public int ReadyRations { get; private set; }
         public float Progress => (float)(elapsed / SecondsPerRation);
+
+        public RationStock(int initialProvisions = InitialProvisions)
+        {
+            if (initialProvisions < 0)
+                throw new ArgumentOutOfRangeException(nameof(initialProvisions));
+            Provisions = initialProvisions;
+        }
+
+        public void AddProvisions(int amount)
+        {
+            if (amount < 0)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+            Provisions = checked(Provisions + amount);
+        }
 
         public int TakeProvisions(int requested)
         {
@@ -72,8 +86,8 @@ namespace NoMansGround.Soldiers
         [SerializeField] private SoldierRoster roster;
         [SerializeField] private Sprite facilitySprite;
         private GameObject kitchenObject;
-        private GameObject depotObject;
         private MapData buildingMap;
+        private bool pantryInitialized;
         private float retryTimer;
         private readonly List<SoldierView> mealRecipients = new List<SoldierView>();
         private int mealDay;
@@ -81,11 +95,12 @@ namespace NoMansGround.Soldiers
         public int CarriedRations { get; private set; }
         public int CarriedProvisions { get; private set; }
         public int PendingMeals => mealRecipients.Count;
-        public RationStock Stock { get; private set; } = new RationStock();
+        public RationStock Stock { get; private set; } = new RationStock(0);
         public SoldierView Cook { get; private set; }
         public Vector2Int KitchenCell { get; private set; }
         public Vector2Int DepotCell { get; private set; }
-        public bool HasFacilities => kitchenObject != null && depotObject != null;
+        public bool HasFacilities => kitchenObject != null;
+        public bool HasPantry => map != null && map.Data != null && map.Data.HasZone(MapZoneKind.Pantry);
         public string Status { get; private set; } = "Cucina non pronta.";
         public event Action Changed;
 
@@ -136,7 +151,7 @@ namespace NoMansGround.Soldiers
             if (Cook != null)
                 Cook.SetWorkAssignment(false);
             ClearFacilities();
-            Stock = new RationStock();
+            Stock = new RationStock(0);
             mealRecipients.Clear();
             CarriedRations = 0;
             CarriedProvisions = 0;
@@ -162,20 +177,13 @@ namespace NoMansGround.Soldiers
             buildingMap = map.Data;
             KitchenCell = kitchen;
             buildingMap.SetWalkable(KitchenCell, false);
-            if (!TryBuildingCell(out Vector2Int depot))
-            {
-                buildingMap.SetWalkable(KitchenCell, true);
-                buildingMap = null;
-                SetStatus("Spazio insufficiente per il deposito.");
-                Debug.LogWarning(Status, this);
-                return;
-            }
-            DepotCell = depot;
-            buildingMap.SetWalkable(DepotCell, false);
             kitchenObject = CreateFacility("CUCINA", KitchenCell, new Color(0.7f, 0.45f, 0.25f));
-            depotObject = CreateFacility("VIVERI", DepotCell, new Color(0.7f, 0.7f, 0.3f));
+            Stock = new RationStock(0);
+            pantryInitialized = false;
+            HandleZonesChanged();
             retryTimer = 0f;
-            SetStatus("Cuoco in attesa di raggiungere la cucina.");
+            SetStatus(HasPantry ? "Cuoco in attesa di raggiungere la cucina."
+                : "Dispensa non designata: il cuoco non ha viveri.");
         }
 
         private bool TryBuildingCell(out Vector2Int cell)
@@ -187,7 +195,8 @@ namespace NoMansGround.Soldiers
                     {
                         cell = new Vector2Int(center + distance * side, y);
                         if (!map.Data.IsWalkable(cell) || map.Data.IsTrench(cell)
-                            || map.Data[cell.x, cell.y] == TerrainKind.Road)
+                            || map.Data[cell.x, cell.y] == TerrainKind.Road
+                            || map.Data.TryGetZone(cell, out _))
                             continue;
                         if (buildingMap != null
                             && Mathf.Abs(cell.x - KitchenCell.x) + Mathf.Abs(cell.y - KitchenCell.y) < 3)
@@ -224,17 +233,30 @@ namespace NoMansGround.Soldiers
             return obj;
         }
 
+        public void HandleZonesChanged()
+        {
+            if (!HasPantry)
+            {
+                DepotCell = default;
+                return;
+            }
+            Vector2Int origin = HasFacilities ? KitchenCell : Vector2Int.zero;
+            if (!map.Data.TryFindZoneCell(MapZoneKind.Pantry, origin, out Vector2Int pantryCell))
+                return;
+            DepotCell = pantryCell;
+            if (pantryInitialized)
+                return;
+            Stock.AddProvisions(RationStock.InitialProvisions);
+            pantryInitialized = true;
+        }
+
         private void ClearFacilities()
         {
-            if (buildingMap != null && HasFacilities)
-            {
+            if (buildingMap != null && kitchenObject != null)
                 buildingMap.SetWalkable(KitchenCell, true);
-                buildingMap.SetWalkable(DepotCell, true);
-            }
             buildingMap = null;
             RemoveFacility(kitchenObject);
-            RemoveFacility(depotObject);
-            kitchenObject = depotObject = null;
+            kitchenObject = null;
         }
 
         private static void RemoveFacility(GameObject obj)
@@ -257,7 +279,7 @@ namespace NoMansGround.Soldiers
                 mapView.transform.position.z - camera.transform.position.z));
             Vector3Int cell = mapView.Tilemap.WorldToCell(world);
             var position = new Vector2Int(cell.x, cell.y);
-            depot = position == DepotCell;
+            depot = map.Data.TryGetZone(position, out MapZoneKind kind) && kind == MapZoneKind.Pantry;
             return depot || position == KitchenCell;
         }
 
@@ -267,11 +289,18 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentOutOfRangeException(nameof(gameSeconds));
             if (gameSeconds == 0f || !HasFacilities)
                 return;
+            HandleZonesChanged();
             UpdateMealSchedule();
             if (Cook == null || !Cook.isActiveAndEnabled || Cook.Data.Profession != SoldierProfession.Cook)
             {
                 if (Cook != null) Cook.SetWorkAssignment(false);
                 SetStatus("Nessun cuoco disponibile.");
+                return;
+            }
+            if (!HasPantry)
+            {
+                Cook.SetWorkAssignment(false);
+                SetStatus("Dispensa non designata: il cuoco non ha viveri.");
                 return;
             }
             if (Cook.IsMoving)
@@ -463,11 +492,21 @@ namespace NoMansGround.Soldiers
 
         private GridPath FindServingPath(Vector2Int target)
         {
+            if (map.Data.TryGetZone(target, out MapZoneKind zoneKind) && zoneKind == MapZoneKind.Pantry)
+            {
+                GridPath pantryPath = GridPathfinder.FindNearest(map.Data, new[] { Cook.Cell }, target);
+                if (pantryPath == null)
+                    return null;
+                foreach (SoldierView other in roster.Soldiers)
+                    if (other != Cook && other != null && (other.Destination == target || other.Cell == target))
+                        return null;
+                return pantryPath;
+            }
             GridPath best = null;
             foreach (Vector2Int offset in Neighbours)
             {
                 Vector2Int destination = target + offset;
-                bool facility = target == KitchenCell || target == DepotCell;
+                bool facility = target == KitchenCell;
                 if (!facility && !map.Data.CanStep(destination, target))
                     continue;
                 if (facility && map.Data.IsTrench(destination))
@@ -498,8 +537,7 @@ namespace NoMansGround.Soldiers
 
         private bool IsAtDepot()
         {
-            return Mathf.Abs(Cook.Cell.x - DepotCell.x) + Mathf.Abs(Cook.Cell.y - DepotCell.y) == 1
-                && !map.Data.IsTrench(Cook.Cell);
+            return map.Data.TryGetZone(Cook.Cell, out MapZoneKind kind) && kind == MapZoneKind.Pantry;
         }
 
         private void SetStatus(string status)

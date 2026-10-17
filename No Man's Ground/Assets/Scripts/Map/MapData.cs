@@ -3,6 +3,14 @@ using UnityEngine;
 
 namespace NoMansGround.Map
 {
+    public enum MapZoneKind
+    {
+        Dump,
+        MaterialsDepot,
+        Pantry,
+        Cemetery
+    }
+
     public enum TerrainKind
     {
         Dirt,
@@ -17,6 +25,7 @@ namespace NoMansGround.Map
         private readonly TerrainKind[] cells;
         private readonly bool[] blocked;
         private readonly bool[] ladders;
+        private readonly MapZoneKind?[] zones;
 
         public int Width { get; }
         public int Height { get; }
@@ -31,6 +40,7 @@ namespace NoMansGround.Map
             cells = new TerrainKind[checked(width * height)];
             blocked = new bool[cells.Length];
             ladders = new bool[cells.Length];
+            zones = new MapZoneKind?[cells.Length];
         }
 
         public TerrainKind this[int x, int y]
@@ -48,6 +58,79 @@ namespace NoMansGround.Map
         public bool Contains(Vector2Int cell)
         {
             return cell.x >= 0 && cell.y >= 0 && cell.x < Width && cell.y < Height;
+        }
+
+        public bool TryGetZone(Vector2Int cell, out MapZoneKind kind)
+        {
+            kind = default;
+            if (!Contains(cell) || !zones[cell.y * Width + cell.x].HasValue)
+                return false;
+            kind = zones[cell.y * Width + cell.x].Value;
+            return true;
+        }
+
+        public bool HasZone(MapZoneKind kind)
+        {
+            for (int i = 0; i < zones.Length; i++)
+                if (zones[i] == kind)
+                    return true;
+            return false;
+        }
+
+        public bool TryDesignateZone(MapZoneKind kind, Vector2Int from, Vector2Int to, out int changed)
+        {
+            changed = 0;
+            if (!Enum.IsDefined(typeof(MapZoneKind), kind))
+                return false;
+            int minX = Math.Min(from.x, to.x);
+            int maxX = Math.Max(from.x, to.x);
+            int minY = Math.Min(from.y, to.y);
+            int maxY = Math.Max(from.y, to.y);
+            if (!Contains(new Vector2Int(minX, minY)) || !Contains(new Vector2Int(maxX, maxY)))
+                return false;
+
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    int index = y * Width + x;
+                    if (!IsWalkable(cell) || IsTrench(cell)
+                        || (zones[index].HasValue && zones[index] != kind))
+                        return false;
+                }
+
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    int index = y * Width + x;
+                    if (zones[index] == kind)
+                        continue;
+                    zones[index] = kind;
+                    changed++;
+                }
+            return true;
+        }
+
+        // TODO: Bathroom/waste and material-hauling jobs must consume these zone destinations.
+        public bool TryFindZoneCell(MapZoneKind kind, Vector2Int origin, out Vector2Int cell)
+        {
+            int bestDistance = int.MaxValue;
+            cell = default;
+            bool found = false;
+            for (int y = 0; y < Height; y++)
+                for (int x = 0; x < Width; x++)
+                {
+                    var candidate = new Vector2Int(x, y);
+                    if (zones[y * Width + x] != kind || !IsWalkable(candidate) || IsTrench(candidate))
+                        continue;
+                    int distance = Mathf.Abs(candidate.x - origin.x) + Mathf.Abs(candidate.y - origin.y);
+                    if (distance >= bestDistance)
+                        continue;
+                    bestDistance = distance;
+                    cell = candidate;
+                    found = true;
+                }
+            return found;
         }
 
         public bool IsWalkable(Vector2Int cell)

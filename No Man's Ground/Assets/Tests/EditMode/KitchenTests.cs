@@ -29,6 +29,9 @@ namespace NoMansGround.Tests
             roster.Spawn(map.Data);
             kitchen = roster.GetComponent<KitchenSystem>();
             Assert.IsNotNull(kitchen);
+            Vector2Int pantry = FindAvailableCell();
+            Assert.IsTrue(map.Data.TryDesignateZone(MapZoneKind.Pantry, pantry, pantry, out _));
+            map.GetComponentInChildren<MapTilemapView>().RenderZones(map.Data);
             kitchen.Rebuild();
         }
 
@@ -82,9 +85,11 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(SoldierProfession.Engineer, roster.Soldiers[i].Data.Profession);
             Assert.IsTrue(kitchen.HasFacilities);
             Assert.IsFalse(map.Data.IsWalkable(kitchen.KitchenCell));
-            Assert.IsFalse(map.Data.IsWalkable(kitchen.DepotCell));
+            Assert.IsTrue(map.Data.IsWalkable(kitchen.DepotCell));
+            Assert.IsTrue(map.Data.TryGetZone(kitchen.DepotCell, out MapZoneKind zone));
+            Assert.AreEqual(MapZoneKind.Pantry, zone);
             Assert.AreNotEqual(TerrainKind.Road, map.Data[kitchen.KitchenCell.x, kitchen.KitchenCell.y]);
-            Assert.AreNotEqual(TerrainKind.Road, map.Data[kitchen.DepotCell.x, kitchen.DepotCell.y]);
+            Assert.AreEqual(1000, kitchen.Stock.Provisions);
             for (int y = 0; y < 6; y++)
                 for (int x = 62; x < 66; x++)
                     Assert.IsTrue(map.Data.IsWalkable(new Vector2Int(x, y)),
@@ -163,13 +168,11 @@ namespace NoMansGround.Tests
         [Test]
         public void InaccessibleKitchenWaitsAndDisabledCookCannotProduce()
         {
-            foreach (Vector2Int delta in new[] { Vector2Int.down, Vector2Int.up, Vector2Int.left, Vector2Int.right })
-                map.Data.SetWalkable(kitchen.DepotCell + delta, false);
+            map.Data.SetWalkable(kitchen.DepotCell, false);
             kitchen.Tick(1f);
             Assert.IsFalse(kitchen.Cook.IsMoving);
             Assert.AreEqual("Accesso deposito bloccato o occupato.", kitchen.Status);
-            foreach (Vector2Int delta in new[] { Vector2Int.down, Vector2Int.up, Vector2Int.left, Vector2Int.right })
-                map.Data.SetWalkable(kitchen.DepotCell + delta, true);
+            map.Data.SetWalkable(kitchen.DepotCell, true);
             kitchen.Tick(1f);
             Assert.IsTrue(kitchen.Cook.IsMoving);
             kitchen.Cook.AdvanceMovement(100f);
@@ -192,6 +195,69 @@ namespace NoMansGround.Tests
             kitchen.Tick(1f);
             kitchen.Cook.AdvanceMovement(1000f);
             kitchen.Tick(1f);
+        }
+
+        private Vector2Int FindAvailableCell()
+        {
+            for (int y = 8; y < map.Data.Height; y++)
+                for (int x = 8; x < map.Data.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!map.Data.IsWalkable(cell) || map.Data.IsTrench(cell)
+                        || map.Data[cell.x, cell.y] == TerrainKind.Road)
+                        continue;
+                    bool occupied = false;
+                    foreach (SoldierView soldier in roster.Soldiers)
+                        if (soldier.Cell == cell || soldier.Destination == cell)
+                            occupied = true;
+                    if (!occupied)
+                        return cell;
+                }
+            Assert.Fail("No available cell for pantry zone.");
+            return default;
+        }
+
+        [Test]
+        public void CookHasNoProvisionsUntilThePlayerDesignatesAPantry()
+        {
+            map.Regenerate();
+            roster.Spawn(map.Data);
+            kitchen.Rebuild();
+            Assert.IsTrue(kitchen.HasFacilities);
+            Assert.IsFalse(kitchen.HasPantry);
+            Assert.Zero(kitchen.Stock.Provisions);
+            kitchen.Tick(1f);
+            Assert.AreEqual("Dispensa non designata: il cuoco non ha viveri.", kitchen.Status);
+            Assert.IsFalse(kitchen.Cook.IsMoving);
+
+            Vector2Int pantry = FindAvailableCell();
+            Assert.IsTrue(map.Data.TryDesignateZone(MapZoneKind.Pantry, pantry, pantry, out _));
+            kitchen.HandleZonesChanged();
+            Assert.IsTrue(kitchen.HasPantry);
+            Assert.AreEqual(RationStock.InitialProvisions, kitchen.Stock.Provisions);
+        }
+
+        [Test]
+        public void ZoneRectanglesRejectDifferentZoneOverlapAndBlockedCellsAtomically()
+        {
+            var data = new MapData(8, 8);
+            Assert.IsTrue(data.TryDesignateZone(MapZoneKind.Pantry,
+                new Vector2Int(1, 1), new Vector2Int(2, 2), out int added));
+            Assert.AreEqual(4, added);
+            Assert.IsFalse(data.TryDesignateZone(MapZoneKind.Dump,
+                new Vector2Int(2, 2), new Vector2Int(3, 3), out _));
+            Assert.IsTrue(data.TryDesignateZone(MapZoneKind.Cemetery,
+                new Vector2Int(6, 6), new Vector2Int(7, 7), out added));
+            Assert.AreEqual(4, added);
+            Assert.IsTrue(data.HasZone(MapZoneKind.Cemetery));
+            Assert.IsFalse(data.TryGetZone(new Vector2Int(3, 3), out _));
+            data.SetWalkable(new Vector2Int(5, 5), false);
+            Assert.IsFalse(data.TryDesignateZone(MapZoneKind.MaterialsDepot,
+                new Vector2Int(4, 4), new Vector2Int(5, 5), out _));
+            Assert.IsFalse(data.TryGetZone(new Vector2Int(4, 4), out _));
+            Assert.IsTrue(data.TryFindZoneCell(MapZoneKind.Pantry, Vector2Int.zero, out Vector2Int destination));
+            Assert.AreEqual(new Vector2Int(1, 1), destination);
+            Assert.IsFalse(data.TryFindZoneCell(MapZoneKind.Dump, Vector2Int.zero, out _));
         }
 
         private void StageAllProvisionsInKitchen()

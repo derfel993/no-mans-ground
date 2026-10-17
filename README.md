@@ -25,8 +25,8 @@ Il terreno viene generato all'avvio, non salvato come migliaia di tile nella sce
 Sul bordo inferiore viene generata una **strada larga 4 tile e lunga 6 tile**
 verso l'interno, centrata orizzontalmente (x 62-65, y 0-5 nella mappa 128 x 128).
 Il tile provvisorio grigio-terra distingue la strada dal terreno circostante.
-E percorribile come il terreno normale, senza bonus di velocita; cucina e deposito
-vengono collocati fuori dalla carreggiata. La strada viene ricreata anche alla
+E percorribile come il terreno normale, senza bonus di velocita; la cucina viene
+collocata fuori dalla carreggiata. Le zone designate restano percorribili. La strada viene ricreata anche alla
 rigenerazione, indipendentemente dal seed. Su mappe piu piccole di 4 x 6 viene
 ridotta alle dimensioni disponibili.
 E il futuro accesso per i rifornimenti e l'evacuazione dei feriti:
@@ -46,6 +46,9 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
 | L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
+| Pulsanti Discarica / Materiali / Dispensa / Cimitero | Seleziona il tipo di zona da disegnare |
+| Sinistro + trascinamento in modalita zona | Designa un rettangolo di celle |
+| Esc / destro in modalita zona | Esce dalla modalita senza impartire ordini |
 | X / pulsante Annulla scavi | Attiva/disattiva la cancellazione lungo una linea |
 | Esc / destro in modalita Scava o Annulla | Esce dalla modalita, senza impartire movimento |
 | Maiusc + clic destro sul terreno | Aggiunge/rimuove un ostacolo debug, a soldati fermi e senza scavi in coda |
@@ -81,7 +84,7 @@ La scena non viene inserita automaticamente nelle Build Profiles.
 
 - `Assets/Scripts/Map/MapData.cs`: dati del terreno, indipendenti dalla Tilemap.
 - `Assets/Scripts/Map/MapGenerator.cs`: generazione con seed e rumore Perlin.
-- `Assets/Scripts/Map/MapTilemapView.cs`: disegno e limiti della mappa.
+- `Assets/Scripts/Map/MapTilemapView.cs`: disegno del terreno e colori persistenti delle zone.
 - `Assets/Scripts/Map/MapCameraController.cs`: input tramite Input System.
 - `Assets/Scripts/Map/MapPrototype.cs`: collegamento tra generazione, vista e camera.
 - `Assets/Editor/MapPrototypeSetup.cs`: creazione della scena e degli asset provvisori.
@@ -91,8 +94,8 @@ La scena non viene inserita automaticamente nelle Build Profiles.
 Aprire **Window > General > Test Runner**, selezionare **EditMode** ed eseguire
 `NoMansGround.Tests` (incluse le prove input con il fixture ufficiale Input System).
 I test verificano riproducibilita, variazione del seed, validazione dei parametri,
-tile e riferimenti della scena, panning con mouse, punto di zoom e limiti della
-camera su finestre orizzontali, verticali e mappe piccole.
+tile e riferimenti della scena, panning con mouse, punto di zoom, limiti della
+camera e designazione/colorazione delle zone.
 Il manifest abilita i test del pacchetto Input System per rendere disponibile
 il suo fixture ufficiale; selezionare il namespace del progetto per eseguire
 soltanto i test di No Man's Ground.
@@ -394,7 +397,7 @@ API: `TrenchWorkOrders.DesignateLadder(cell)` accoda l'installazione;
 ospitare un soldato, non che sia raggiungibile dal terreno:
 le transizioni tra livelli sono validate da `CanStep(from, to)`.
 
-## Step 5: fame, mestieri, cucina e deposito viveri
+## Step 5: fame, mestieri, cucina e dispensa
 
 Con fame **strettamente sotto 35/100**, il soldato risulta **in attesa del rancio**:
 non cerca cibo, non va alla cucina e continua a muoversi e lavorare normalmente.
@@ -417,14 +420,17 @@ un'interfaccia per scegliere o cambiare il mestiere dei soldati.
 
 ### Cucina e produzione
 
-La scena genera una **CUCINA** e un **DEPOSITO VIVERI** vicino alla zona di arrivo.
-I rispettivi ingombri non sono percorribili o scavabili; il cuoco lavora da una
-cella adiacente ortogonale, raggiunta con il normale pathfinding e prenotata.
-Se manca spazio o l'accesso e occupato/bloccato, il sistema lo segnala;
-gli accessi vengono ritentati automaticamente ogni mezzo secondo.
+La scena genera automaticamente la sola **CUCINA**, con ingombro non percorribile
+e non scavabile. Il giocatore deve disegnare una zona **Dispensa** sulla mappa:
+le sue celle restano percorribili e il cuoco raggiunge una cella al suo interno
+con il normale pathfinding. Senza dispensa non ci sono viveri e la produzione
+resta ferma. La dispensa designata riceve le scorte iniziali di **1000 viveri**.
+Se manca spazio per la cucina o il suo accesso e occupato/bloccato, il sistema
+lo segnala; gli accessi vengono ritentati automaticamente ogni mezzo secondo.
 Su mappe senza capienza per il cuoco la cucina non viene generata.
 
-- Il deposito parte con **1000 viveri** e la cucina con **0 razioni pronte**.
+- La cucina parte con **0 razioni pronte**; i viveri sono disponibili solo dopo
+  aver designato la dispensa.
 - La produzione e continua, indipendente dal numero di soldati affamati,
   tranne durante gli spostamenti e il giro di distribuzione.
 - Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
@@ -434,14 +440,14 @@ Su mappe senza capienza per il cuoco la cucina non viene generata.
   il completamento della razione non li sottrae una seconda volta.
 - Il viaggio non conta come preparazione. Pausa, assenza o disabilitazione
   del cuoco sospendono la produzione conservando il progresso.
-- Con meno di 10 viveri il cuoco si ferma. Il deposito iniziale consente
+- Con meno di 10 viveri il cuoco si ferma. La scorta iniziale consente
   **100 razioni**, per 50 minuti di cottura effettiva, oltre ai viaggi.
 - **Clic sinistro sulla cucina**: mostra razioni pronte, viveri in cucina e
-  deposito, avanzamento della razione, carico trasportato e stato del cuoco.
-  Sul deposito mostra i viveri residui e quelli in trasporto.
+  dispensa, avanzamento della razione, carico trasportato e stato del cuoco.
+  Sulla dispensa mostra i viveri residui e quelli in trasporto.
   Uscire prima dalle modalita Scava/Scala/Annulla con Esc.
-- Rigenerare ricrea cuoco, edifici e scorte iniziali, azzerando razioni,
-  progresso e stress accumulato.
+- Rigenerare ricrea cuoco e cucina, rimuove le zone designate e azzera scorte,
+  razioni, progresso e stress accumulato.
 
 `RationStock` gestisce tempi e contabilita; `KitchenSystem` gestisce strutture,
 prenotazione del cuoco, preparazione e distribuzione.
@@ -519,7 +525,43 @@ API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`
 `SoldierMovementOrders.Selected` segue la selezione del pannello;
 `IssueMove(cell)` valida e muove esclusivamente quella guardia.
 
+## Step 7: zone designate
+
+I pulsanti **Discarica**, **Materiali**, **Dispensa** e **Cimitero** attivano
+la modalita di designazione. Trascinare con il sinistro dal tile iniziale a
+quello finale per creare un rettangolo; il verso del trascinamento non conta.
+L'anteprima segue il cursore e, al rilascio, il colore viene applicato ai tile
+e resta visibile: grigio per la discarica, rosso per i materiali, verde per la
+dispensa e grigio scuro per il cimitero. **Esc** o destro escono dalla modalita.
+
+Si possono aggiungere piu rettangoli dello stesso tipo. Le zone di tipo diverso
+non si sovrappongono; celle fuori mappa, bloccate o in trincea non sono valide.
+Le zone restano percorribili. Per ora non si possono cancellare e durano solo
+fino alla rigenerazione della mappa.
+
+- **Dispensa**: il cuoco non ha viveri finche non viene designata. La prima
+  dispensa fornisce le scorte iniziali di 1000 viveri; il cuoco raggiunge una
+  sua cella e la usa come origine del prelievo.
+- **Discarica**: area disponibile per future consegne di detriti e rifiuti.
+- **Deposito materiali**: destinazione disponibile per futuri materiali da
+  costruzione e rifornimenti dalle retrovie.
+- **Cimitero**: area designata, senza ancora funzioni di sepoltura.
+
+I lavori di bagno, raccolta e smaltimento dei rifiuti/detriti, trasporto dei
+materiali e rifornimento dalle retrovie non sono ancora implementati. Le zone
+forniscono le destinazioni, non assegnano ancora questi lavori ai soldati.
+Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
+
 ## Step successivi (non implementati)
+
+### TODO zone e logistica
+
+- [ ] Collegare i bisogni fisiologici alla **discarica**: senza una zona valida
+  i soldati non possono andare al bagno; implementare raccolta e smaltimento
+  di rifiuti e detriti.
+- [ ] Collegare raccolta e trasporto di risorse al **deposito materiali**;
+  aggiungere anche i rifornimenti in arrivo dalle retrovie.
+- [ ] Implementare le funzioni del **cimitero**.
 
 ### TODO risorse e rifugi
 

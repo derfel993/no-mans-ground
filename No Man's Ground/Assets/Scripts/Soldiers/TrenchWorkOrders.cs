@@ -208,7 +208,8 @@ namespace NoMansGround.Soldiers
         public bool Designate(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.IsWalkable(cell)
-                || map.Data[cell.x, cell.y] == TerrainKind.Trench || jobs.Exists(job => job.Cell == cell))
+                || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.TryGetZone(cell, out _)
+                || jobs.Exists(job => job.Cell == cell))
             {
                 Notify("Scavo non valido: fuori mappa,\nbloccato o gia presente.");
                 return false;

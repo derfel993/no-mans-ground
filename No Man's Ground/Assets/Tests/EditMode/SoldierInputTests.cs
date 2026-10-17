@@ -45,7 +45,7 @@ namespace NoMansGround.Tests
                 bool shown = false;
                 foreach (UnityEngine.UI.Text text in GameObject.Find("Soldier Interface")
                     .GetComponentsInChildren<UnityEngine.UI.Text>())
-                    if (text.text.Contains("Razioni pronte: 1"))
+                    if (text.text.Contains("Dispensa non designata"))
                         shown = true;
                 Assert.IsTrue(shown);
                 InputSystem.QueueStateEvent(mouse, new UnityEngine.InputSystem.LowLevel.MouseState { position = pointer });
@@ -103,6 +103,87 @@ namespace NoMansGround.Tests
                 Object.DestroyImmediate(root);
                 Object.DestroyImmediate(viewport);
             }
+        }
+
+        [Test]
+        public void ZoneModeDesignatesTheRectangleDraggedWithTheLeftMouseButton()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                SoldierDetailsPanel panel = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out SoldierDetailsPanel selection)) panel = selection;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 64f, 0f));
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                Vector2Int start = FindEmptyRectangle(map.Data, 3, 2);
+                Vector2Int end = start + new Vector2Int(2, 1);
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                panel.SetZoneMode(MapZoneKind.Dump);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(start.x, start.y, 0))));
+                Press(mouse.leftButton);
+                UpdateSelection(panel);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(end.x, end.y, 0))));
+                UpdateSelection(panel);
+                Release(mouse.leftButton);
+                UpdateSelection(panel);
+                for (int y = start.y; y <= end.y; y++)
+                    for (int x = start.x; x <= end.x; x++)
+                    {
+                        Assert.IsTrue(map.Data.TryGetZone(new Vector2Int(x, y), out MapZoneKind kind));
+                        Assert.AreEqual(MapZoneKind.Dump, kind);
+                    }
+                var tilePosition = new Vector3Int(start.x, start.y, 0);
+                Color zoneTint = Color.Lerp(Color.white, MapTilemapView.ZoneColor(MapZoneKind.Dump), 0.42f);
+                Assert.AreEqual(zoneTint, view.Tilemap.GetColor(tilePosition));
+                view.RenderZones(map.Data);
+                Assert.AreEqual(zoneTint, view.Tilemap.GetColor(tilePosition));
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        private static Vector2Int FindEmptyRectangle(MapData map, int width, int height)
+        {
+            for (int y = 8; y < map.Height - height; y++)
+                for (int x = 8; x < map.Width - width; x++)
+                {
+                    bool valid = true;
+                    for (int dy = 0; dy < height && valid; dy++)
+                        for (int dx = 0; dx < width; dx++)
+                        {
+                            var cell = new Vector2Int(x + dx, y + dy);
+                            if (!map.IsWalkable(cell) || map.IsTrench(cell)
+                                || map[cell.x, cell.y] == TerrainKind.Road)
+                            {
+                                valid = false;
+                                break;
+                            }
+                        }
+                    if (valid)
+                        return new Vector2Int(x, y);
+                }
+            Assert.Fail("No valid terrain rectangle found.");
+            return default;
         }
 
         private static void UpdateSelection(SoldierDetailsPanel panel)

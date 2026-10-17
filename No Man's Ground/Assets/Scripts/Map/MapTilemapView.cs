@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -7,6 +8,7 @@ namespace NoMansGround.Map
     [RequireComponent(typeof(Tilemap), typeof(TilemapRenderer))]
     public sealed class MapTilemapView : MonoBehaviour
     {
+        private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
         [SerializeField] private TileBase dirtTile;
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
@@ -97,6 +99,7 @@ namespace NoMansGround.Map
 
             Tilemap tilemap = Tilemap;
             tilemap.ClearAllTiles();
+            renderedZoneCells.Clear();
             tilemap.SetTilesBlock(new BoundsInt(0, 0, 0, map.Width, map.Height, 1), tiles);
             tilemap.CompressBounds();
             for (int y = 0; y < map.Height; y++)
@@ -109,6 +112,46 @@ namespace NoMansGround.Map
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(0, map.Height, 0)));
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(map.Width, map.Height, 0)));
             WorldBounds = bounds;
+            RenderZones(map);
+        }
+
+        public void RenderZones(MapData map)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            Tilemap tilemap = Tilemap;
+            foreach (Vector2Int cell in renderedZoneCells)
+            {
+                var position = new Vector3Int(cell.x, cell.y, 0);
+                tilemap.SetTileFlags(position, TileFlags.None);
+                tilemap.SetColor(position, map.IsWalkable(cell)
+                    ? Color.white : new Color(0.20f, 0.13f, 0.13f));
+            }
+            renderedZoneCells.Clear();
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!map.TryGetZone(cell, out MapZoneKind kind))
+                        continue;
+                    Color tint = Color.Lerp(Color.white, ZoneColor(kind), 0.42f);
+                    var position = new Vector3Int(x, y, 0);
+                    tilemap.SetTileFlags(position, TileFlags.None);
+                    tilemap.SetColor(position, tint);
+                    renderedZoneCells.Add(cell);
+                }
+        }
+
+        public static Color ZoneColor(MapZoneKind kind)
+        {
+            switch (kind)
+            {
+                case MapZoneKind.Dump: return new Color(0.58f, 0.60f, 0.58f);
+                case MapZoneKind.MaterialsDepot: return new Color(0.82f, 0.24f, 0.20f);
+                case MapZoneKind.Pantry: return new Color(0.35f, 0.67f, 0.44f);
+                case MapZoneKind.Cemetery: return new Color(0.22f, 0.23f, 0.24f);
+                default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
         }
 
         public void RefreshWalkability(MapData map, Vector2Int cell)
