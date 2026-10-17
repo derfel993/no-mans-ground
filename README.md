@@ -19,14 +19,18 @@ Aprire il progetto con Unity **6000.6.6f1**, quindi aprire
 La scena originale `SampleScene` non viene modificata.
 
 La mappa iniziale misura 128 x 128 celle sul piano XY; ogni cella occupa
-1 unita Unity. Terra, erba e fango sono rappresentati da tile provvisori.
+1 unita Unity. Terra, erba, fango e roccia sono generati con tile provvisori.
+La roccia e non percorribile; la fascia iniziale resta libera per gli arrivi.
+Gli alberi coprono il 40% delle celle non rocciose, sono disegnati sopra il
+terreno e restano percorribili; il seed rende riproducibile la loro posizione.
 Il terreno viene generato all'avvio, non salvato come migliaia di tile nella scena.
 
 Sul bordo inferiore viene generata una **strada larga 4 tile e lunga 6 tile**
 verso l'interno, centrata orizzontalmente (x 62-65, y 0-5 nella mappa 128 x 128).
 Il tile provvisorio grigio-terra distingue la strada dal terreno circostante.
 E percorribile come il terreno normale, senza bonus di velocita; la cucina viene
-collocata fuori dalla carreggiata. Le zone designate restano percorribili. La strada viene ricreata anche alla
+collocata fuori dalla carreggiata. Le zone designate restano percorribili.
+La strada viene ricreata anche alla
 rigenerazione, indipendentemente dal seed. Su mappe piu piccole di 4 x 6 viene
 ridotta alle dimensioni disponibili.
 E il futuro accesso per i rifornimenti e l'evacuazione dei feriti:
@@ -64,8 +68,10 @@ in modo da non mostrare spazio esterno.
 
 - Oggetto **Map**, componente **Map Prototype**: dimensioni (1-512 per asse),
   seed, scala del rumore e soglie del terreno. La soglia del fango deve essere
-  inferiore a quella dell'erba. Una scala del rumore maggiore produce zone piu ampie.
-- Oggetto **Ground**: riferimenti ai tile del terreno, della strada, della trincea e della scala.
+  inferiore a quella dell'erba, e quella della roccia superiore a entrambe.
+  Una scala del rumore maggiore produce zone piu ampie.
+- Oggetto **Ground**: riferimenti ai tile di terra, erba, fango, roccia, strada,
+  trincea e scala.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
@@ -214,8 +220,9 @@ Il pannello aggiorna immediatamente XP e livello.
   personaggi e la capienza della mappa. Cambiare prima di Play o rigenerare.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
   bordo inferiore, la zona d'arrivo dei soldati. La camera iniziale inquadra
-  questa zona rispettando i limiti della mappa. Tutti i terreni
-  attuali sono utilizzabili, salvo ostacoli di debug. Non vengono valutate coperture.
+  questa zona rispettando i limiti della mappa. Terra, erba, fango e strada sono
+  percorribili; la roccia blocca movimento e scavi, mentre la trincea segue le
+  regole di accesso tramite scala. Non vengono valutate coperture.
 - Se la mappa ha meno celle dei soldati richiesti, il numero viene ridotto alla
   capienza e viene emesso un avviso in Console.
 - **Regenerate Map** ricrea anche i soldati: anagrafica e stato iniziali sono
@@ -565,10 +572,10 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 
 ### TODO risorse e rifugi
 
-- [ ] **Alberi**: generarli sulla mappa e permettere al giocatore di
-  designarne l'abbattimento come job per ottenere **legna**.
-- [ ] **Massi**: generarli sulla mappa e permettere al giocatore di
-  designarne l'estrazione come job per ottenere **pietra da costruzione**.
+- [ ] **Alberi**: permettere al giocatore di designarne l'abbattimento come job
+  per ottenere **legna**. La generazione e il rendering degli alberi sono presenti.
+- [ ] **Estrazione della roccia**: designare celle Rock per ottenere
+  **pietra da costruzione** tramite un job del Genio.
 - [ ] **Risorse raccolte**: gestire legna e pietra come materiali disponibili
   per le costruzioni.
 - [ ] **Rifugi con costruzione a celle, in stile RimWorld**: designare pareti

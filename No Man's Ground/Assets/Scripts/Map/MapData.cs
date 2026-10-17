@@ -17,7 +17,8 @@ namespace NoMansGround.Map
         Grass,
         Mud,
         Trench,
-        Road
+        Road,
+        Rock
     }
 
     public sealed class MapData
@@ -25,10 +26,12 @@ namespace NoMansGround.Map
         private readonly TerrainKind[] cells;
         private readonly bool[] blocked;
         private readonly bool[] ladders;
+        private readonly bool[] trees;
         private readonly MapZoneKind?[] zones;
 
         public int Width { get; }
         public int Height { get; }
+        public int TreeCount { get; private set; }
 
         public MapData(int width, int height)
         {
@@ -40,6 +43,7 @@ namespace NoMansGround.Map
             cells = new TerrainKind[checked(width * height)];
             blocked = new bool[cells.Length];
             ladders = new bool[cells.Length];
+            trees = new bool[cells.Length];
             zones = new MapZoneKind?[cells.Length];
         }
 
@@ -52,6 +56,11 @@ namespace NoMansGround.Map
                 cells[index] = value;
                 if (value != TerrainKind.Trench)
                     ladders[index] = false;
+                if (value == TerrainKind.Rock && trees[index])
+                {
+                    trees[index] = false;
+                    TreeCount--;
+                }
             }
         }
 
@@ -135,7 +144,8 @@ namespace NoMansGround.Map
 
         public bool IsWalkable(Vector2Int cell)
         {
-            return Contains(cell) && !blocked[cell.y * Width + cell.x];
+            return Contains(cell) && cells[cell.y * Width + cell.x] != TerrainKind.Rock
+                && !blocked[cell.y * Width + cell.x];
         }
 
         public void SetWalkable(Vector2Int cell, bool walkable)
@@ -146,6 +156,21 @@ namespace NoMansGround.Map
         public bool IsTrench(Vector2Int cell)
         {
             return Contains(cell) && this[cell.x, cell.y] == TerrainKind.Trench;
+        }
+
+        public bool HasTree(Vector2Int cell)
+        {
+            return Contains(cell) && trees[cell.y * Width + cell.x];
+        }
+
+        public void SetTree(Vector2Int cell, bool hasTree)
+        {
+            int index = IndexOf(cell.x, cell.y);
+            if (hasTree && cells[index] == TerrainKind.Rock)
+                throw new InvalidOperationException("A tree cannot be placed on rock.");
+            if (trees[index] != hasTree)
+                TreeCount += hasTree ? 1 : -1;
+            trees[index] = hasTree;
         }
 
         public bool HasLadder(Vector2Int cell)

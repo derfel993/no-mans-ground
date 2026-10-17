@@ -25,7 +25,11 @@ namespace NoMansGround.Tests
             Assert.AreEqual(128, first.Height);
             for (int y = 0; y < first.Height; y++)
                 for (int x = 0; x < first.Width; x++)
+                {
                     Assert.AreEqual(first[x, y], second[x, y], $"Cell {x}, {y}");
+                    Assert.AreEqual(first.HasTree(new Vector2Int(x, y)), second.HasTree(new Vector2Int(x, y)),
+                        $"Tree {x}, {y}");
+                }
         }
 
         [Test]
@@ -36,18 +40,31 @@ namespace NoMansGround.Tests
             settings.seed++;
             MapData second = MapGenerator.Generate(settings);
             int differences = 0;
+            int nonRockCells = 0;
+            int treeCells = 0;
             var counts = new int[Enum.GetValues(typeof(TerrainKind)).Length];
             for (int y = 0; y < first.Height; y++)
             {
                 for (int x = 0; x < first.Width; x++)
                 {
                     counts[(int)first[x, y]]++;
+                    var cell = new Vector2Int(x, y);
+                    if (first[x, y] != TerrainKind.Rock)
+                        nonRockCells++;
+                    if (first.HasTree(cell))
+                    {
+                        treeCells++;
+                        Assert.AreNotEqual(TerrainKind.Rock, first[x, y]);
+                        Assert.IsTrue(first.IsWalkable(cell));
+                    }
                     if (first[x, y] != second[x, y])
                         differences++;
                 }
             }
             Assert.Greater(differences, first.Width * first.Height / 10);
-            foreach (TerrainKind terrain in new[] { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road })
+            Assert.AreEqual(nonRockCells * 2 / 5, treeCells);
+            foreach (TerrainKind terrain in new[]
+                { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road, TerrainKind.Rock })
                 Assert.Greater(counts[(int)terrain], 0);
             Assert.AreEqual(24, counts[(int)TerrainKind.Road]);
             Assert.Zero(counts[(int)TerrainKind.Trench]);
@@ -99,9 +116,24 @@ namespace NoMansGround.Tests
                 MapGenerator.Generate(new MapGenerationSettings { noiseScale = float.NaN }));
             Assert.Throws<ArgumentException>(() =>
                 MapGenerator.Generate(new MapGenerationSettings { mudThreshold = 0.8f, grassThreshold = 0.2f }));
+            Assert.Throws<ArgumentException>(() =>
+                MapGenerator.Generate(new MapGenerationSettings { grassThreshold = 0.7f, rockThreshold = 0.6f }));
+            Assert.Throws<ArgumentException>(() =>
+                MapGenerator.Generate(new MapGenerationSettings { mudThreshold = 0.1f, grassThreshold = 0.2f, rockThreshold = -0.1f }));
             var map = new MapData(3, 2);
             Assert.IsFalse(map.Contains(new Vector2Int(-1, 0)));
             Assert.Throws<ArgumentOutOfRangeException>(() => { TerrainKind unused = map[3, 0]; });
+        }
+
+        [Test]
+        public void RockTerrainCannotBeMadeWalkable()
+        {
+            var map = new MapData(1, 1);
+            map[0, 0] = TerrainKind.Rock;
+            Assert.IsFalse(map.IsWalkable(Vector2Int.zero));
+            Assert.Throws<InvalidOperationException>(() => map.SetTree(Vector2Int.zero, true));
+            map.SetWalkable(Vector2Int.zero, true);
+            Assert.IsFalse(map.IsWalkable(Vector2Int.zero));
         }
 
         [Test]
@@ -115,25 +147,36 @@ namespace NoMansGround.Tests
             var grass = ScriptableObject.CreateInstance<Tile>();
             var mud = ScriptableObject.CreateInstance<Tile>();
             var road = ScriptableObject.CreateInstance<Tile>();
+            var rock = ScriptableObject.CreateInstance<Tile>();
             try
             {
                 var map = new MapData(3, 2);
                 map[1, 0] = TerrainKind.Grass;
                 map[2, 1] = TerrainKind.Mud;
                 map[0, 1] = TerrainKind.Road;
+                map[1, 1] = TerrainKind.Rock;
+                map.SetTree(new Vector2Int(1, 0), true);
                 var view = ground.GetComponent<MapTilemapView>();
                 view.Configure(dirt, grass, mud);
                 Assert.Throws<InvalidOperationException>(() => view.Render(map));
                 view.ConfigureRoad(road);
+                Assert.Throws<InvalidOperationException>(() => view.Render(map));
+                view.ConfigureRock(rock);
                 view.Render(map);
                 Assert.AreEqual(dirt, view.Tilemap.GetTile(Vector3Int.zero));
                 Assert.AreEqual(grass, view.Tilemap.GetTile(new Vector3Int(1, 0, 0)));
                 Assert.AreEqual(mud, view.Tilemap.GetTile(new Vector3Int(2, 1, 0)));
                 Assert.AreEqual(road, view.Tilemap.GetTile(new Vector3Int(0, 1, 0)));
+                Assert.AreEqual(rock, view.Tilemap.GetTile(new Vector3Int(1, 1, 0)));
+                Assert.IsFalse(map.IsWalkable(new Vector2Int(1, 1)));
+                Assert.IsTrue(map.IsWalkable(new Vector2Int(1, 0)));
+                Tilemap treeTilemap = view.transform.Find("Trees").GetComponent<Tilemap>();
+                Assert.IsNotNull(treeTilemap.GetTile(new Vector3Int(1, 0, 0)));
                 Assert.AreEqual(new Vector3(10f, 20f, 0f), view.WorldBounds.min);
                 Assert.AreEqual(new Vector3(13f, 22f, 0f), view.WorldBounds.max);
                 view.Render(new MapData(1, 1));
                 Assert.IsNull(view.Tilemap.GetTile(new Vector3Int(2, 1, 0)));
+                Assert.IsNull(treeTilemap.GetTile(new Vector3Int(1, 0, 0)));
             }
             finally
             {
@@ -142,6 +185,7 @@ namespace NoMansGround.Tests
                 Object.DestroyImmediate(grass);
                 Object.DestroyImmediate(mud);
                 Object.DestroyImmediate(road);
+                Object.DestroyImmediate(rock);
             }
         }
 
@@ -235,11 +279,26 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(camera);
                 prototype.Regenerate();
                 Assert.AreEqual(new Vector3Int(128, 128, 1), view.Tilemap.cellBounds.size);
-                Assert.AreEqual(4, view.Tilemap.GetUsedTilesCount());
+                Assert.AreEqual(5, view.Tilemap.GetUsedTilesCount());
                 Tile road = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Road.asset");
+                Tile rock = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Rock.asset");
                 Assert.IsNotNull(road);
+                Assert.IsNotNull(rock);
                 Assert.IsNotNull(road.sprite);
+                Assert.IsNotNull(rock.sprite);
                 Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
+                Assert.AreEqual(Tile.ColliderType.None, rock.colliderType);
+                int rockCells = 0;
+                for (int y = 0; y < prototype.Data.Height; y++)
+                    for (int x = 0; x < prototype.Data.Width; x++)
+                        if (prototype.Data[x, y] == TerrainKind.Rock)
+                        {
+                            rockCells++;
+                            Assert.IsFalse(prototype.Data.IsWalkable(new Vector2Int(x, y)));
+                            Assert.GreaterOrEqual(y, 10);
+                            Assert.AreSame(rock, view.Tilemap.GetTile(new Vector3Int(x, y, 0)));
+                        }
+                Assert.Greater(rockCells, 0);
                 for (int y = 0; y < 6; y++)
                     for (int x = 62; x < 66; x++)
                         Assert.AreSame(road, view.Tilemap.GetTile(new Vector3Int(x, y, 0)));

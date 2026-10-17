@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NoMansGround.Map
@@ -12,6 +13,7 @@ namespace NoMansGround.Map
         [Min(1f)] public float noiseScale = 18f;
         [Range(0f, 1f)] public float mudThreshold = 0.38f;
         [Range(0f, 1f)] public float grassThreshold = 0.58f;
+        [Range(0f, 1f)] public float rockThreshold = 0.70f;
 
         public void Validate()
         {
@@ -19,9 +21,11 @@ namespace NoMansGround.Map
                 throw new ArgumentOutOfRangeException(nameof(width), "Map dimensions must be between 1 and 512.");
             if (!float.IsFinite(noiseScale) || noiseScale < 1f)
                 throw new ArgumentOutOfRangeException(nameof(noiseScale), "Noise scale must be finite and at least 1.");
-            if (!float.IsFinite(mudThreshold) || !float.IsFinite(grassThreshold)
-                || mudThreshold < 0f || grassThreshold > 1f || mudThreshold >= grassThreshold)
-                throw new ArgumentException("Terrain thresholds must satisfy 0 <= mud < grass <= 1.");
+            if (!float.IsFinite(mudThreshold) || !float.IsFinite(grassThreshold) || !float.IsFinite(rockThreshold)
+                || mudThreshold < 0f || mudThreshold > 1f || grassThreshold < 0f || grassThreshold > 1f
+                || rockThreshold < 0f || rockThreshold > 1f || mudThreshold >= grassThreshold
+                || grassThreshold >= rockThreshold)
+                throw new ArgumentException("Terrain thresholds must satisfy 0 <= mud < grass < rock <= 1.");
         }
     }
 
@@ -38,6 +42,7 @@ namespace NoMansGround.Map
             float offsetX = (float)random.NextDouble() * 10000f;
             float offsetY = (float)random.NextDouble() * 10000f;
             var map = new MapData(settings.width, settings.height);
+            const int spawnSafeRows = 10;
 
             for (int y = 0; y < map.Height; y++)
             {
@@ -45,7 +50,8 @@ namespace NoMansGround.Map
                 {
                     float noise = Mathf.PerlinNoise(offsetX + x / settings.noiseScale,
                         offsetY + y / settings.noiseScale);
-                    map[x, y] = noise < settings.mudThreshold ? TerrainKind.Mud
+                    map[x, y] = y >= spawnSafeRows && noise >= settings.rockThreshold ? TerrainKind.Rock
+                        : noise < settings.mudThreshold ? TerrainKind.Mud
                         : noise >= settings.grassThreshold ? TerrainKind.Grass : TerrainKind.Dirt;
                 }
             }
@@ -56,6 +62,22 @@ namespace NoMansGround.Map
             for (int y = 0; y < roadLength; y++)
                 for (int x = roadStartX; x < roadStartX + roadWidth; x++)
                     map[x, y] = TerrainKind.Road;
+
+            var treeCandidates = new List<Vector2Int>();
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                    if (map[x, y] != TerrainKind.Rock)
+                        treeCandidates.Add(new Vector2Int(x, y));
+
+            int treeCount = treeCandidates.Count * 2 / 5;
+            for (int i = 0; i < treeCount; i++)
+            {
+                int swapIndex = i + random.Next(treeCandidates.Count - i);
+                Vector2Int selected = treeCandidates[swapIndex];
+                treeCandidates[swapIndex] = treeCandidates[i];
+                treeCandidates[i] = selected;
+                map.SetTree(treeCandidates[i], true);
+            }
 
             return map;
         }

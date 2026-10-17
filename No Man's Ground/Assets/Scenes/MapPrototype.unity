@@ -206,6 +206,7 @@ MonoBehaviour:
     noiseScale: 18
     mudThreshold: 0.38
     grassThreshold: 0.58
+    rockThreshold: 0.7
   mapView: {fileID: 1241894002}
   cameraController: {fileID: 737981056}
 --- !u!156049354 &557374256
@@ -484,6 +485,7 @@ MonoBehaviour:
   dirtTile: {fileID: 11400000, guid: 38095a591fcb9544285333972fb4e031, type: 2}
   grassTile: {fileID: 11400000, guid: 4c23f7b30725a09478db8b7c52ac2127, type: 2}
   mudTile: {fileID: 11400000, guid: e2264e976335ab0439326c125472c3ad, type: 2}
+  rockTile: {fileID: 11400000, guid: a71d2584ea7e4ea89caf97a2c8c0d155, type: 2}
   trenchTile: {fileID: 11400000, guid: f5ac7af79256eb648a3d3e430a60ffd7, type: 2}
   ladderTile: {fileID: 11400000, guid: 92c288c3ccc5e7c449f3b5d003d9e797, type: 2}
   roadTile: {fileID: 11400000, guid: c43743cdfc484c18b4522d78608e79eb, type: 2}

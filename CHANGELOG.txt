@@ -8,6 +8,16 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.1.4 - 2026-10-17
+===============================================================================
+
+Generazione della mappa
+- Aggiunto il terreno **Rock**, non percorribile, generato con soglia del rumore
+  configurabile; le prime dieci righe restano libere per l'arrivo dei soldati.
+- Aggiunti alberi procedurali walkable sul 40% delle celle non rocciose, con
+  posizioni deterministiche rispetto al seed e rendering su layer separato.
+
+===============================================================================
 0.1.3 - 2026-10-17
 ===============================================================================
 

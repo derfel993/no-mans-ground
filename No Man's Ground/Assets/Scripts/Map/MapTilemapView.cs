@@ -9,9 +9,16 @@ namespace NoMansGround.Map
     public sealed class MapTilemapView : MonoBehaviour
     {
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
+        private GameObject treeLayer;
+        private Tilemap treeTilemap;
+        private Tile runtimeTreeTile;
+        private Sprite runtimeTreeSprite;
+        private Texture2D runtimeTreeTexture;
         [SerializeField] private TileBase dirtTile;
         [SerializeField] private TileBase grassTile;
         [SerializeField] private TileBase mudTile;
+        [SerializeField] private TileBase rockTile;
+        [SerializeField] private TileBase treeTile;
         [SerializeField] private TileBase trenchTile;
         [SerializeField] private TileBase ladderTile;
         [SerializeField] private TileBase roadTile;
@@ -34,6 +41,11 @@ namespace NoMansGround.Map
         public void ConfigureRoad(TileBase road)
         {
             roadTile = road;
+        }
+
+        public void ConfigureRock(TileBase rock)
+        {
+            rockTile = rock;
         }
 
         public void ConfigureLadder(TileBase ladder)
@@ -80,6 +92,11 @@ namespace NoMansGround.Map
                         case TerrainKind.Dirt: tiles[y * map.Width + x] = dirtTile; break;
                         case TerrainKind.Grass: tiles[y * map.Width + x] = grassTile; break;
                         case TerrainKind.Mud: tiles[y * map.Width + x] = mudTile; break;
+                        case TerrainKind.Rock:
+                            if (rockTile == null)
+                                throw new InvalidOperationException("Assign a rock tile before rendering rocks.");
+                            tiles[y * map.Width + x] = rockTile;
+                            break;
                         case TerrainKind.Road:
                             if (roadTile == null)
                                 throw new InvalidOperationException("Assign a road tile before rendering roads.");
@@ -113,6 +130,94 @@ namespace NoMansGround.Map
             bounds.Encapsulate(tilemap.CellToWorld(new Vector3Int(map.Width, map.Height, 0)));
             WorldBounds = bounds;
             RenderZones(map);
+            RenderTrees(map);
+        }
+
+        private void RenderTrees(MapData map)
+        {
+            if (map.TreeCount == 0)
+            {
+                if (treeTilemap != null)
+                    treeTilemap.ClearAllTiles();
+                return;
+            }
+
+            EnsureTreeLayer();
+            var tiles = new TileBase[map.Width * map.Height];
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                    if (map.HasTree(new Vector2Int(x, y)))
+                        tiles[y * map.Width + x] = treeTile;
+            treeTilemap.ClearAllTiles();
+            treeTilemap.SetTilesBlock(new BoundsInt(0, 0, 0, map.Width, map.Height, 1), tiles);
+            treeTilemap.CompressBounds();
+        }
+
+        private void EnsureTreeLayer()
+        {
+            if (treeTilemap == null)
+            {
+                treeLayer = new GameObject("Trees", typeof(Tilemap), typeof(TilemapRenderer));
+                treeLayer.transform.SetParent(transform, false);
+                treeTilemap = treeLayer.GetComponent<Tilemap>();
+                TilemapRenderer baseRenderer = GetComponent<TilemapRenderer>();
+                TilemapRenderer treeRenderer = treeLayer.GetComponent<TilemapRenderer>();
+                treeRenderer.sortingLayerID = baseRenderer.sortingLayerID;
+                treeRenderer.sortingOrder = baseRenderer.sortingOrder + 1;
+            }
+            if (treeTile == null)
+                treeTile = CreateRuntimeTreeTile();
+        }
+
+        private Tile CreateRuntimeTreeTile()
+        {
+            runtimeTreeTexture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            runtimeTreeTexture.filterMode = FilterMode.Point;
+            var pixels = new Color32[256];
+            for (int y = 0; y < 7; y++)
+                for (int x = 7; x <= 8; x++)
+                    pixels[y * 16 + x] = new Color32(105, 72, 39, 255);
+            for (int y = 4; y < 16; y++)
+            {
+                int radius = Mathf.Min(6, (y - 3) / 2);
+                for (int x = 8 - radius; x <= 8 + radius; x++)
+                {
+                    bool edge = Mathf.Abs(x - 8) == radius;
+                    pixels[y * 16 + x] = edge
+                        ? new Color32(37, 78, 39, 255)
+                        : (x + y) % 4 == 0
+                            ? new Color32(75, 133, 60, 255) : new Color32(50, 105, 48, 255);
+                }
+            }
+            runtimeTreeTexture.SetPixels32(pixels);
+            runtimeTreeTexture.Apply();
+            runtimeTreeSprite = Sprite.Create(runtimeTreeTexture, new Rect(0f, 0f, 16f, 16f),
+                new Vector2(0.5f, 0.5f), 16f);
+            runtimeTreeTile = ScriptableObject.CreateInstance<Tile>();
+            runtimeTreeTile.sprite = runtimeTreeSprite;
+            runtimeTreeTile.colliderType = Tile.ColliderType.None;
+            runtimeTreeTile.flags = TileFlags.None;
+            return runtimeTreeTile;
+        }
+
+        private void OnDestroy()
+        {
+            if (treeLayer != null)
+                DestroyGeneratedObject(treeLayer);
+            if (runtimeTreeTile != null)
+                DestroyGeneratedObject(runtimeTreeTile);
+            if (runtimeTreeSprite != null)
+                DestroyGeneratedObject(runtimeTreeSprite);
+            if (runtimeTreeTexture != null)
+                DestroyGeneratedObject(runtimeTreeTexture);
+        }
+
+        private static void DestroyGeneratedObject(UnityEngine.Object obj)
+        {
+            if (Application.isPlaying)
+                UnityEngine.Object.Destroy(obj);
+            else
+                UnityEngine.Object.DestroyImmediate(obj);
         }
 
         public void RenderZones(MapData map)
@@ -165,7 +270,8 @@ namespace NoMansGround.Map
             if (!map.IsWalkable(cell))
             {
                 Tilemap.SetTileFlags(position, TileFlags.None);
-                Tilemap.SetColor(position, new Color(0.20f, 0.13f, 0.13f));
+                Tilemap.SetColor(position, map[cell.x, cell.y] == TerrainKind.Rock
+                    ? Color.white : new Color(0.20f, 0.13f, 0.13f));
             }
         }
     }
