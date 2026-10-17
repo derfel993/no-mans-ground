@@ -24,7 +24,7 @@ namespace NoMansGround.Map
 
         public void SetSimulationSpeed(int multiplier)
         {
-            if (multiplier != 1 && multiplier != 2 && multiplier != 5)
+            if (multiplier != 1 && multiplier != 2 && multiplier != 5 && multiplier != 10)
                 throw new ArgumentOutOfRangeException(nameof(multiplier));
             SimulationSpeed = multiplier;
             Time.timeScale = multiplier;

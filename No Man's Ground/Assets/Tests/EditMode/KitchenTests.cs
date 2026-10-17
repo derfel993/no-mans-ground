@@ -36,24 +36,33 @@ namespace NoMansGround.Tests
         public void TearDown() { EditorSceneManager.CloseScene(scene, true); }
 
         [Test]
-        public void StockConsumesExactlyTenPerThirtySecondsAndStopsAtOneHundredRations()
+        public void DepotStockIsWithdrawnOnceAndKitchenStockIsConsumedByCooking()
         {
             var stock = new RationStock();
             Assert.AreEqual(1000, stock.Provisions);
+            Assert.Zero(stock.KitchenProvisions);
             Assert.Zero(stock.ReadyRations);
+            int initialLoad = stock.TakeProvisions(RationStock.ProvisionsPerRation);
+            Assert.AreEqual(990, stock.Provisions);
+            stock.StoreKitchenProvisions(initialLoad);
             stock.AdvanceTime(29f);
             Assert.Zero(stock.ReadyRations);
-            Assert.AreEqual(1000, stock.Provisions);
+            Assert.AreEqual(990, stock.Provisions);
+            Assert.AreEqual(10, stock.KitchenProvisions);
             stock.AdvanceTime(1f);
             Assert.AreEqual(1, stock.ReadyRations);
             Assert.AreEqual(990, stock.Provisions);
+            Assert.Zero(stock.KitchenProvisions);
+            stock.StoreKitchenProvisions(stock.TakeProvisions(990));
             stock.AdvanceTime(75f);
             Assert.AreEqual(3, stock.ReadyRations);
-            Assert.AreEqual(970, stock.Provisions);
+            Assert.Zero(stock.Provisions);
+            Assert.AreEqual(970, stock.KitchenProvisions);
             Assert.AreEqual(0.5f, stock.Progress);
             stock.AdvanceTime(float.MaxValue);
             Assert.AreEqual(100, stock.ReadyRations);
             Assert.Zero(stock.Provisions);
+            Assert.Zero(stock.KitchenProvisions);
             Assert.Zero(stock.Progress);
             stock.AdvanceTime(300f);
             Assert.AreEqual(100, stock.ReadyRations);
@@ -87,6 +96,8 @@ namespace NoMansGround.Tests
         {
             var single = new RationStock();
             var stepped = new RationStock();
+            single.StoreKitchenProvisions(single.TakeProvisions(1000));
+            stepped.StoreKitchenProvisions(stepped.TakeProvisions(1000));
             single.AdvanceTime(105f);
             for (int i = 0; i < 6300; i++)
                 stepped.AdvanceTime(1f / 60f);
@@ -99,38 +110,70 @@ namespace NoMansGround.Tests
         }
 
         [Test]
-        public void TravelIsNotCookingAndStockOnlyChangesAfterThirtySecondsAtKitchen()
+        public void CookWithdrawsFoodBeforeCookingAndDoesNotChargeTheDepotAgainOnCompletion()
         {
             kitchen.Tick(1f);
             Assert.IsTrue(kitchen.Cook.IsMoving);
             kitchen.Tick(100f);
             Assert.Zero(kitchen.Stock.Progress);
             Assert.AreEqual(1000, kitchen.Stock.Provisions);
+            Assert.Zero(kitchen.CarriedProvisions);
             kitchen.Cook.AdvanceMovement(100f);
-            Assert.AreEqual(1, Mathf.Abs(kitchen.Cook.Cell.x - kitchen.KitchenCell.x)
-                + Mathf.Abs(kitchen.Cook.Cell.y - kitchen.KitchenCell.y));
+            kitchen.Tick(1f);
+            Assert.AreEqual(990, kitchen.Stock.Provisions);
+            Assert.AreEqual(10, kitchen.CarriedProvisions);
+            Assert.IsTrue(kitchen.Cook.IsMoving);
+            Assert.Zero(kitchen.Stock.Progress);
+            kitchen.Tick(100f);
+            Assert.Zero(kitchen.Stock.Progress);
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(1f);
+            Assert.AreEqual(990, kitchen.Stock.Provisions);
+            Assert.Zero(kitchen.CarriedProvisions);
+            Assert.AreEqual(10, kitchen.Stock.KitchenProvisions);
+            Assert.Zero(kitchen.Stock.Progress);
             kitchen.Tick(29f);
             Assert.Zero(kitchen.Stock.ReadyRations);
+            Assert.AreEqual(990, kitchen.Stock.Provisions);
             kitchen.Tick(1f);
             Assert.AreEqual(1, kitchen.Stock.ReadyRations);
             Assert.AreEqual(990, kitchen.Stock.Provisions);
-            kitchen.Tick(2970f);
-            Assert.AreEqual(100, kitchen.Stock.ReadyRations);
-            Assert.Zero(kitchen.Stock.Provisions);
-            Assert.IsFalse(kitchen.Cook.HasWorkAssignment);
+            Assert.Zero(kitchen.Stock.KitchenProvisions);
+            kitchen.Tick(1f);
+            Assert.IsTrue(kitchen.Cook.IsMoving);
+            Assert.AreEqual(990, kitchen.Stock.Provisions);
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(1f);
+            Assert.AreEqual(980, kitchen.Stock.Provisions);
+            Assert.AreEqual(10, kitchen.CarriedProvisions);
+            Assert.Zero(kitchen.Stock.Progress);
+            kitchen.Tick(100f);
+            Assert.Zero(kitchen.Stock.Progress);
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(1f);
+            Assert.AreEqual(10, kitchen.Stock.KitchenProvisions);
+            Assert.Zero(kitchen.Stock.Progress);
+            kitchen.Tick(29f);
+            Assert.AreEqual(1, kitchen.Stock.ReadyRations);
+            kitchen.Tick(1f);
+            Assert.AreEqual(2, kitchen.Stock.ReadyRations);
+            Assert.AreEqual(980, kitchen.Stock.Provisions);
         }
 
         [Test]
         public void InaccessibleKitchenWaitsAndDisabledCookCannotProduce()
         {
             foreach (Vector2Int delta in new[] { Vector2Int.down, Vector2Int.up, Vector2Int.left, Vector2Int.right })
-                map.Data.SetWalkable(kitchen.KitchenCell + delta, false);
+                map.Data.SetWalkable(kitchen.DepotCell + delta, false);
             kitchen.Tick(1f);
             Assert.IsFalse(kitchen.Cook.IsMoving);
-            Assert.AreEqual("Accesso cucina bloccato o occupato.", kitchen.Status);
-            map.Data.SetWalkable(kitchen.KitchenCell + Vector2Int.down, true);
+            Assert.AreEqual("Accesso deposito bloccato o occupato.", kitchen.Status);
+            foreach (Vector2Int delta in new[] { Vector2Int.down, Vector2Int.up, Vector2Int.left, Vector2Int.right })
+                map.Data.SetWalkable(kitchen.DepotCell + delta, true);
             kitchen.Tick(1f);
             Assert.IsTrue(kitchen.Cook.IsMoving);
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(1f);
             kitchen.Cook.AdvanceMovement(100f);
             kitchen.Cook.enabled = false;
             kitchen.Tick(300f);
@@ -146,6 +189,14 @@ namespace NoMansGround.Tests
         {
             kitchen.Tick(1f);
             kitchen.Cook.AdvanceMovement(1000f);
+            kitchen.Tick(1f);
+            kitchen.Cook.AdvanceMovement(1000f);
+            kitchen.Tick(1f);
+        }
+
+        private void StageAllProvisionsInKitchen()
+        {
+            kitchen.Stock.StoreKitchenProvisions(kitchen.Stock.TakeProvisions(kitchen.Stock.Provisions));
         }
 
         private void CompleteMealRound()
@@ -164,6 +215,7 @@ namespace NoMansGround.Tests
             foreach (SoldierView soldier in roster.Soldiers)
                 soldier.Data.Needs.AdvanceTime(1000f);
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(270f);
             map.Clock.AdvanceTime(399d);
             kitchen.Tick(0.1f);
@@ -194,6 +246,7 @@ namespace NoMansGround.Tests
         public void ShortageReturnsCookToProductionUntilEveryoneHasEaten()
         {
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(60f);
             map.Clock.AdvanceTime(400d);
             kitchen.Tick(0.1f);
@@ -213,6 +266,7 @@ namespace NoMansGround.Tests
         public void PreparedMealsAreDistributedEvenWhenProvisionsAreExhausted()
         {
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(3000f);
             Assert.Zero(kitchen.Stock.Provisions);
             var view = map.GetComponentInChildren<MapTilemapView>();
@@ -231,6 +285,7 @@ namespace NoMansGround.Tests
         public void MovingRecipientIsReachedAtNewLocationWithoutReplacingTheirGuardOrder()
         {
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(270f);
             foreach (SoldierView soldier in roster.Soldiers)
                 soldier.Data.Needs.AdvanceTime(1000f);
@@ -254,6 +309,7 @@ namespace NoMansGround.Tests
         public void DisabledCookPausesDeliveryAndRegenerationClearsTheRound()
         {
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(270f);
             map.Clock.AdvanceTime(400d);
             kitchen.Tick(0.1f);
@@ -284,6 +340,7 @@ namespace NoMansGround.Tests
             map.Data[cell.x, cell.y] = TerrainKind.Trench;
             isolated.Data.Needs.AdvanceTime(1000f);
             ReachKitchen();
+            StageAllProvisionsInKitchen();
             kitchen.Stock.AdvanceTime(270f);
             map.Clock.AdvanceTime(400d);
             kitchen.Tick(0.1f);

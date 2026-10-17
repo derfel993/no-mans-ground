@@ -227,9 +227,10 @@ namespace NoMansGround.Soldiers
             instructions.text = "Sinistro: ispeziona.\nRancio: ogni giorno alle 13.";
             facilityStatus.gameObject.SetActive(true);
             facilityStatus.text = depotSelected
-                ? $"Viveri: {kitchen.Stock.Provisions}/1000\nConsumo: 10 per razione."
-                : $"Razioni pronte: {kitchen.Stock.ReadyRations}\nViveri: {kitchen.Stock.Provisions}/1000\n"
-                    + $"Razione: {kitchen.Stock.Progress:P0}\nIn consegna: {kitchen.CarriedRations}"
+                ? $"Viveri: {kitchen.Stock.Provisions}/1000\nIn trasporto: {kitchen.CarriedProvisions}"
+                : $"Razioni pronte: {kitchen.Stock.ReadyRations}\nViveri in cucina: {kitchen.Stock.KitchenProvisions}"
+                    + $"\nViveri in deposito: {kitchen.Stock.Provisions}/1000\nRazione: {kitchen.Stock.Progress:P0}"
+                    + $"\nIn trasporto: {kitchen.CarriedProvisions}\nIn consegna: {kitchen.CarriedRations}"
                     + $"\nIn attesa: {kitchen.PendingMeals}\n{kitchen.Status}";
         }
 
@@ -394,10 +395,11 @@ namespace NoMansGround.Soldiers
                 var speedLayout = speedRow.gameObject.AddComponent<HorizontalLayoutGroup>();
                 speedLayout.spacing = 3f;
                 speedLayout.childForceExpandWidth = true;
-                speedButtons = new Button[3];
+                speedButtons = new Button[4];
                 speedButtons[0] = CreateSpeedButton(speedRow, 1);
                 speedButtons[1] = CreateSpeedButton(speedRow, 2);
                 speedButtons[2] = CreateSpeedButton(speedRow, 5);
+                speedButtons[3] = CreateSpeedButton(speedRow, 10);
                 RefreshSpeedButtons();
             }
             CreateText(content, "SOLDATI", 13, 20f);
@@ -491,7 +493,7 @@ namespace NoMansGround.Soldiers
             if (speedButtons == null || gameMap == null)
                 return;
             int selectedSpeed = speed < 0 ? gameMap.SimulationSpeed : speed;
-            int[] speeds = { 1, 2, 5 };
+            int[] speeds = { 1, 2, 5, 10 };
             for (int i = 0; i < speedButtons.Length; i++)
                 speedButtons[i].GetComponent<Image>().color = speeds[i] == selectedSpeed
                     ? new Color(0.48f, 0.58f, 0.34f)

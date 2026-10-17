@@ -107,7 +107,7 @@ Il giorno aumenta a mezzanotte; la prima arriva dopo 25 minuti, perche si parte
 dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
 
 Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
-I pulsanti 1x, 2x e 5x sotto l'orologio accelerano insieme orologio, movimento
+I pulsanti 1x, 2x, 5x e 10x sotto l'orologio accelerano insieme orologio, movimento
 dei soldati e sistemi che usano il tempo scalato.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
 Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
@@ -168,7 +168,7 @@ sessione, senza alterare anagrafica, skill e altri stati generati.
 Il consumo avviene sia da fermi sia in marcia o al lavoro e segue la velocita
 della simulazione. Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x
 un secondo reale corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende
-il consumo. I pulsanti 1x, 2x e 5x sotto l'orologio cambiano la velocita;
+il consumo. I pulsanti 1x, 2x, 5x e 10x sotto l'orologio cambiano la velocita;
 un controllo di pausa dedicato non e ancora disponibile.
 
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
@@ -428,14 +428,17 @@ Su mappe senza capienza per il cuoco la cucina non viene generata.
 - La produzione e continua, indipendente dal numero di soldati affamati,
   tranne durante gli spostamenti e il giro di distribuzione.
 - Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
-- Al completamento si sottraggono **10 viveri** e si aggiunge **1 razione**.
-  Prima del completamento i viveri non vengono scalati.
+- Prima della prima razione, e dopo ogni razione completata, il cuoco raggiunge
+  il deposito e preleva fisicamente **10 viveri**, poi torna alla cucina.
+- I viveri vengono scalati dal deposito al prelievo e trasferiti in cucina;
+  il completamento della razione non li sottrae una seconda volta.
 - Il viaggio non conta come preparazione. Pausa, assenza o disabilitazione
   del cuoco sospendono la produzione conservando il progresso.
 - Con meno di 10 viveri il cuoco si ferma. Il deposito iniziale consente
-  **100 razioni**, per 50 minuti di preparazione effettiva.
-- **Clic sinistro sulla cucina**: mostra razioni pronte, viveri, avanzamento
-  della razione e stato del cuoco. Sul deposito mostra i viveri residui.
+  **100 razioni**, per 50 minuti di cottura effettiva, oltre ai viaggi.
+- **Clic sinistro sulla cucina**: mostra razioni pronte, viveri in cucina e
+  deposito, avanzamento della razione, carico trasportato e stato del cuoco.
+  Sul deposito mostra i viveri residui e quelli in trasporto.
   Uscire prima dalle modalita Scava/Scala/Annulla con Esc.
 - Rigenerare ricrea cuoco, edifici e scorte iniziali, azzerando razioni,
   progresso e stress accumulato.
@@ -473,7 +476,7 @@ Le razioni trasportate sono gia sottratte alle razioni pronte della cucina.
 - [ ] Prevedere le **provvigioni necessarie a creare il rancio** con tipi,
   ricette, approvvigionamento e rifornimento del deposito. Il prototipo
   implementa soltanto il costo fisso di 10 unita per razione.
-- [ ] **Ritiro fisico dei viveri per ogni razione**: dopo aver terminato una
+- [x] **Ritiro fisico dei viveri per ogni razione**: dopo aver terminato una
   razione, il cuoco raggiunge il deposito, preleva **10 viveri** e torna alla
   cucina per preparare la successiva. Gestire anche il prelievo iniziale prima
   della prima razione; il viaggio non conta come tempo di cottura e i viveri
@@ -517,10 +520,6 @@ API: `SoldierView.RequestDuty(SoldierDuty.Guard/Work)`, `Duty`, `GuardRequested`
 `IssueMove(cell)` valida e muove esclusivamente quella guardia.
 
 ## Step successivi (non implementati)
-
-### TODO velocita della simulazione
-
-- [ ] Estendere i controlli della velocita simulata con l'opzione **10x**.
 
 ### TODO risorse e rifugi
 

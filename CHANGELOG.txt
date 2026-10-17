@@ -8,6 +8,19 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.1.2 - 2026-10-17
+===============================================================================
+
+Tempo e strumenti
+- Aggiunta la velocita di simulazione **10x**, insieme alle modalita 1x, 2x e 5x.
+
+Rancio
+- Il cuoco preleva fisicamente 10 viveri dal deposito prima della prima razione
+  e dopo ogni razione completata, riportandoli alla cucina.
+- Il viaggio non conta come tempo di cottura; i viveri sono sottratti al deposito
+  al prelievo e non vengono addebitati una seconda volta a cottura ultimata.
+
+===============================================================================
 0.1.1 - 2026-10-17
 ===============================================================================
 

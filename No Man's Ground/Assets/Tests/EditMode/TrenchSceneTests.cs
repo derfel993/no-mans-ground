@@ -24,10 +24,13 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(8, buttons.Length);
+            Assert.AreEqual(9, buttons.Length);
             FindButton(canvas, "2x").onClick.Invoke();
             Assert.AreEqual(2, Time.timeScale);
             Assert.AreEqual(2, map.SimulationSpeed);
+            FindButton(canvas, "10x").onClick.Invoke();
+            Assert.AreEqual(10, Time.timeScale);
+            Assert.AreEqual(10, map.SimulationSpeed);
             FindButton(canvas, "1x").onClick.Invoke();
             Assert.AreEqual(1, Time.timeScale);
             FindButton(canvas, "Scava").onClick.Invoke();
