@@ -140,6 +140,8 @@ namespace NoMansGround.Soldiers
 
     public sealed class SoldierData
     {
+        public const float MinimumCarryWeightKg = 20f;
+        public const float MaximumCarryWeightKg = 35f;
         private readonly SkillProgress[] skills;
 
         public int Id { get; }
@@ -149,6 +151,9 @@ namespace NoMansGround.Soldiers
         public SoldierNeeds Needs { get; }
         public IReadOnlyList<SkillProgress> Skills { get; }
         public SoldierProfession Profession { get; }
+        public float MaxCarryWeightKg => MinimumCarryWeightKg
+            + (MaximumCarryWeightKg - MinimumCarryWeightKg)
+            * (GetSkill(SoldierSkill.Strength).Value - 5f) / 95f;
 
         public SoldierData(int id, string firstName, string lastName, SoldierNeeds needs,
             IReadOnlyList<int> skillLevels, SoldierProfession profession = SoldierProfession.Soldier)

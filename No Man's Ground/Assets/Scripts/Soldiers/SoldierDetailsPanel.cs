@@ -27,6 +27,7 @@ namespace NoMansGround.Soldiers
         private Text instructions;
         private Text orderStatus;
         private Text activity;
+        private Text carryCapacity;
         private Text diggingStatus;
         private Text diggingButton;
         private Text cancelButton;
@@ -40,6 +41,8 @@ namespace NoMansGround.Soldiers
         private Button workButton;
         private Button[] zoneButtons;
         private Button[] speedButtons;
+        private Button[] soldierTabButtons;
+        private GameObject[] soldierTabPages;
         private bool facilitySelected;
         private bool depotSelected;
         private SoldierView subscribedMovement;
@@ -52,6 +55,7 @@ namespace NoMansGround.Soldiers
         private SoldierData selectedData;
         private RectTransform panelRect;
         private RectTransform contentRect;
+        private int activeSoldierTab;
         private readonly List<SpriteRenderer> zonePreview = new List<SpriteRenderer>();
         private MapZoneKind? activeZone;
         private bool zoneDragging;
@@ -430,6 +434,7 @@ namespace NoMansGround.Soldiers
                     ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
+            carryCapacity.text = $"Carico massimo: {Selected.Data.MaxCarryWeightKg:0.0} kg";
             RefreshNeeds();
             for (int i = 0; i < skills.Length; i++)
             {
@@ -551,9 +556,6 @@ namespace NoMansGround.Soldiers
             CreateText(content, "SOLDATI", 13, 20f);
             dutyCounts = CreateText(content, "", 10, 20f);
             RefreshDutyCounts();
-            identity = CreateText(content, "", 12, 32f);
-            instructions = CreateText(content, "", 10, 28f);
-            orderStatus = CreateText(content, "", 10, 48f);
             facilityStatus = CreateText(content, "", 10, 156f);
             facilityStatus.gameObject.SetActive(false);
             if (trenchOrders != null)
@@ -582,33 +584,115 @@ namespace NoMansGround.Soldiers
                 zoneStatus = CreateText(content, DescribeZones(), 9, 32f);
                 UpdateZoneControls();
             }
-            var detailRect = CreateRect("Details", content);
-            var detailLayout = detailRect.gameObject.AddComponent<VerticalLayoutGroup>();
-            detailLayout.spacing = 4f;
-            detailLayout.childControlHeight = true;
-            detailLayout.childControlWidth = true;
-            detailLayout.childForceExpandHeight = false;
-            details = detailRect.gameObject;
-            dutyStatus = CreateText(detailRect, "", 10, 28f);
-            var dutyRow = CreateRect("Duty controls", detailRect);
+            BuildSoldierPanel(canvasObject.transform);
+            Refresh();
+        }
+
+        private void BuildSoldierPanel(Transform parent)
+        {
+            RectTransform panel = CreateRect("Soldier Details Panel", parent);
+            panel.anchorMin = Vector2.zero;
+            panel.anchorMax = Vector2.zero;
+            panel.pivot = Vector2.zero;
+            panel.anchoredPosition = new Vector2(12f, 12f);
+            panel.sizeDelta = new Vector2(380f, 300f);
+            panel.gameObject.AddComponent<Image>().color = new Color(0.09f, 0.11f, 0.09f, 0.96f);
+            details = panel.gameObject;
+
+            RectTransform tabs = CreateRect("Soldier Tabs", panel);
+            tabs.anchorMin = new Vector2(0f, 1f);
+            tabs.anchorMax = new Vector2(1f, 1f);
+            tabs.pivot = new Vector2(0.5f, 1f);
+            tabs.anchoredPosition = new Vector2(0f, -8f);
+            tabs.sizeDelta = new Vector2(-16f, 30f);
+            var tabLayout = tabs.gameObject.AddComponent<HorizontalLayoutGroup>();
+            tabLayout.spacing = 4f;
+            tabLayout.childForceExpandWidth = true;
+            tabLayout.childForceExpandHeight = true;
+            soldierTabButtons = new[]
+            {
+                CreateSoldierTabButton(tabs, "Info", 0),
+                CreateSoldierTabButton(tabs, "Stato", 1),
+                CreateSoldierTabButton(tabs, "Skill", 2),
+                CreateSoldierTabButton(tabs, "Inventario", 3)
+            };
+
+            soldierTabPages = new[]
+            {
+                CreateSoldierTabPage(panel, "Info content"),
+                CreateSoldierTabPage(panel, "Stato content"),
+                CreateSoldierTabPage(panel, "Skill content"),
+                CreateSoldierTabPage(panel, "Inventario content")
+            };
+
+            Transform info = soldierTabPages[0].transform;
+            identity = CreateText(info, "", 12, 24f);
+            instructions = CreateText(info, "", 10, 30f);
+            dutyStatus = CreateText(info, "", 10, 24f);
+            var dutyRow = CreateRect("Duty controls", info);
             dutyRow.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
             var dutyLayout = dutyRow.gameObject.AddComponent<HorizontalLayoutGroup>();
             dutyLayout.spacing = 4f;
             dutyLayout.childForceExpandWidth = true;
             guardButton = CreateDutyButton(dutyRow, "Guardia", SoldierDuty.Guard);
             workButton = CreateDutyButton(dutyRow, "Lavoro", SoldierDuty.Work);
-            activity = CreateText(detailRect, "", 10, 28f);
-            mealStatus = CreateText(detailRect, "", 10, 28f);
-            CreateText(detailRect, "Riserve: 100 pieno, 0 esaurito\nStress/paura/fatica: 100 critico", 10, 28f);
+            activity = CreateText(info, "", 10, 28f);
+            carryCapacity = CreateText(info, "", 10, 20f);
+            orderStatus = CreateText(info, "", 10, 42f);
+
+            Transform state = soldierTabPages[1].transform;
             needs = new Meter[7];
             for (int i = 0; i < needs.Length; i++)
-                needs[i] = CreateMeter(detailRect, 24f);
-            CreateText(detailRect, "SKILL - livelli 1-20", 11, 20f);
+                needs[i] = CreateMeter(state, 24f);
+            mealStatus = CreateText(state, "", 10, 28f);
+
+            Transform skill = soldierTabPages[2].transform;
             skills = new Meter[5];
             for (int i = 0; i < skills.Length; i++)
-                skills[i] = CreateMeter(detailRect, 34f);
-            CreateText(detailRect, "T: scava, L: scala, X: annulla.\nEsc/destro: esci dalla modalita.", 9, 28f);
-            Refresh();
+                skills[i] = CreateMeter(skill, 34f);
+
+            SetSoldierTab(0);
+        }
+
+        private GameObject CreateSoldierTabPage(Transform parent, string name)
+        {
+            RectTransform page = CreateRect(name, parent);
+            page.anchorMin = Vector2.zero;
+            page.anchorMax = Vector2.one;
+            page.offsetMin = new Vector2(10f, 10f);
+            page.offsetMax = new Vector2(-10f, -46f);
+            var layout = page.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 3f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            return page.gameObject;
+        }
+
+        private Button CreateSoldierTabButton(Transform parent, string label, int tabIndex)
+        {
+            var rect = CreateRect(label, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => SetSoldierTab(tabIndex));
+            Text text = CreateText(rect, label, 10, 0f);
+            Stretch(text.rectTransform, 1f);
+            return button;
+        }
+
+        private void SetSoldierTab(int tabIndex)
+        {
+            activeSoldierTab = Mathf.Clamp(tabIndex, 0, 3);
+            if (soldierTabPages == null || soldierTabButtons == null)
+                return;
+            for (int i = 0; i < soldierTabPages.Length; i++)
+            {
+                soldierTabPages[i].SetActive(i == activeSoldierTab);
+                soldierTabButtons[i].GetComponent<Image>().color = i == activeSoldierTab
+                    ? new Color(0.48f, 0.58f, 0.34f) : new Color(0.26f, 0.32f, 0.22f);
+            }
         }
 
         private Text CreateButton(Transform parent, string label, DiggingMode mode)

@@ -225,6 +225,21 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void CarryCapacityScalesWithStrengthFromTwentyToThirtyFiveKilograms()
+        {
+            var needs = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            var soldier = new SoldierData(0, "Giovanni", "Rossi", needs, new[] { 1, 1, 1, 1, 1 });
+            SkillProgress strength = soldier.GetSkill(SoldierSkill.Strength);
+            Assert.AreEqual(20f, soldier.MaxCarryWeightKg);
+
+            strength.AddExperience(strength.ExperienceToNextLevel);
+            Assert.Greater(soldier.MaxCarryWeightKg, 20f);
+            while (!strength.IsMaximumLevel)
+                strength.AddExperience(strength.ExperienceToNextLevel);
+            Assert.AreEqual(35f, soldier.MaxCarryWeightKg);
+        }
+
+        [Test]
         public void SkillInputValidationAndIndependentProgressArePreserved()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new SkillProgress(0));

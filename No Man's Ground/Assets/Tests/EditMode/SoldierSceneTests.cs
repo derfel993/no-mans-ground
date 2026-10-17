@@ -86,11 +86,30 @@ namespace NoMansGround.Tests
             Assert.AreSame(selected, panel.FindAtScreenPosition(Camera.main.WorldToScreenPoint(selected.transform.position)));
             Assert.IsNull(panel.FindAtScreenPosition(Vector2.zero));
             AssertTextExists(selected.Data.FullName);
+            AssertTextExists($"Carico massimo: {selected.Data.MaxCarryWeightKg:0.0} kg");
+            foreach (string tab in new[] { "Info", "Stato", "Skill", "Inventario" })
+                Assert.IsNotNull(FindButton(canvas, tab));
+            RectTransform soldierPanel = canvas.transform.Find("Soldier Details Panel").GetComponent<RectTransform>();
+            Assert.AreEqual(Vector2.zero, soldierPanel.anchorMin);
+            Assert.AreEqual(Vector2.zero, soldierPanel.anchorMax);
+            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel/Info content").gameObject.activeSelf);
+            FindButton(canvas, "Inventario").onClick.Invoke();
+            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel/Inventario content").gameObject.activeSelf);
+            Assert.Zero(canvas.transform.Find("Soldier Details Panel/Inventario content")
+                .GetComponentsInChildren<Text>(true).Length);
+            FindButton(canvas, "Info").onClick.Invoke();
+            SkillProgress strength = selected.Data.GetSkill(SoldierSkill.Strength);
+            float initialCarryWeight = selected.Data.MaxCarryWeightKg;
+            strength.AddExperience(strength.ExperienceToNextLevel);
+            Assert.Greater(selected.Data.MaxCarryWeightKg, initialCarryWeight);
+            AssertTextExists($"Carico massimo: {selected.Data.MaxCarryWeightKg:0.0} kg");
             SkillProgress aim = selected.Data.GetSkill(SoldierSkill.Aim);
             int previousLevel = aim.Level;
             aim.AddExperience(aim.ExperienceToNextLevel + 7);
             Assert.AreEqual(previousLevel + 1, aim.Level);
             Assert.AreEqual(7, aim.Experience);
+            FindButton(canvas, "Skill").onClick.Invoke();
+            Assert.IsTrue(canvas.transform.Find("Soldier Details Panel/Skill content").gameObject.activeSelf);
             AssertTextExists($"Mira - Liv. {aim.Level} ({aim.Value}/100)\nXP 7/{aim.ExperienceToNextLevel}");
             Canvas.ForceUpdateCanvases();
             AssertCompactPanel();
@@ -180,19 +199,23 @@ namespace NoMansGround.Tests
         {
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var panel = canvas.transform.Find("Soldier Panel").GetComponent<RectTransform>();
+            var soldierPanel = canvas.transform.Find("Soldier Details Panel").GetComponent<RectTransform>();
             Assert.AreEqual(167f, panel.rect.width, 0.01f);
             Assert.IsNull(canvas.GetComponentInChildren<ScrollRect>());
             var corners = new Vector3[4];
             foreach (Text text in canvas.GetComponentsInChildren<Text>())
             {
+                if (!text.gameObject.activeInHierarchy)
+                    continue;
                 Assert.LessOrEqual(text.preferredHeight, text.rectTransform.rect.height + 0.1f,
                     "Text is truncated: " + text.text);
+                RectTransform bounds = text.transform.IsChildOf(soldierPanel) ? soldierPanel : panel;
                 text.rectTransform.GetWorldCorners(corners);
                 foreach (Vector3 corner in corners)
                 {
-                    Vector3 local = panel.InverseTransformPoint(corner);
-                    Assert.That(local.x, Is.InRange(panel.rect.xMin - 0.1f, panel.rect.xMax + 0.1f), text.text);
-                    Assert.That(local.y, Is.InRange(panel.rect.yMin - 0.1f, panel.rect.yMax + 0.1f), text.text);
+                    Vector3 local = bounds.InverseTransformPoint(corner);
+                    Assert.That(local.x, Is.InRange(bounds.rect.xMin - 0.1f, bounds.rect.xMax + 0.1f), text.text);
+                    Assert.That(local.y, Is.InRange(bounds.rect.yMin - 0.1f, bounds.rect.yMax + 0.1f), text.text);
                 }
             }
         }

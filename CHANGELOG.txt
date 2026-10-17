@@ -8,6 +8,20 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.1.6 - 2026-10-17
+===============================================================================
+
+Interfaccia del soldato
+- Spostate in un pannello in basso a sinistra le informazioni del soldato,
+  organizzate nei tab Info, Stato, Skill e Inventario.
+- Inventario lasciato vuoto in attesa degli oggetti; Info mostra anche la
+  capacita massima di carico, da 20 a 35 kg in base alla Forza.
+
+TODO e lavori futuri
+- Aggiunto al README il vincolo futuro: non si potra scavare una trincea in
+  una cella occupata da un albero.
+
+===============================================================================
 0.1.4 - 2026-10-17
 ===============================================================================
 

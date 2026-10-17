@@ -128,10 +128,12 @@ Alle 13:00 viene avviata automaticamente la distribuzione del rancio.
 La stessa scena include **8 soldati italiani del Genio e un cuoco aggiuntivo**,
 visibili con sprite provvisori.
 Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
-La scheda sulla destra mostra nome, cognome, stato e tutte le skill senza scroll.
-La larghezza e dimezzata (167 unita UI anziche 334), con caratteri e spaziature
-compatti. Se l'altezza della finestra non basta, il contenuto viene ridimensionato
-per rimanere completamente visibile.
+Il pannello del soldato compare in basso a sinistra e offre quattro tab:
+**Info** (identita, istruzioni, lavoro/guardia e carico massimo), **Stato**
+(fame, sete, bisogni fisiologici, termico, stress, paura e stanchezza),
+**Skill** e **Inventario**. Il tab Inventario e vuoto; la gestione degli oggetti
+non e ancora implementata. Il pannello laterale destro mantiene orologio,
+comandi, zone e informazioni sulle strutture.
 Selezionare un altro soldato con clic sinistro o il terreno per deselezionare.
 Zoom e panning restano disponibili; i clic sul pannello non selezionano soldati
 dietro l'interfaccia.
@@ -208,6 +210,9 @@ Le attivita assegnano esperienza con
 `soldier.GetSkill(SoldierSkill.Aim).AddExperience(amount)`.
 Velocita influenza lo spostamento; Forza influenza lo scavo e cresce
 completando celle di trincea. Le altre skill non modificano ancora le attivita.
+La capacita massima trasportabile dipende dalla Forza: parte da **20 kg** al
+livello 1 e cresce linearmente fino a **35 kg** al livello 20. Il carico massimo
+attuale appare nella scheda del soldato e si aggiorna quando la Forza aumenta.
 Per provare la progressione in Play, selezionare un soldato e usare
 **Debug/Add 100 Aim XP to Selected Soldier** nel menu contestuale del componente
 **Soldier Details Panel**, sull'oggetto **Soldier Selection**.
@@ -573,7 +578,8 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 ### TODO risorse e rifugi
 
 - [ ] **Alberi**: permettere al giocatore di designarne l'abbattimento come job
-  per ottenere **legna**. La generazione e il rendering degli alberi sono presenti.
+  per ottenere **legna**. La generazione e il rendering degli alberi sono presenti;
+  non si potra scavare una trincea in una cella che contiene un albero.
 - [ ] **Estrazione della roccia**: designare celle Rock per ottenere
   **pietra da costruzione** tramite un job del Genio.
 - [ ] **Risorse raccolte**: gestire legna e pietra come materiali disponibili
@@ -583,6 +589,17 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 - [ ] **Tetti automatici**: quando le pareti e le porte costruite chiudono
   un perimetro, riconoscere lo spazio interno e generare automaticamente
   il tetto del rifugio.
+
+### TODO stati e inventario
+
+- [ ] **Termico**: sostituire il valore statico con variazioni ambientali e
+  gestione di caldo/freddo.
+- [ ] **Stress**: aggiungere recupero e gestione degli effetti; al momento cresce
+  soltanto quando la fame scende sotto 35.
+- [ ] **Paura**: definire cause, variazione e gestione del valore.
+- [ ] **Stanchezza**: implementare consumo, riposo e recupero.
+- [ ] **Inventario**: introdurre gli oggetti trasportabili, il peso corrente e
+  le regole di carico usando la capacita massima gia mostrata in Info.
 
 Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
 dei bisogni, evoluzione degli altri stati, copertura e combattimento.
