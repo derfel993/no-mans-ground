@@ -26,6 +26,9 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(100f, first[i].Needs.Hunger);
                 Assert.AreEqual(100f, first[i].Needs.Thirst);
                 Assert.AreEqual(100f, first[i].Needs.PhysicalNeeds);
+                Assert.Zero(first[i].Needs.Stress);
+                Assert.Zero(first[i].Needs.Fear);
+                Assert.Zero(first[i].Needs.Fatigue);
                 Assert.AreEqual(1, first[i].Inventory.Count(ItemType.FullCanteen));
                 Assert.Zero(first[i].Inventory.Count(ItemType.EmptyCanteen));
                 Assert.AreEqual(first[i].Needs.Hunger, second[i].Needs.Hunger);
@@ -148,6 +151,29 @@ namespace NoMansGround.Tests
             Assert.IsNull(SoldierTasks.Tool(SoldierTask.Cook));
             Assert.IsTrue(SoldierTasks.Allows(SoldierTask.Builder, TrenchJobKind.BuildDoor));
             Assert.IsTrue(SoldierTasks.Allows(SoldierTask.Builder, TrenchJobKind.Ladder));
+        }
+
+        [Test]
+        public void FatigueIncreasesOnlyOnActivityAndClampsAtOneHundred()
+        {
+            var state = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            int notifications = 0;
+            state.Changed += () => notifications++;
+            state.AddFatigue(0f);
+            Assert.Zero(notifications);
+            state.AddFatigue(1f);
+            state.AddFatigue(5f);
+            Assert.AreEqual(6f, state.Fatigue);
+            Assert.AreEqual(2, notifications);
+            Assert.Zero(state.Stress);
+            Assert.Zero(state.Fear);
+            state.AddFatigue(200f);
+            Assert.AreEqual(100f, state.Fatigue);
+            state.AddFatigue(5f);
+            Assert.AreEqual(3, notifications);
+            Assert.Throws<ArgumentOutOfRangeException>(() => state.AddFatigue(-1f));
+            Assert.Throws<ArgumentOutOfRangeException>(() => state.AddFatigue(float.NaN));
+            Assert.Throws<ArgumentOutOfRangeException>(() => state.AddFatigue(float.PositiveInfinity));
         }
 
         [TestCase(0)]

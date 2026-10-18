@@ -8,6 +8,32 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.3 - 2026-10-18
+===============================================================================
+
+Stati iniziali e stanchezza
+- Paura, stress e stanchezza dei soldati generati iniziano a 0/100,
+  incluso il cuoco, senza modificare anagrafica e skill determinate dal seed.
+- La stanchezza aumenta di 1 per ogni tile raggiunto, anche diagonale,
+  e di 5 per ogni job completato, fino al limite di 100/100.
+- Movimenti parziali, soste e rotazioni non aggiungono punti; i percorsi
+  riassegnati conteggiano ogni arrivo una sola volta.
+- Il costo del job viene applicato solo al completamento: lavori parziali,
+  annullamenti e ritiri preparatori di utensili o materiali non aggiungono 5 punti.
+- La raccolta conta come job alla consegna della risorsa nel deposito.
+  Per il cuoco contano ogni razione preparata e ogni consegna ad altri soldati.
+- La barra della stanchezza si aggiorna immediatamente; rigenerare azzera
+  nuovamente paura, stress e stanchezza. Recupero e penalita restano futuri.
+- Lo stress continua a crescere con la fame sotto soglia, come in precedenza.
+
+Test e documentazione
+- Aggiornato il README con valori iniziali, costi della stanchezza e limiti attuali.
+- Verificati arrivi ortogonali e diagonali, riassegnazioni, job riusciti o
+  annullati, trasporto, preparazione e consegna del rancio e saturazione a 100.
+- Suite completa: 203 test superati su 218; restano gli stessi 15 fallimenti
+  preesistenti, senza nuove regressioni rilevate.
+
+===============================================================================
 0.4.2 - 2026-10-18
 ===============================================================================
 

@@ -364,6 +364,7 @@ namespace NoMansGround.Soldiers
                     ? Mathf.Min(gameSeconds, (1f - Stock.Progress) * RationStock.SecondsPerRation + 0.001f) : gameSeconds;
                 int before = Stock.ReadyRations;
                 Stock.AdvanceTime(cookingTime);
+                Cook.Data.Needs.AddFatigue((Stock.ReadyRations - before) * 5f);
                 Cook.SetWorkAssignment(Stock.KitchenProvisions >= RationStock.ProvisionsPerRation
                     && !(Cook.RequestedTask.HasValue && Stock.ReadyRations > before), Stock.Progress);
                 SetStatus(Stock.KitchenProvisions >= RationStock.ProvisionsPerRation
@@ -514,6 +515,7 @@ namespace NoMansGround.Soldiers
                     || Vector3.Distance(Cook.transform.position, soldier.transform.position) > 1.05f)
                     continue;
                 soldier.Data.ReceiveRation();
+                Cook.Data.Needs.AddFatigue(5f);
                 CarriedRations--;
                 mealRecipients.RemoveAt(i);
                 Changed?.Invoke();

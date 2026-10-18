@@ -41,8 +41,12 @@ namespace NoMansGround.Soldiers
                 int choice = random.Next(identities.Count);
                 int identity = identities[choice];
                 identities.RemoveAt(choice);
+                int thermalState = random.Next(-25, 26);
+                random.Next(0, 31);
+                random.Next(0, 21);
+                random.Next(0, 36);
                 var needs = new SoldierNeeds(100f, 100f, 100f,
-                    random.Next(-25, 26), random.Next(0, 31), random.Next(0, 21), random.Next(0, 36),
+                    thermalState, 0f, 0f, 0f,
                     GenerateDepletionSeconds(consumptionRandom), GenerateDepletionSeconds(consumptionRandom),
                     GenerateDepletionSeconds(consumptionRandom));
                 var levels = new int[5];

@@ -137,12 +137,15 @@ namespace NoMansGround.Tests
             Assert.Zero(kitchen.CarriedProvisions);
             Assert.AreEqual(10, kitchen.Stock.KitchenProvisions);
             Assert.Zero(kitchen.Stock.Progress);
+            float beforeCookingFatigue = kitchen.Cook.Data.Needs.Fatigue;
             kitchen.Tick(29f);
             Assert.Zero(kitchen.Stock.ReadyRations);
+            Assert.AreEqual(beforeCookingFatigue, kitchen.Cook.Data.Needs.Fatigue);
             Assert.AreEqual(990, kitchen.Stock.Provisions);
             kitchen.Tick(1f);
             Assert.AreEqual(1, kitchen.Stock.ReadyRations);
             Assert.AreEqual(990, kitchen.Stock.Provisions);
+            Assert.AreEqual(Mathf.Min(100f, beforeCookingFatigue + 5f), kitchen.Cook.Data.Needs.Fatigue);
             Assert.Zero(kitchen.Stock.KitchenProvisions);
             kitchen.Tick(1f);
             Assert.IsTrue(kitchen.Cook.IsMoving);
@@ -326,6 +329,34 @@ namespace NoMansGround.Tests
             CompleteMealRound();
             Assert.AreEqual(1, recipient.Data.Inventory.Count(ItemType.FullCanteen));
             Assert.Zero(recipient.Data.Inventory.Count(ItemType.EmptyCanteen));
+        }
+
+        [Test]
+        public void CookGetsOneFatiguePerTileAndFivePerDeliveredRation()
+        {
+            ReachKitchen();
+            StageAllProvisionsInKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            float expected = kitchen.Cook.Data.Needs.Fatigue;
+            int deliveries = 0;
+            for (int step = 0; step < 300 && kitchen.PendingMeals > 0; step++)
+            {
+                int pending = kitchen.PendingMeals;
+                kitchen.Tick(1f);
+                int delivered = pending - kitchen.PendingMeals;
+                deliveries += delivered;
+                expected = Mathf.Min(100f, expected + delivered * 5f);
+                Assert.AreEqual(expected, kitchen.Cook.Data.Needs.Fatigue);
+                int movement = kitchen.Cook.IsMoving
+                    ? kitchen.Cook.CurrentPath.Count - kitchen.Cook.NextWaypoint : 0;
+                kitchen.Cook.AdvanceMovement(1000f);
+                expected = Mathf.Min(100f, expected + movement);
+                Assert.AreEqual(expected, kitchen.Cook.Data.Needs.Fatigue);
+            }
+            Assert.Greater(deliveries, 0);
+            Assert.Zero(kitchen.PendingMeals);
         }
 
         [Test]

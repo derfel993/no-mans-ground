@@ -103,6 +103,49 @@ namespace NoMansGround.Tests
 
         [TestCase(false)]
         [TestCase(true)]
+        public void FatigueCountsCompletedTilesNotPartialMovementOrIdleUpdates(bool diagonal)
+        {
+            SoldierView soldier = roster.Soldiers[0];
+            Vector2Int start = soldier.Cell;
+            Vector2Int direction = diagonal ? new Vector2Int(1, 1) : Vector2Int.right;
+            soldier.BeginMove(view, new[] { start, start, start + direction, start + direction * 2 });
+            float stepDistance = diagonal ? Mathf.Sqrt(2f) : 1f;
+            soldier.AdvanceMovement(stepDistance * 0.5f / soldier.MovementSpeed);
+            Assert.AreEqual(start, soldier.Cell);
+            Assert.Zero(soldier.Data.Needs.Fatigue);
+            soldier.AdvanceMovement((stepDistance * 0.5f + 0.001f) / soldier.MovementSpeed);
+            Assert.AreEqual(start + direction, soldier.Cell);
+            Assert.AreEqual(1f, soldier.Data.Needs.Fatigue);
+            soldier.AdvanceMovement(1000f);
+            Assert.AreEqual(start + direction * 2, soldier.Cell);
+            Assert.AreEqual(2f, soldier.Data.Needs.Fatigue);
+            soldier.AdvanceMovement(1000f);
+            soldier.AdvanceLook(10f);
+            Assert.AreEqual(2f, soldier.Data.Needs.Fatigue);
+            Assert.Zero(soldier.Data.Needs.Stress);
+            Assert.Zero(soldier.Data.Needs.Fear);
+        }
+
+        [Test]
+        public void RedirectingGuardCountsEachReachedTileOnlyOnce()
+        {
+            SoldierView soldier = orders.Selected;
+            Vector2Int start = soldier.Cell;
+            soldier.BeginMove(view, new[] { start, start + Vector2Int.right, start + Vector2Int.right + Vector2Int.up });
+            soldier.AdvanceMovement(0.4f / soldier.MovementSpeed);
+            Assert.Zero(soldier.Data.Needs.Fatigue);
+            Assert.IsTrue(orders.IssueMove(start + Vector2Int.left));
+            int arrivals = soldier.CurrentPath.Count - soldier.NextWaypoint;
+            soldier.AdvanceMovement(1000f);
+            Assert.AreEqual(start + Vector2Int.left, soldier.Cell);
+            Assert.AreEqual(arrivals, soldier.Data.Needs.Fatigue);
+            Assert.IsTrue(orders.IssueMove(soldier.Cell));
+            soldier.AdvanceMovement(1000f);
+            Assert.AreEqual(arrivals, soldier.Data.Needs.Fatigue);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
         public void RepeatedRedirectsKeepPositionFinishCurrentStepAndReachLastDestination(bool diagonal)
         {
             SoldierView guard = orders.Selected;

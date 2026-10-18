@@ -566,6 +566,7 @@ namespace NoMansGround.Soldiers
                             continue;
                         }
                         map.Data.StorageStockpile.Add(item, 1);
+                        worker.Data.Needs.AddFatigue(5f);
                         Release(job);
                         jobs.RemoveAt(i);
                         Notify($"{ItemCatalog.Get(item).DisplayName} consegnata al deposito.");
@@ -686,6 +687,7 @@ namespace NoMansGround.Soldiers
                 else
                     mapView.CompleteLadder(map.Data, job.Cell);
                 worker.Data.GetSkill(SoldierSkill.Strength).AddExperience(strengthExperience);
+                worker.Data.Needs.AddFatigue(5f);
                 Release(job);
                 jobs.RemoveAt(i);
             }

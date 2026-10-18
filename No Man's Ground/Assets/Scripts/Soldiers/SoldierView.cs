@@ -277,7 +277,10 @@ namespace NoMansGround.Soldiers
                 }
                 transform.position = target;
                 remainingDistance -= distance;
+                Vector2Int previousCell = Cell;
                 Cell = cell;
+                if (previousCell != cell)
+                    Data.Needs.AddFatigue(1f);
                 waypoint++;
                 if (waypoint == path.Count)
                 {

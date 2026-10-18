@@ -243,7 +243,8 @@ I dati del soldato sono separati dal suo sprite e dal pannello.
 Fame, sete e bisogni fisiologici sono **riserve che diminuiscono nel tempo**.
 Alla nascita sono sempre **100/100**, cioe completamente soddisfatti:
 la barra e piena e verde. A **0** il bisogno deve essere soddisfatto.
-Temperatura, paura e stanchezza restano statici.
+**Paura, stanchezza e stress iniziano sempre a 0/100**, incluso per il cuoco.
+Temperatura e paura restano statiche; la stanchezza cresce con movimento e lavori.
 Lo stress cresce con la fame sotto 35, senza impedire il lavoro.
 
 | Indicatore | Significato |
@@ -259,6 +260,24 @@ Lo stress cresce con la fame sotto 35, senza impedire il lavoro.
 La temperatura e uno stato relativo, non una misura in gradi Celsius.
 La barra termica indica l'intensita del disagio, blu per freddo e arancione per caldo.
 Il coraggio e una skill distinta dalla paura attuale.
+
+### Stanchezza da movimento e lavoro
+
+- **+1 per ogni tile raggiunto**, anche diagonale, in Guardia o in Lavoro.
+  Il conteggio avviene all'arrivo: mezzo tile, sosta o rotazione dello sguardo
+  non aggiungono punti. Vale anche per i viaggi al deposito e i trasporti.
+- **+5 per ogni job completato**: scavo, taglio, minatura, costruzione, porta,
+  scala e raccolta con consegna al deposito. Il ritiro di utensili o materiali
+  e preparatorio: non aggiunge un secondo costo job.
+- Per il cuoco, **+5 per ogni razione preparata** e **+5 per ogni consegna
+  effettiva a un altro soldato**. Mangiare o bere non sono job aggiuntivi.
+
+Un lavoro parziale, annullato o rilasciato non aggiunge i 5 punti; gli eventuali
+tile gia percorsi restano conteggiati. I valori si sommano fino a **100/100**
+senza superarlo. La barra si aggiorna immediatamente. Pausa e velocita della
+simulazione agiscono sui tempi di esecuzione, non sul costo per tile o job.
+Non sono ancora previsti recupero automatico, sonno, penalita o blocchi a 100.
+Rigenerare la mappa azzera nuovamente stanchezza, paura e stress.
 
 ### Consumo dei bisogni
 
@@ -895,8 +914,9 @@ Rigenerare la mappa elimina progetti e costruzioni.
   gestione di caldo/freddo.
 - [ ] **Stress**: aggiungere recupero e gestione degli effetti; al momento cresce
   soltanto quando la fame scende sotto 35.
-- [ ] **Paura**: definire cause, variazione e gestione del valore.
-- [ ] **Stanchezza**: implementare consumo, riposo e recupero.
+- [ ] **Paura**: definire cause, variazione e gestione del valore; parte da zero.
+- [x] **Stanchezza da attivita**: parte da zero, +1 per tile raggiunto e +5 per job completato.
+- [ ] **Riposo e recupero della stanchezza**: aggiungere sonno ed effetti sull'attivita.
 - [ ] **Inventario**: calcolare il peso corrente e applicare il limite di carico;
   estendere raccolta e assegnazione agli altri utensili, cibo e armi.
 - [ ] **Peso dei tool e oggetti**: definire il peso unitario e conteggiarlo nel carico.

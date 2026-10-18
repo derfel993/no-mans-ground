@@ -87,7 +87,7 @@ namespace NoMansGround.Soldiers
         public float Stress => (float)stress;
         public bool WaitingForRations => hunger < 35d;
         public float Fear { get; }
-        public float Fatigue { get; }
+        public float Fatigue { get; private set; }
         public event Action Changed;
 
         public SoldierNeeds(float hunger, float thirst, float physicalNeeds, float thermalState,
@@ -117,6 +117,17 @@ namespace NoMansGround.Soldiers
         public void DrinkWater()
         {
             thirst = 100d;
+            Changed?.Invoke();
+        }
+
+        public void AddFatigue(float amount)
+        {
+            if (!float.IsFinite(amount) || amount < 0f)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+            float updated = Math.Min(100f, Fatigue + amount);
+            if (updated == Fatigue)
+                return;
+            Fatigue = updated;
             Changed?.Invoke();
         }
 

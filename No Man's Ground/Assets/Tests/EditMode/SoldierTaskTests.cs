@@ -333,6 +333,63 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void CompletedJobAddsFiveFatigueButProgressAndCancellationDoNot()
+        {
+            SoldierView worker = roster.Soldiers[0];
+            TaskTestSetup.Assign(worker, SoldierTask.Digger);
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Shovel, 1));
+            worker.Data.Inventory.Add(ItemType.Shovel, 1);
+            Vector2Int first = worker.Cell + Vector2Int.down;
+            map.Data[first.x, first.y] = TerrainKind.Dirt;
+            map.Data.SetTree(first, false);
+            map.Data.SetWalkable(first, true);
+            Assert.IsTrue(orders.Designate(first));
+            orders.Tick(0.01f);
+            Assert.AreSame(worker, orders.Jobs[0].Worker);
+            Assert.IsFalse(worker.IsMoving);
+            float duration = 6f / (1f + worker.Data.GetSkill(SoldierSkill.Strength).Value / 100f);
+            orders.Tick(duration / 2f);
+            Assert.Zero(worker.Data.Needs.Fatigue);
+            orders.Tick(duration / 2f + 0.001f);
+            Assert.Zero(orders.Jobs.Count);
+            Assert.AreEqual(5f, worker.Data.Needs.Fatigue);
+            Vector2Int second = worker.Cell + Vector2Int.right;
+            map.Data[second.x, second.y] = TerrainKind.Dirt;
+            map.Data.SetTree(second, false);
+            map.Data.SetWalkable(second, true);
+            Assert.IsTrue(orders.Designate(second));
+            orders.Tick(0.01f);
+            orders.Tick(0.1f);
+            Assert.IsTrue(orders.Cancel(second));
+            Assert.AreEqual(5f, worker.Data.Needs.Fatigue);
+        }
+
+        [Test]
+        public void HaulingAddsMovementFatigueAndOneJobCostOnlyAfterDelivery()
+        {
+            var source = new Vector2Int(50, 10);
+            map.Data.AddGroundItem(source, ItemType.Wood);
+            view.RefreshGroundItems(map.Data);
+            Assert.IsTrue(orders.DesignateCollection(source));
+            orders.Tick(0.01f);
+            SoldierView worker = orders.Jobs[0].Worker;
+            Assert.IsNotNull(worker);
+            int firstSteps = worker.IsMoving ? worker.CurrentPath.Count - worker.NextWaypoint : 0;
+            worker.AdvanceMovement(1000f);
+            Assert.AreEqual(firstSteps, worker.Data.Needs.Fatigue);
+            orders.Tick(0.01f);
+            Assert.AreEqual(firstSteps, worker.Data.Needs.Fatigue);
+            int deliverySteps = worker.IsMoving ? worker.CurrentPath.Count - worker.NextWaypoint : 0;
+            worker.AdvanceMovement(1000f);
+            Assert.AreEqual(firstSteps + deliverySteps, worker.Data.Needs.Fatigue);
+            orders.Tick(0.01f);
+            Assert.Zero(orders.Jobs.Count);
+            Assert.AreEqual(firstSteps + deliverySteps + 5, worker.Data.Needs.Fatigue);
+            orders.Tick(1f);
+            Assert.AreEqual(firstSteps + deliverySteps + 5, worker.Data.Needs.Fatigue);
+        }
+
+        [Test]
         public void DutyStaysSeparateAndPausedTickDoesNotMoveOrTransferTools()
         {
             SoldierView soldier = roster.Soldiers[0];
