@@ -171,10 +171,11 @@ namespace NoMansGround.Tests
             Assert.AreEqual(map.StorageOrigin.x, map.PantryOrigin.x);
             Assert.AreEqual(map.StorageOrigin.y, map.PantryOrigin.y + map.PantryHeight);
             Assert.GreaterOrEqual(map.StorageOrigin.y, 4);
-            Assert.AreEqual(10, map.StorageStockpile.TotalCount);
+            Assert.AreEqual(12, map.StorageStockpile.TotalCount);
             Assert.AreEqual(6, map.StorageStockpile.Count(ItemType.Shovel));
             Assert.AreEqual(2, map.StorageStockpile.Count(ItemType.Axe));
             Assert.AreEqual(2, map.StorageStockpile.Count(ItemType.Pickaxe));
+            Assert.AreEqual(2, map.StorageStockpile.Count(ItemType.ConstructionHammer));
             Assert.AreEqual(1000, map.PantryStockpile.Count(ItemType.Rations));
             Assert.AreEqual(ItemCategory.Food, ItemCatalog.Get(ItemType.Rations).Category);
             Assert.AreEqual(250, ItemCatalog.Get(ItemType.Rations).StackSize);
@@ -225,6 +226,11 @@ namespace NoMansGround.Tests
             Assert.AreEqual(ItemAction.DigTrench, shovel.Action);
             Assert.AreEqual(ItemAction.CutTree, axe.Action);
             Assert.AreEqual(ItemAction.BreakRock, pickaxe.Action);
+            ItemDefinition hammer = ItemCatalog.Get(ItemType.ConstructionHammer);
+            Assert.AreEqual("Martello da Costruzione", hammer.DisplayName);
+            Assert.AreEqual(ItemCategory.Tool, hammer.Category);
+            Assert.AreEqual(ItemAction.Build, hammer.Action);
+            Assert.AreEqual(1, hammer.StackSize);
         }
 
         [TestCase(128, 128, 1916)]
@@ -462,16 +468,21 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
                 Assert.AreEqual(Tile.ColliderType.None, rock.colliderType);
                 Assert.IsTrue(prototype.Data.HasStorageArea);
-                Assert.AreEqual(10, prototype.Data.StorageStockpile.TotalCount);
+                Assert.AreEqual(12, prototype.Data.StorageStockpile.TotalCount);
                 Transform depotDisplay = view.transform.Find("Depot stockpile items");
                 Assert.IsNotNull(depotDisplay);
-                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
-                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<TextMesh>().Length);
+                Assert.AreEqual(5, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+                Assert.AreEqual(5, depotDisplay.GetComponentsInChildren<TextMesh>().Length);
+                SpriteRenderer hammerDisplay = depotDisplay.Find("ConstructionHammer").GetComponent<SpriteRenderer>();
+                Assert.IsTrue(hammerDisplay.gameObject.activeSelf);
+                Assert.IsNotNull(hammerDisplay.sprite);
+                Assert.Greater(hammerDisplay.sprite.texture.GetPixel(7, 12).a, 0f);
+                Assert.AreEqual("Martello\nx2", hammerDisplay.GetComponentInChildren<TextMesh>().text);
                 Assert.IsTrue(prototype.Data.StorageStockpile.TryTake(ItemType.Pickaxe, 1));
                 Assert.AreEqual(6, prototype.Data.StorageStockpile.Count(ItemType.Shovel));
                 Assert.AreEqual(2, prototype.Data.StorageStockpile.Count(ItemType.Axe));
                 Assert.AreEqual(1, prototype.Data.StorageStockpile.Count(ItemType.Pickaxe));
-                Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+                Assert.AreEqual(5, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
                 var labels = new HashSet<string>();
                 foreach (TextMesh label in depotDisplay.GetComponentsInChildren<TextMesh>())
                     labels.Add(label.text);

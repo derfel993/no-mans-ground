@@ -19,9 +19,14 @@ namespace NoMansGround.Soldiers
         public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
         public SoldierDuty Duty { get; private set; } = SoldierDuty.Work;
         public bool GuardRequested { get; private set; }
+        public SoldierTask? RequestedTask { get; private set; }
+        public bool TaskReady { get; private set; } = true;
+        public bool IsChangingTaskEquipment { get; internal set; }
+        public string TaskStatus { get; private set; } = "Pronto";
         public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
-            && !GuardRequested && Data.Profession == SoldierProfession.Engineer;
-        public bool CanTakeGuardMove => isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard;
+            && !GuardRequested && TaskReady && !RequestedTask.HasValue && Data.Task != SoldierTask.Cook;
+        public bool CanTakeGuardMove => isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard
+            && TaskReady && !RequestedTask.HasValue;
         public Vector2Int GuardPathStart => IsMoving && !transform.position.Equals(
             movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(Cell.x, Cell.y, 0)))
                 ? path[waypoint] : Cell;
@@ -38,12 +43,62 @@ namespace NoMansGround.Soldiers
         public float MovementSpeed => Mathf.Lerp(1.5f, 4.5f, Data.GetSkill(SoldierSkill.Speed).Value / 100f);
         public event Action MovementChanged;
         public event Action DutyChanged;
+        public event Action TaskChanged;
+
+        public void RequestTask(SoldierTask task)
+        {
+            if (!Enum.IsDefined(typeof(SoldierTask), task))
+                throw new ArgumentOutOfRangeException(nameof(task));
+            if (task == Data.Task && !IsChangingTaskEquipment)
+            {
+                RequestedTask = null;
+                TaskReady = true;
+                SetTaskStatus("Pronto");
+            }
+            else
+            {
+                RequestedTask = task;
+                TaskReady = false;
+                SetTaskStatus(HasWorkAssignment && !IsChangingTaskEquipment ? "Cambio a fine lavoro" : "In attesa del deposito");
+            }
+            TaskChanged?.Invoke();
+            MovementChanged?.Invoke();
+        }
+
+        internal void SetTaskStatus(string status)
+        {
+            if (TaskStatus == status)
+                return;
+            TaskStatus = status;
+            TaskChanged?.Invoke();
+            MovementChanged?.Invoke();
+        }
+
+        internal void CompleteTaskEquipment()
+        {
+            if (RequestedTask.HasValue)
+                Data.Task = RequestedTask.Value;
+            RequestedTask = null;
+            TaskReady = true;
+            IsChangingTaskEquipment = false;
+            if (Data.Task == SoldierTask.Cook)
+            {
+                Duty = SoldierDuty.Work;
+                GuardRequested = false;
+                DutyChanged?.Invoke();
+            }
+            if (body != null)
+                body.color = Data.Task == SoldierTask.Cook ? new Color(1f, 0.85f, 0.65f) : Color.white;
+            SetWorkAssignment(false);
+            SetTaskStatus("Pronto");
+            TaskChanged?.Invoke();
+        }
 
         public bool RequestDuty(SoldierDuty duty)
         {
             if (!Enum.IsDefined(typeof(SoldierDuty), duty))
                 throw new ArgumentOutOfRangeException(nameof(duty));
-            if (Data.Profession == SoldierProfession.Cook && duty == SoldierDuty.Guard)
+            if (Data.Task == SoldierTask.Cook && duty == SoldierDuty.Guard)
             {
                 Debug.LogWarning("Il cuoco resta in Lavoro.", this);
                 return false;
@@ -69,7 +124,7 @@ namespace NoMansGround.Soldiers
             body = GetComponent<SpriteRenderer>();
             body.sprite = sprite;
             body.color = Color.white;
-            if (data.Profession == SoldierProfession.Cook)
+            if (data.Task == SoldierTask.Cook)
                 body.color = new Color(1f, 0.85f, 0.65f);
             body.sortingOrder = 10;
             var highlight = new GameObject("Selection", typeof(SpriteRenderer));

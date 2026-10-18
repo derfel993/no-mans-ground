@@ -46,6 +46,7 @@ namespace NoMansGround.Soldiers
         [SerializeField, Min(0.1f)] private float baseLadderSeconds = 4f;
 
         private readonly List<TrenchJob> jobs = new List<TrenchJob>();
+        private readonly HashSet<SoldierView> equipmentWorkers = new HashSet<SoldierView>();
         private IReadOnlyList<TrenchJob> readOnlyJobs;
         private readonly List<SpriteRenderer> preview = new List<SpriteRenderer>();
         private bool dragging;
@@ -509,6 +510,7 @@ namespace NoMansGround.Soldiers
             if (map.Data == null || deltaTime == 0f)
                 return;
             bool changed = false;
+            changed |= TickTaskEquipment();
             for (int i = jobs.Count - 1; i >= 0; i--)
             {
                 TrenchJob job = jobs[i];
@@ -698,7 +700,7 @@ namespace NoMansGround.Soldiers
         {
             var available = new List<SoldierView>();
             foreach (SoldierView soldier in roster.Soldiers)
-                if (soldier != null && soldier.CanTakeEngineeringWork)
+                if (soldier != null && soldier.CanTakeEngineeringWork && SoldierTasks.Allows(soldier.Data.Task, job.Kind))
                     available.Add(soldier);
             if (available.Count == 0)
             {
@@ -710,14 +712,21 @@ namespace NoMansGround.Soldiers
             if (job.Kind == TrenchJobKind.CollectItem)
                 return AssignCollection(job, available);
 
+            if (job.Kind == TrenchJobKind.BuildWall || job.Kind == TrenchJobKind.BuildDoor || job.Kind == TrenchJobKind.Ladder)
+            {
+                available = available.FindAll(soldier => soldier.Data.Inventory.Count(ItemType.ConstructionHammer) > 0);
+                if (available.Count == 0)
+                    return AssignToolPickup(job, ItemType.ConstructionHammer);
+            }
             ItemType? requiredTool = job.Kind == TrenchJobKind.Dig ? ItemType.Shovel
                 : job.Kind == TrenchJobKind.CutTree ? ItemType.Axe
                 : job.Kind == TrenchJobKind.MineRock ? ItemType.Pickaxe : job.Material;
             if (requiredTool.HasValue)
             {
-                available.RemoveAll(soldier => soldier.Data.Inventory.Count(requiredTool.Value) == 0);
+                List<SoldierView> eligible = available;
+                available = available.FindAll(soldier => soldier.Data.Inventory.Count(requiredTool.Value) > 0);
                 if (available.Count == 0)
-                    return AssignToolPickup(job, requiredTool.Value);
+                    return AssignToolPickup(job, requiredTool.Value, eligible);
             }
 
             var starts = new List<Vector2Int>();
@@ -841,7 +850,7 @@ namespace NoMansGround.Soldiers
             return best;
         }
 
-        private bool AssignToolPickup(TrenchJob job, ItemType tool)
+        private bool AssignToolPickup(TrenchJob job, ItemType tool, IEnumerable<SoldierView> candidates = null)
         {
             int reservedTools = 0;
             foreach (TrenchJob other in jobs)
@@ -860,9 +869,13 @@ namespace NoMansGround.Soldiers
                                 || (other.Kind == TrenchJobKind.CollectItem && other.Cell == cell)))
                             pickupCells.Add(cell);
                     }
+            if (job.Kind == TrenchJobKind.BuildWall && job.Material == tool
+                && map.Data.TryGetGroundItem(job.Cell, out ItemType onSiteMaterial) && onSiteMaterial == tool)
+                pickupCells.RemoveAll(cell => cell != job.Cell);
             if (pickupCells.Count == 0)
             {
                 string noTool = tool == ItemType.Axe ? "Nessuna accetta disponibile"
+                    : tool == ItemType.ConstructionHammer ? "Nessun martello da costruzione disponibile"
                     : tool == ItemType.Wood || tool == ItemType.BuildingStone
                         ? $"Materiale esaurito: {ItemCatalog.Get(tool).DisplayName}" : "Nessuna pala disponibile";
                 bool changed = job.Status != noTool;
@@ -876,9 +889,9 @@ namespace NoMansGround.Soldiers
             GridPath best = null;
             SoldierView bestWorker = null;
             Vector2Int? groundPickup = null;
-            foreach (SoldierView worker in roster.Soldiers)
+            foreach (SoldierView worker in candidates ?? roster.Soldiers)
             {
-                if (worker == null || !worker.CanTakeEngineeringWork
+                if (worker == null || !worker.CanTakeEngineeringWork || !SoldierTasks.Allows(worker.Data.Task, job.Kind)
                     || worker.Data.Inventory.Count(tool) > 0)
                     continue;
                 foreach (Vector2Int pickupCell in pickupCells)
@@ -926,6 +939,62 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
+        private bool TickTaskEquipment()
+        {
+            bool changed = false;
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                if (soldier == null || !soldier.isActiveAndEnabled)
+                    continue;
+                if (!soldier.RequestedTask.HasValue)
+                    continue;
+                if (soldier.IsMoving || (soldier.HasWorkAssignment && !equipmentWorkers.Contains(soldier)))
+                    continue;
+                if (!map.Data.IsStorageCell(soldier.Cell))
+                {
+                    GridPath route = FindStoragePath(soldier);
+                    if (route == null)
+                    {
+                        soldier.SetTaskStatus("Deposito bloccato o occupato");
+                        continue;
+                    }
+                    equipmentWorkers.Add(soldier);
+                    soldier.IsChangingTaskEquipment = true;
+                    soldier.SetWorkAssignment(true);
+                    soldier.SetTaskStatus("In marcia al deposito");
+                    if (route.Cells.Count > 1)
+                        soldier.BeginMove(mapView, route.Cells);
+                    changed = true;
+                    continue;
+                }
+                equipmentWorkers.Add(soldier);
+                soldier.IsChangingTaskEquipment = true;
+                soldier.SetWorkAssignment(true);
+                ItemType? required = SoldierTasks.Tool(soldier.RequestedTask.Value);
+                foreach (ItemType item in Enum.GetValues(typeof(ItemType)))
+                {
+                    if (ItemCatalog.Get(item).Category != ItemCategory.Tool)
+                        continue;
+                    int returned = soldier.Data.Inventory.Count(item) - (item == required ? 1 : 0);
+                    if (returned > 0 && soldier.Data.Inventory.TryTake(item, returned))
+                        map.Data.StorageStockpile.Add(item, returned);
+                }
+                if (required.HasValue && soldier.Data.Inventory.Count(required.Value) == 0
+                    && !map.Data.StorageStockpile.TryTake(required.Value, 1))
+                {
+                    soldier.SetTaskStatus($"In attesa: {ItemCatalog.Get(required.Value).DisplayName}");
+                    continue;
+                }
+                if (required.HasValue && soldier.Data.Inventory.Count(required.Value) == 0)
+                    soldier.Data.Inventory.Add(required.Value, 1);
+                equipmentWorkers.Remove(soldier);
+                soldier.CompleteTaskEquipment();
+                retryTimer = 0f;
+                changed = true;
+            }
+            return changed;
+        }
+
         private bool CanExcavate(Vector2Int cell)
         {
             // Completing a trench removes ground-level edges: keep existing routes valid until they clear it.
@@ -967,6 +1036,13 @@ namespace NoMansGround.Soldiers
 
         private void ResetJobs()
         {
+            foreach (SoldierView soldier in equipmentWorkers)
+                if (soldier != null)
+                {
+                    soldier.IsChangingTaskEquipment = false;
+                    soldier.SetWorkAssignment(false);
+                }
+            equipmentWorkers.Clear();
             foreach (TrenchJob job in jobs)
                 Release(job);
             jobs.Clear();

@@ -50,9 +50,10 @@ standard si trova sul lato destro della strada (a sinistra se manca spazio).
 Subito sotto c'e una dispensa automatica di **2 x 4 celle**. Entrambe le aree
 restano percorribili e libere da rocce e alberi; mappe troppo piccole possono
 non avere spazio per crearle. Nel deposito ci sono **6 pale, 2 accette e 2
-picconi**; nella dispensa **1000 Razioni**, in quattro stack da **250**.
+picconi e 2 martelli da costruzione**; nella dispensa **1000 Razioni**, in quattro stack da **250**.
 Gli item hanno categorie **Tool**, **Weapon**, **Food**, **Resource** e **Equipment**. Per ora i Tool sono
-Pala (**Scava trincea**), Piccone (**Rompi roccia**) e Accetta (**Taglia albero**);
+Pala (**Scava trincea**), Piccone (**Rompi roccia**), Accetta (**Taglia albero**)
+e Martello da Costruzione (**Costruisci**, inclusa l'installazione delle scale);
 Food contiene Razioni; Resource contiene Legna e Pietra da costruzione;
 Equipment contiene **Borraccia piena (acqua)** e **Borraccia vuota**, non impilabili.
 Gli utensili vengono ritirati per i lavori ma non consumati al completamento.
@@ -164,11 +165,12 @@ Alle 13:00 viene avviata automaticamente la distribuzione del rancio.
 
 ## Step 2: soldati, stato e skill
 
-La stessa scena include **8 soldati italiani del Genio e un cuoco aggiuntivo**,
-visibili con sprite provvisori.
+La stessa scena include **9 personaggi italiani**, visibili con sprite provvisori.
+Tutti iniziano in **Lavoro**, con compito **Trasportatore**; il cuoco va assegnato
+dal giocatore attraverso il menu Compito nella scheda Info.
 Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
 Il pannello del soldato compare in basso a sinistra e offre quattro tab:
-**Info** (identita, istruzioni, lavoro/guardia e carico massimo), **Stato**
+**Info** (identita, lavoro/guardia, compito, stato della dotazione e carico massimo), **Stato**
 (fame, sete, bisogni fisiologici, termico, stress, paura e stanchezza),
 **Skill** e **Inventario**. Il tab Inventario mostra gli utensili, le risorse
 trasportate e la borraccia personale, piena o vuota, aggiornandosi dopo bevuta
@@ -282,8 +284,9 @@ Il pannello aggiorna immediatamente XP e livello.
 
 ### Configurazione e limiti
 
-- Oggetto **Soldiers**, componente **Soldier Roster**: numero di soldati del Genio,
-  seed e sprite. **Spawn Cook** aggiunge un cuoco, entro il limite totale di 64
+- Oggetto **Soldiers**, componente **Soldier Roster**: numero di soldati,
+  seed e sprite. **Spawn Cook** aggiunge un personaggio, anch'esso Trasportatore,
+  entro il limite totale di 64
   personaggi e la capienza della mappa. Cambiare prima di Play o rigenerare.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
   bordo inferiore, la zona d'arrivo dei soldati. La camera iniziale inquadra
@@ -491,7 +494,8 @@ Le altre due celle adiacenti devono essere percorribili sullo stesso livello,
 e almeno una deve proseguire nella galleria. Prima raccogliere la pietra o gli
 altri item rimasti sulla cella della porta e terminare eventuali job presenti.
 
-Il Genio costruisce una **porta di legno**: costo **1 Legna**, ritirata da terra
+Un **Costruttore in Lavoro** usa un **Martello da Costruzione** per costruire una **porta di legno**:
+costo **1 Legna**, ritirata da terra
 o dal deposito, e durata `6 / (1 + Forza / 100)` secondi, esclusi i viaggi.
 La risorsa si consuma solo al completamento, che assegna **25 XP Forza**.
 Senza legna raggiungibile il job resta in attesa. **Annulla [X]** rimuove solo
@@ -520,7 +524,8 @@ scala gia presente o con un lavoro gia in coda vengono rifiutate con un messaggi
 
 Un soldato libero raggiunge una delle quattro celle adiacenti e installa
 la scala senza dover entrare prima nella trincea. Puo lavorare dal terreno
-o da un tratto di trincea gia raggiungibile. Non vengono richiesti materiali.
+o da un tratto di trincea gia raggiungibile. Serve un **Martello da Costruzione**,
+ritirato dal deposito se manca nell'inventario; non vengono richiesti materiali.
 Durata: `4 / (1 + Forza / 100)` secondi, escluso il viaggio;
 premio al completamento: **25 XP Forza**, come per lo scavo.
 **Base Ladder Seconds** sul componente **Trench Work Orders** modifica il tempo base.
@@ -548,26 +553,59 @@ API: `TrenchWorkOrders.DesignateLadder(cell)` accoda l'installazione;
 ospitare un soldato, non che sia raggiungibile dal terreno:
 le transizioni tra livelli sono validate da `CanStep(from, to)`.
 
-## Step 5: fame, mestieri, cucina e dispensa
+## Step 5: fame, compiti, cucina e dispensa
 
 Con fame **strettamente sotto 35/100**, il soldato risulta **in attesa del rancio**:
 non cerca cibo, non va alla cucina e continua a muoversi e lavorare normalmente.
 Lo stress aumenta di **5 punti per minuto di gioco**, fino a 100, soltanto
 per il tempo passato sotto soglia (anche nei frame che attraversano la soglia).
 A 35 esatti non e ancora in attesa. Per ora lo stress non cala automaticamente.
-L'attesa e indicata sulla scheda, insieme al mestiere.
+L'attesa e indicata sulla scheda, insieme al compito.
 
-### Mestieri iniziali
+### Compiti e dotazione
 
-- **Genio**: gli 8 soldati iniziali eseguono scavi e installazioni di scale.
-- **Cuoco**: un nono personaggio con nome italiano e tinta chiara raggiunge
-  la cucina, prepara il rancio e lo distribuisce. Non riceve scavi, scale o spostamenti
-  manuali con il destro; la sua posizione resta prenotata per gli altri.
-- **Soldato**: ruolo previsto per il solo combattimento futuro, escluso dai
-  lavori del Genio. Il combattimento non e ancora implementato.
+Selezionare un soldato e aprire il tab **Info**: il menu **Compito** assegna
+un unico compito operativo. All'avvio **tutti sono Trasportatori**, incluso
+il personaggio aggiuntivo precedentemente riservato alla cucina.
 
-Il mestiere appartiene a `SoldierData.Profession`. Non e ancora presente
-un'interfaccia per scegliere o cambiare il mestiere dei soldati.
+| Compito | Utensile | Lavori |
+| --- | --- | --- |
+| Trasportatore | Nessuno | Raccoglie le risorse designate e le porta al deposito. |
+| Taglialegna | Accetta | Taglia gli alberi designati. |
+| Minatore | Piccone | Mina roccia e montagna, aprendo anche gallerie. |
+| Scavatore | Pala | Scava le trincee designate. |
+| Costruttore | Martello da Costruzione | Costruisce pareti, porte e scale designate. |
+| Cuoco | Nessuno | Prepara e distribuisce rancio e rifornisce le borracce alla consegna. |
+
+Al cambio compito, il soldato raggiunge fisicamente una cella libera del
+**deposito degli utensili**, restituisce i vecchi tool e prende quello nuovo,
+se richiesto. Il prelievo non avviene a distanza. Le borracce e le risorse
+personali non vengono restituite. Anche il passaggio a un compito senza tool
+richiede il viaggio al deposito; se e gia li, lo scambio avviene sul posto.
+Senza utensili disponibili attende al deposito e riprova, senza ricevere altri
+job. Piu soldati possono avere lo stesso compito, ma ciascuno deve possedere
+il proprio utensile: le scorte iniziali restano limitate.
+
+Un lavoro gia in esecuzione termina prima del cambio dotazione. Un percorso
+gia iniziato viene completato senza teletrasporti; se il soldato sta soltanto
+ritirando un attrezzo, puo passare al cambio prima di iniziare il job.
+Richiedere un altro compito durante il viaggio aggiorna la destinazione
+operativa: al deposito viene preparata l'ultima dotazione richiesta.
+Il pannello mostra compito attuale, eventuale richiesta e stato dello scambio.
+
+Guardia/Lavoro e separato dal compito: soltanto in Lavoro si eseguono i relativi
+job. La dotazione viene cambiata anche per una guardia, che poi resta in Guardia.
+Scegliere Cuoco porta invece in Lavoro, come richiesto dalla cucina. Una cucina
+ha un solo cuoco operativo; eventuali altri Cuochi restano di riserva. Lasciando
+il compito, il cuoco termina la razione in preparazione o gestisce il carico
+prima del cambio; scorte e progresso della cucina non vengono azzerati.
+
+I compiti lavorano sulle designazioni del giocatore, non scelgono automaticamente
+alberi o aree da scavare. La rigenerazione ripristina tutti a Trasportatore,
+senza utensili personali e con una borraccia piena.
+API: `SoldierData.Task`, `SoldierView.RequestTask(task)`, `RequestedTask`,
+`TaskReady` e `TaskStatus`. `SoldierData.Profession` resta un dato iniziale,
+non limita l'assegnazione dei compiti.
 
 ### Cucina e produzione
 
@@ -578,10 +616,13 @@ La dispensa contiene **1000 Razioni** in stack da 250; il cuoco preleva da qui
 10 viveri per ciclo.
 Se manca spazio per la cucina o il suo accesso e occupato/bloccato, il sistema
 lo segnala; gli accessi vengono ritentati automaticamente ogni mezzo secondo.
-Su mappe senza capienza per il cuoco la cucina non viene generata.
+La cucina resta presente anche senza Cuochi assegnati; su mappe senza spazio
+per la struttura non viene generata.
 
 - La cucina parte con **0 razioni pronte**; le Razioni sono gia presenti nella
   dispensa dalla generazione della mappa.
+- Nessuno cucina finche un soldato non assume il compito **Cuoco** e completa
+  il passaggio al deposito. Il lavoro viene assegnato al primo Cuoco disponibile.
 - La produzione e continua, indipendente dal numero di soldati affamati,
   tranne durante gli spostamenti e il giro di distribuzione.
 - Ogni razione richiede **30 secondi di gioco**, senza bonus delle skill.
@@ -597,7 +638,8 @@ Su mappe senza capienza per il cuoco la cucina non viene generata.
   dispensa, avanzamento della razione, carico trasportato e stato del cuoco.
   Sulla dispensa mostra i viveri residui e quelli in trasporto.
   Uscire prima dalle modalita Scava/Scala/Annulla con Esc.
-- Rigenerare ricrea cuoco e cucina, rimuove le zone designate e azzera scorte,
+- Rigenerare ricrea squadra e cucina, ripristina i compiti a Trasportatore,
+  rimuove le zone designate e azzera scorte,
   razioni, progresso e stress accumulato. Deposito, dispensa e stock iniziale
   vengono ricreati.
 
@@ -642,14 +684,14 @@ Le razioni trasportate sono gia sottratte alle razioni pronte della cucina.
   della prima razione; il viaggio non conta come tempo di cottura e i viveri
   prelevati non devono essere sottratti nuovamente al completamento.
 - [x] Distribuzione del rancio in trincea da parte del cuoco e consumo dei soldati.
-- [ ] Assegnazione e cambio dei mestieri da parte del giocatore.
+- [x] Assegnazione e cambio dei compiti, con scambio fisico degli utensili al deposito.
 
 ## Step 6: Guardia e Lavoro
 
-Ogni personaggio ha uno stato distinto dal mestiere:
+Ogni personaggio ha uno stato distinto dal compito:
 
-- **Lavoro**: partecipa soltanto ai job consentiti dal mestiere (Genio: scavi e
-  scale; Cuoco: rancio). Non riceve spostamenti manuali con il destro.
+- **Lavoro**: partecipa soltanto ai job consentiti dal compito selezionato.
+  Non riceve spostamenti manuali con il destro.
 - **Guardia**: non prende job. Selezionarlo con il sinistro e usare il destro
   per raggiungere una cella; rimane in Guardia sulla destinazione, anche se
   vengono designati lavori vicini. Non sono ancora presenti tiro o nemici.
@@ -657,7 +699,7 @@ Ogni personaggio ha uno stato distinto dal mestiere:
 Nella scheda del soldato sono presenti i pulsanti **Guardia** e **Lavoro**.
 Il contatore **Lavoro: N | Guardia: N** resta visibile anche senza selezione
 o quando si ispeziona un edificio, e conta gli stati effettivi di tutti
-i personaggi generati, **incluso il cuoco in Lavoro**.
+i personaggi generati, inclusi gli eventuali Cuochi in Lavoro.
 All'avvio normale indica Lavoro: 9 e Guardia: 0.
 
 Se si richiede Guardia durante un job, il soldato resta in Lavoro fino al
@@ -669,8 +711,9 @@ viene applicata al rilascio; un percorso gia iniziato termina senza teletrasport
 Tornando in Lavoro durante una marcia di Guardia, termina il percorso prima di
 poter prendere job. In Guardia il destro sostituisce anche percorsi gia in corso.
 
-Il **cuoco resta sempre in Lavoro** e il suo pulsante Guardia e disabilitato.
-Il mestiere non cambia passando tra i due stati. I bisogni e lo stress
+Chi ha il compito **Cuoco resta in Lavoro** e il suo pulsante Guardia e disabilitato;
+puo tornare a un altro compito attraverso il menu. Il compito non cambia
+passando tra i due stati. I bisogni e lo stress
 continuano ad avanzare in entrambi. Rigenerare ripristina tutti in Lavoro,
 azzera le richieste pendenti e aggiorna il contatore.
 
@@ -718,7 +761,12 @@ La porta usa lo stesso materiale delle pareti. Prima della scelta della porta
 non partono lavori. Il pulsante Porta permette anche di completare la scelta
 dopo essere usciti dalla modalita con Esc o destro.
 
-Il **Genio in Lavoro** costruisce pareti e porta tramite la coda dei lavori:
+Il **Costruttore in Lavoro** costruisce pareti e porta tramite la coda dei lavori:
+richiede un **Martello da Costruzione**, ritirato dal deposito prima dei materiali
+se non e gia nell'inventario. Senza martelli disponibili i job aspettano e
+riprovano. Il martello non viene consumato e resta al lavoratore dopo il job.
+Se il materiale richiesto si trova gia sulla cella di un muro designato,
+viene usato per primo, evitando di renderlo irraggiungibile sotto il muro finito.
 ogni tile costa provvisoriamente **1 Legna** oppure **1 Pietra da costruzione**.
 Il soldato ritira fisicamente il materiale dal deposito **oppure direttamente
 da terra**, scegliendo la fonte raggiungibile piu vicina. Legna e pietra lasciate

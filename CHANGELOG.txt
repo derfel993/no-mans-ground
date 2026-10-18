@@ -8,6 +8,48 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.3.8 - 2026-10-18
+===============================================================================
+
+Compiti dei soldati
+- Aggiunto il menu Compito nella scheda Info: Trasportatore, Taglialegna,
+  Minatore, Scavatore, Costruttore e Cuoco, separati dallo stato Guardia/Lavoro.
+- Tutti i personaggi iniziano come Trasportatori. Ogni compito esegue soltanto
+  i propri lavori designati; la cucina attende l'assegnazione di un Cuoco.
+- Cambiando compito, il soldato raggiunge fisicamente il deposito, restituisce
+  i vecchi utensili e ritira quello richiesto. Senza utensili disponibili
+  resta in attesa, senza ricevere altri job.
+- Il cambio attende il rilascio del lavoro in corso e conserva borraccia e
+  risorse personali. Il pannello mostra compito attuale, richiesta e dotazione.
+- Il cuoco operativo viene scelto dal compito, non dal mestiere iniziale;
+  il cambio preserva le scorte e gestisce preparazione e carichi in corso.
+- La rigenerazione ripristina tutti a Trasportatore senza utensili personali.
+
+Martello da Costruzione
+- Aggiunto il nuovo Tool per costruire pareti, porte e scale, con 2 esemplari
+  iniziali nel deposito, sprite dedicata e visualizzazione nell'inventario.
+- Il martello viene ritirato prima dei materiali e non viene consumato.
+- Il materiale presente sulla cella di un muro viene usato per primo,
+  evitando che la costruzione lo renda irraggiungibile.
+
+Borracce e acqua
+- Ogni personaggio nasce con una Borraccia piena (acqua). Sotto il 20% di sete
+  beve automaticamente, torna al 100% e conserva una Borraccia vuota.
+- Alla consegna effettiva del rancio le borracce vuote vengono sostituite
+  con borracce piene, anche per il cuoco, senza duplicare quelle gia piene.
+- L'inventario si aggiorna dopo bevuta e rifornimento; rigenerare assegna
+  nuovamente una borraccia piena a ogni personaggio.
+
+Test e documentazione
+- Creato ITEM.md con il catalogo degli item, categorie, stack, utilizzi e
+  dotazione per compito; viene aggiornato a ogni richiesta di un nuovo item.
+- Aggiornato il README con compiti, scambio degli utensili e gestione dell'acqua.
+- Verificati cambio dotazione, attesa degli utensili, filtro dei job, cambio
+  del cuoco e menu Compito aperto su formati orizzontali e verticali.
+- Suite completa: 179 test superati su 194; restano gli stessi 15 fallimenti
+  preesistenti, senza nuove regressioni rilevate.
+
+===============================================================================
 0.3.7 - 2026-10-18
 ===============================================================================
 

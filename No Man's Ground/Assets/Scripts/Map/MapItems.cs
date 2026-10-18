@@ -21,14 +21,16 @@ namespace NoMansGround.Map
         Wood,
         BuildingStone,
         FullCanteen,
-        EmptyCanteen
+        EmptyCanteen,
+        ConstructionHammer
     }
 
     public enum ItemAction
     {
         DigTrench,
         CutTree,
-        BreakRock
+        BreakRock,
+        Build
     }
 
     public readonly struct ItemDefinition
@@ -67,6 +69,8 @@ namespace NoMansGround.Map
                     return new ItemDefinition(type, "Borraccia piena (acqua)", ItemCategory.Equipment, null, 1);
                 case ItemType.EmptyCanteen:
                     return new ItemDefinition(type, "Borraccia vuota", ItemCategory.Equipment, null, 1);
+                case ItemType.ConstructionHammer:
+                    return new ItemDefinition(type, "Martello da Costruzione", ItemCategory.Tool, ItemAction.Build, 1);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

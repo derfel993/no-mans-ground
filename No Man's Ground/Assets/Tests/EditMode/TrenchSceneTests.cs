@@ -23,6 +23,7 @@ namespace NoMansGround.Tests
                 var roster = Object.FindAnyObjectByType<SoldierRoster>();
                 map.Regenerate();
                 roster.Spawn(map.Data);
+                TaskTestSetup.Assign(roster.Soldiers[0], SoldierTask.Builder);
                 var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
                 typeof(SoldierDetailsPanel).GetMethod("Awake", flags).Invoke(panel, null);
                 typeof(SoldierDetailsPanel).GetMethod("OnEnable", flags).Invoke(panel, null);
@@ -35,6 +36,8 @@ namespace NoMansGround.Tests
                 map.Data[51, 11] = TerrainKind.Tunnel;
                 map.GetComponentInChildren<MapTilemapView>().Render(map.Data);
                 roster.Soldiers[0].Data.Inventory.Add(ItemType.Wood, 1);
+                Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 1));
+                roster.Soldiers[0].Data.Inventory.Add(ItemType.ConstructionHammer, 1);
                 Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
                 AssertTextContains(canvas, "Rifugi galleria: 0");
                 AssertTextContains(canvas, "Gallerie aperte: 1");
@@ -94,6 +97,7 @@ namespace NoMansGround.Tests
             yield return null;
             var map = Object.FindAnyObjectByType<MapPrototype>();
             var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Digger);
             var trenches = roster.GetComponent<TrenchWorkOrders>();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
@@ -164,6 +168,9 @@ namespace NoMansGround.Tests
             Assert.Zero(trenches.Jobs.Count);
             FindButton(canvas, "Installa scala").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Ladder, trenches.Mode);
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 1));
+            worker.Data.Inventory.Add(ItemType.ConstructionHammer, 1);
+            TaskTestSetup.Assign(worker, SoldierTask.Builder);
             Assert.IsTrue(trenches.DesignateLadder(target));
             yield return null;
             Assert.AreSame(worker, trenches.Jobs[0].Worker);

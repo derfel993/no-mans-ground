@@ -20,6 +20,8 @@ namespace NoMansGround.Tests
             yield return null;
             var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
             var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            TaskTestSetup.AssignCook(roster);
+            kitchen.Rebuild();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var map = Object.FindAnyObjectByType<MapPrototype>();
             float scale = Time.timeScale;
@@ -86,6 +88,8 @@ namespace NoMansGround.Tests
             yield return null;
             var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
             var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            TaskTestSetup.AssignCook(roster);
+            kitchen.Rebuild();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var map = Object.FindAnyObjectByType<MapPrototype>();
             Assert.IsTrue(kitchen.HasFacilities);

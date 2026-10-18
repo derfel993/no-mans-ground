@@ -120,6 +120,36 @@ namespace NoMansGround.Tests
             Assert.Zero(soldier.Inventory.Count(ItemType.EmptyCanteen));
         }
 
+        [TestCase(SoldierTask.Hauler, null, TrenchJobKind.CollectItem)]
+        [TestCase(SoldierTask.Woodcutter, ItemType.Axe, TrenchJobKind.CutTree)]
+        [TestCase(SoldierTask.Miner, ItemType.Pickaxe, TrenchJobKind.MineRock)]
+        [TestCase(SoldierTask.Digger, ItemType.Shovel, TrenchJobKind.Dig)]
+        [TestCase(SoldierTask.Builder, ItemType.ConstructionHammer, TrenchJobKind.BuildWall)]
+        public void TasksDefineToolsAndOnlyAllowTheirOwnJobs(SoldierTask task, ItemType? tool, TrenchJobKind job)
+        {
+            Assert.AreEqual(tool, SoldierTasks.Tool(task));
+            Assert.IsTrue(SoldierTasks.Allows(task, job));
+            Assert.IsFalse(SoldierTasks.Allows(SoldierTask.Cook, job));
+            Assert.IsFalse(string.IsNullOrEmpty(SoldierTasks.DisplayName(task)));
+            foreach (TrenchJobKind kind in Enum.GetValues(typeof(TrenchJobKind)))
+                if (kind != job && !(task == SoldierTask.Builder
+                    && (kind == TrenchJobKind.BuildDoor || kind == TrenchJobKind.Ladder)))
+                    Assert.IsFalse(SoldierTasks.Allows(task, kind));
+        }
+
+        [Test]
+        public void EveryGeneratedSoldierStartsAsHaulerIncludingCookProfession()
+        {
+            foreach (SoldierData soldier in SoldierGenerator.Generate(8, 1917))
+                Assert.AreEqual(SoldierTask.Hauler, soldier.Task);
+            var cook = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 }, SoldierProfession.Cook);
+            Assert.AreEqual(SoldierTask.Hauler, cook.Task);
+            Assert.IsNull(SoldierTasks.Tool(SoldierTask.Cook));
+            Assert.IsTrue(SoldierTasks.Allows(SoldierTask.Builder, TrenchJobKind.BuildDoor));
+            Assert.IsTrue(SoldierTasks.Allows(SoldierTask.Builder, TrenchJobKind.Ladder));
+        }
+
         [TestCase(0)]
         [TestCase(65)]
         public void InvalidSoldierCountIsRejected(int count)

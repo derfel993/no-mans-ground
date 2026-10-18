@@ -121,6 +121,7 @@ namespace NoMansGround.Map
             stockpile.Add(ItemType.Shovel, 6);
             stockpile.Add(ItemType.Axe, 2);
             stockpile.Add(ItemType.Pickaxe, 2);
+            stockpile.Add(ItemType.ConstructionHammer, 2);
         }
     }
 }

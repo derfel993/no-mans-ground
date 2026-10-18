@@ -42,6 +42,8 @@ namespace NoMansGround.Soldiers
         private Text facilityStatus;
         private Text dutyCounts;
         private Text dutyStatus;
+        private Text taskStatus;
+        private Dropdown taskDropdown;
         private Text zoneStatus;
         private Button guardButton;
         private Button workButton;
@@ -431,6 +433,15 @@ namespace NoMansGround.Soldiers
         private void Refresh()
         {
             bool selected = Selected != null;
+            if (taskDropdown != null)
+            {
+                taskDropdown.interactable = selected;
+                if (selected)
+                    taskDropdown.SetValueWithoutNotify((int)(Selected.RequestedTask ?? Selected.Data.Task));
+                taskStatus.text = selected ? (Selected.RequestedTask.HasValue
+                    ? $"{SoldierTasks.DisplayName(Selected.Data.Task)} -> {SoldierTasks.DisplayName(Selected.RequestedTask.Value)}\n{Selected.TaskStatus}"
+                    : Selected.TaskStatus) : string.Empty;
+            }
             if (facilityStatus != null)
                 facilityStatus.gameObject.SetActive(false);
             identity.text = selected ? Selected.Data.FullName : "Nessun soldato selezionato";
@@ -456,14 +467,15 @@ namespace NoMansGround.Soldiers
             }
             dutyStatus.text = Selected.GuardRequested ? "Lavoro -> Guardia a fine job"
                 : Selected.Duty == SoldierDuty.Guard ? "Stato: Guardia" : "Stato: Lavoro";
-            guardButton.interactable = Selected.Data.Profession != SoldierProfession.Cook
+            guardButton.interactable = Selected.Data.Task != SoldierTask.Cook
                 && Selected.Duty != SoldierDuty.Guard && !Selected.GuardRequested;
             workButton.interactable = Selected.Duty != SoldierDuty.Work || Selected.GuardRequested;
 
             Vector2Int target = Selected.Destination;
-            activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
+            activity.text = (Selected.IsChangingTaskEquipment ? Selected.TaskStatus
+                : Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
-                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.BuildWall || Selected.WorkKind == TrenchJobKind.BuildDoor ? "Costruzione" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
+                    ? $"{(Selected.Data.Task == SoldierTask.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.BuildWall || Selected.WorkKind == TrenchJobKind.BuildDoor ? "Costruzione" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             carryCapacity.text = $"Carico massimo: {Selected.Data.MaxCarryWeightKg:0.0} kg";
@@ -485,9 +497,7 @@ namespace NoMansGround.Soldiers
             if (Selected == null || needs == null)
                 return;
             SoldierNeeds state = Selected.Data.Needs;
-            string profession = Selected.Data.Profession == SoldierProfession.Cook ? "Cuoco"
-                : Selected.Data.Profession == SoldierProfession.Engineer ? "Genio" : "Soldato";
-            mealStatus.text = profession + (state.WaitingForRations
+            mealStatus.text = SoldierTasks.DisplayName(Selected.Data.Task) + (state.WaitingForRations
                 ? " | Attende rancio\nStress fame: +5/min" : " | Rancio non richiesto");
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
                 state.Stress, state.Fear, state.Fatigue };
@@ -515,7 +525,8 @@ namespace NoMansGround.Soldiers
             if (Selected == null)
                 return;
             foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
-                ItemType.Wood, ItemType.BuildingStone, ItemType.FullCanteen, ItemType.EmptyCanteen })
+                ItemType.Wood, ItemType.BuildingStone, ItemType.FullCanteen, ItemType.EmptyCanteen,
+                ItemType.ConstructionHammer })
             {
                 int count = Selected.Data.Inventory.Count(type);
                 if (count > 0)
@@ -712,8 +723,8 @@ namespace NoMansGround.Soldiers
 
             Transform info = soldierTabPages[0].transform;
             identity = CreateText(info, "", 12, 24f);
-            instructions = CreateText(info, "", 10, 30f);
-            dutyStatus = CreateText(info, "", 10, 24f);
+            instructions = CreateText(info, "", 10, 22f);
+            dutyStatus = CreateText(info, "", 10, 18f);
             var dutyRow = CreateRect("Duty controls", info);
             dutyRow.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
             var dutyLayout = dutyRow.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -721,9 +732,11 @@ namespace NoMansGround.Soldiers
             dutyLayout.childForceExpandWidth = true;
             guardButton = CreateDutyButton(dutyRow, "Guardia", SoldierDuty.Guard);
             workButton = CreateDutyButton(dutyRow, "Lavoro", SoldierDuty.Work);
-            activity = CreateText(info, "", 10, 28f);
+            taskDropdown = CreateTaskDropdown(info);
+            taskStatus = CreateText(info, "", 9, 26f);
+            activity = CreateText(info, "", 10, 24f);
             carryCapacity = CreateText(info, "", 10, 20f);
-            orderStatus = CreateText(info, "", 10, 42f);
+            orderStatus = CreateText(info, "", 10, 28f);
 
             Transform state = soldierTabPages[1].transform;
             needs = new Meter[7];
@@ -795,6 +808,77 @@ namespace NoMansGround.Soldiers
             Text text = CreateText(rect, label, 10, 0f);
             Stretch(text.rectTransform, 2f);
             return text;
+        }
+
+        private Dropdown CreateTaskDropdown(Transform parent)
+        {
+            var row = CreateRect("Compito", parent);
+            row.gameObject.AddComponent<LayoutElement>().preferredHeight = 24f;
+            var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.childForceExpandWidth = false;
+            Text title = CreateText(row, "Compito", 10, 24f);
+            title.GetComponent<LayoutElement>().preferredWidth = 48f;
+            var rect = CreateRect("Scelta compito", row);
+            rect.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+            var background = rect.gameObject.AddComponent<Image>();
+            background.color = new Color(0.26f, 0.32f, 0.22f);
+            var dropdown = rect.gameObject.AddComponent<Dropdown>();
+            dropdown.targetGraphic = background;
+            Text caption = CreateText(rect, "", 10, 0f);
+            Stretch(caption.rectTransform, 4f);
+            caption.rectTransform.offsetMax = new Vector2(-20f, -4f);
+            dropdown.captionText = caption;
+            Text arrow = CreateText(rect, "v", 10, 0f);
+            arrow.alignment = TextAnchor.MiddleRight;
+            Stretch(arrow.rectTransform, 5f);
+            var template = CreateRect("Template", rect);
+            template.anchorMin = Vector2.zero;
+            template.anchorMax = Vector2.right;
+            template.pivot = Vector2.up;
+            template.anchoredPosition = new Vector2(0f, -2f);
+            template.sizeDelta = new Vector2(0f, 144f);
+            template.gameObject.AddComponent<Image>().color = new Color(0.12f, 0.16f, 0.12f);
+            var scroll = template.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            var viewport = CreateRect("Viewport", template);
+            Stretch(viewport, 0f);
+            viewport.gameObject.AddComponent<Image>();
+            viewport.gameObject.AddComponent<Mask>().showMaskGraphic = false;
+            var content = CreateRect("Content", viewport);
+            content.anchorMin = Vector2.up;
+            content.anchorMax = Vector2.one;
+            content.pivot = Vector2.up;
+            content.sizeDelta = new Vector2(0f, 24f);
+            var item = CreateRect("Item", content);
+            Stretch(item, 0f);
+            var itemBackground = item.gameObject.AddComponent<Image>();
+            itemBackground.color = new Color(0.26f, 0.32f, 0.22f);
+            var toggle = item.gameObject.AddComponent<Toggle>();
+            toggle.targetGraphic = itemBackground;
+            var check = CreateRect("Selected", item);
+            check.anchorMin = new Vector2(0f, 0.5f);
+            check.anchorMax = new Vector2(0f, 0.5f);
+            check.anchoredPosition = new Vector2(8f, 0f);
+            check.sizeDelta = new Vector2(5f, 5f);
+            toggle.graphic = check.gameObject.AddComponent<Image>();
+            Text label = CreateText(item, "", 10, 0f);
+            Stretch(label.rectTransform, 4f);
+            label.rectTransform.offsetMin = new Vector2(18f, 4f);
+            scroll.viewport = viewport;
+            scroll.content = content;
+            dropdown.template = template;
+            dropdown.itemText = label;
+            foreach (SoldierTask task in System.Enum.GetValues(typeof(SoldierTask)))
+                dropdown.options.Add(new Dropdown.OptionData(SoldierTasks.DisplayName(task)));
+            dropdown.onValueChanged.AddListener(value =>
+            {
+                if (Selected != null) Selected.RequestTask((SoldierTask)value);
+            });
+            dropdown.RefreshShownValue();
+            template.gameObject.SetActive(false);
+            return dropdown;
         }
 
         private Button CreateDutyButton(Transform parent, string label, SoldierDuty duty)

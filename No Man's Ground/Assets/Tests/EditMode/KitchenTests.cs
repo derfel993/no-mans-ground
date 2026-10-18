@@ -31,6 +31,7 @@ namespace NoMansGround.Tests
             kitchen = roster.GetComponent<KitchenSystem>();
             Assert.IsNotNull(kitchen);
             Assert.IsTrue(map.Data.HasPantryArea);
+            TaskTestSetup.AssignCook(roster);
             kitchen.Rebuild();
         }
 
@@ -439,6 +440,7 @@ namespace NoMansGround.Tests
             Assert.AreEqual(carried, kitchen.CarriedRations);
             kitchen.Cook.enabled = true;
             CompleteMealRound();
+            TaskTestSetup.AssignCook(roster);
             kitchen.Rebuild();
             Assert.Zero(kitchen.PendingMeals);
             Assert.Zero(kitchen.CarriedRations);

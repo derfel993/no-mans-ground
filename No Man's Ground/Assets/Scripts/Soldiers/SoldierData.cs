@@ -15,6 +15,54 @@ namespace NoMansGround.Soldiers
 
     public enum SoldierProfession { Soldier, Engineer, Cook }
 
+    public enum SoldierTask { Hauler, Woodcutter, Miner, Digger, Builder, Cook }
+
+    public static class SoldierTasks
+    {
+        public static string DisplayName(SoldierTask task)
+        {
+            switch (task)
+            {
+                case SoldierTask.Hauler: return "Trasportatore";
+                case SoldierTask.Woodcutter: return "Taglialegna";
+                case SoldierTask.Miner: return "Minatore";
+                case SoldierTask.Digger: return "Scavatore";
+                case SoldierTask.Builder: return "Costruttore";
+                case SoldierTask.Cook: return "Cuoco";
+                default: throw new ArgumentOutOfRangeException(nameof(task));
+            }
+        }
+
+        public static ItemType? Tool(SoldierTask task)
+        {
+            switch (task)
+            {
+                case SoldierTask.Hauler:
+                case SoldierTask.Cook: return null;
+                case SoldierTask.Woodcutter: return ItemType.Axe;
+                case SoldierTask.Miner: return ItemType.Pickaxe;
+                case SoldierTask.Digger: return ItemType.Shovel;
+                case SoldierTask.Builder: return ItemType.ConstructionHammer;
+                default: throw new ArgumentOutOfRangeException(nameof(task));
+            }
+        }
+
+        public static bool Allows(SoldierTask task, TrenchJobKind kind)
+        {
+            switch (task)
+            {
+                case SoldierTask.Hauler: return kind == TrenchJobKind.CollectItem;
+                case SoldierTask.Woodcutter: return kind == TrenchJobKind.CutTree;
+                case SoldierTask.Miner: return kind == TrenchJobKind.MineRock;
+                case SoldierTask.Digger: return kind == TrenchJobKind.Dig;
+                case SoldierTask.Builder: return kind == TrenchJobKind.BuildWall
+                    || kind == TrenchJobKind.BuildDoor || kind == TrenchJobKind.Ladder;
+                case SoldierTask.Cook: return false;
+                default: throw new ArgumentOutOfRangeException(nameof(task));
+            }
+        }
+    }
+
     public sealed class SoldierNeeds
     {
         public const float AverageDepletionSeconds = 20f * 60f;
@@ -159,6 +207,7 @@ namespace NoMansGround.Soldiers
         public ItemStockpile Inventory { get; } = new ItemStockpile();
         public IReadOnlyList<SkillProgress> Skills { get; }
         public SoldierProfession Profession { get; }
+        public SoldierTask Task { get; internal set; } = SoldierTask.Hauler;
         public float MaxCarryWeightKg => MinimumCarryWeightKg
             + (MaximumCarryWeightKg - MinimumCarryWeightKg)
             * (GetSkill(SoldierSkill.Strength).Value - 5f) / 95f;

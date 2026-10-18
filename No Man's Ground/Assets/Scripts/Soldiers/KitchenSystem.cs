@@ -141,7 +141,7 @@ namespace NoMansGround.Soldiers
             {
                 roster.Rebuilt += Rebuild;
                 if (Application.isPlaying && roster.Soldiers.Count > 0
-                    && (!HasFacilities || Cook == null || buildingMap != map.Data))
+                    && (!HasFacilities || buildingMap != map.Data))
                     Rebuild();
             }
         }
@@ -172,16 +172,11 @@ namespace NoMansGround.Soldiers
             mealDay = lastMealDay = 0;
             Cook = null;
             foreach (SoldierView soldier in roster.Soldiers)
-                if (soldier.Data.Profession == SoldierProfession.Cook)
+                if (soldier.Data.Task == SoldierTask.Cook && soldier.TaskReady)
                 {
                     Cook = soldier;
                     break;
                 }
-            if (Cook == null)
-            {
-                SetStatus("Nessun cuoco disponibile: cucina non generata.");
-                return;
-            }
             if (map.Data == null || !TryBuildingCell(out Vector2Int kitchen))
             {
                 SetStatus("Spazio insufficiente per la cucina.");
@@ -195,7 +190,7 @@ namespace NoMansGround.Soldiers
             kitchenObject = CreateFacility("CUCINA", KitchenCell, new Color(0.7f, 0.45f, 0.25f));
             HandleZonesChanged();
             retryTimer = 0f;
-            SetStatus(HasPantry ? "Cuoco in attesa di raggiungere la cucina."
+            SetStatus(Cook == null ? "Nessun cuoco assegnato." : HasPantry ? "Cuoco in attesa di raggiungere la cucina."
                 : "Dispensa non disponibile: il cuoco non ha viveri.");
         }
 
@@ -299,9 +294,10 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentOutOfRangeException(nameof(gameSeconds));
             if (gameSeconds == 0f || !HasFacilities)
                 return;
+            UpdateCookAssignment();
             HandleZonesChanged();
             UpdateMealSchedule();
-            if (Cook == null || !Cook.isActiveAndEnabled || Cook.Data.Profession != SoldierProfession.Cook)
+            if (Cook == null || !Cook.isActiveAndEnabled || Cook.Data.Task != SoldierTask.Cook)
             {
                 if (Cook != null) Cook.SetWorkAssignment(false);
                 SetStatus("Nessun cuoco disponibile.");
@@ -321,6 +317,29 @@ namespace NoMansGround.Soldiers
                         ? "Cuoco in marcia verso la cucina." : "Cuoco in marcia verso il deposito.");
                 return;
             }
+            if (Cook.RequestedTask.HasValue)
+            {
+                if (CarriedRations > 0)
+                {
+                    if (!IsAtKitchen())
+                    {
+                        SendCookToFacility(KitchenCell, gameSeconds,
+                            "Rientro in cucina prima del cambio compito.", "Rientro cucina bloccato.");
+                        return;
+                    }
+                    Stock.ReturnRations(CarriedRations);
+                    CarriedRations = 0;
+                    Cook.SetWorkAssignment(false);
+                    SetStatus("Carico restituito. Cambio compito del cuoco.");
+                    return;
+                }
+                if (CarriedProvisions == 0 && Stock.KitchenProvisions < RationStock.ProvisionsPerRation)
+                {
+                    Cook.SetWorkAssignment(false);
+                    SetStatus("Cambio compito del cuoco.");
+                    return;
+                }
+            }
             if (mealRecipients.Count > 0 && DistributeMeals(gameSeconds))
                 return;
             if (mealRecipients.Count > 0 && Stock.ReadyRations > 0)
@@ -339,8 +358,12 @@ namespace NoMansGround.Soldiers
                 }
                 retryTimer = 0f;
                 Cook.SetWorkAssignment(true, Stock.Progress);
-                Stock.AdvanceTime(gameSeconds);
-                Cook.SetWorkAssignment(Stock.KitchenProvisions >= RationStock.ProvisionsPerRation, Stock.Progress);
+                float cookingTime = Cook.RequestedTask.HasValue
+                    ? Mathf.Min(gameSeconds, (1f - Stock.Progress) * RationStock.SecondsPerRation + 0.001f) : gameSeconds;
+                int before = Stock.ReadyRations;
+                Stock.AdvanceTime(cookingTime);
+                Cook.SetWorkAssignment(Stock.KitchenProvisions >= RationStock.ProvisionsPerRation
+                    && !(Cook.RequestedTask.HasValue && Stock.ReadyRations > before), Stock.Progress);
                 SetStatus(Stock.KitchenProvisions >= RationStock.ProvisionsPerRation
                     ? "Preparazione rancio." : "Razione pronta. In attesa del prelievo.");
                 Changed?.Invoke();
@@ -357,7 +380,7 @@ namespace NoMansGround.Soldiers
                 Stock.StoreKitchenProvisions(CarriedProvisions);
                 CarriedProvisions = 0;
                 retryTimer = 0f;
-                Cook.SetWorkAssignment(true, Stock.Progress);
+                Cook.SetWorkAssignment(!Cook.RequestedTask.HasValue, Stock.Progress);
                 SetStatus("Viveri consegnati alla cucina.");
                 Changed?.Invoke();
                 return;
@@ -380,6 +403,34 @@ namespace NoMansGround.Soldiers
             }
             Cook.SetWorkAssignment(false);
             SetStatus("Viveri esauriti. Produzione ferma.");
+        }
+
+        private void UpdateCookAssignment()
+        {
+            if (Cook != null && Cook.Data.Task == SoldierTask.Cook && !Cook.IsChangingTaskEquipment
+                && (Cook.TaskReady || Cook.HasWorkAssignment))
+                return;
+            if (Cook != null && !Cook.IsChangingTaskEquipment)
+                Cook.SetWorkAssignment(false);
+            Stock.ReturnRations(CarriedRations);
+            CarriedRations = 0;
+            Stock.StoreKitchenProvisions(CarriedProvisions);
+            CarriedProvisions = 0;
+            Cook = null;
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != null && soldier.isActiveAndEnabled && soldier.Data.Task == SoldierTask.Cook
+                    && soldier.TaskReady && soldier.Duty == SoldierDuty.Work && !soldier.HasWorkAssignment && !soldier.IsMoving)
+                {
+                    Cook = soldier;
+                    break;
+                }
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != Cook && soldier.Data.Task == SoldierTask.Cook && soldier.TaskReady && !soldier.HasWorkAssignment)
+                    soldier.SetTaskStatus("Cuoco di riserva");
+            if (Cook != null)
+                Cook.SetTaskStatus("Pronto");
+            retryTimer = 0f;
+            Changed?.Invoke();
         }
 
         private void SendCookToFacility(Vector2Int facility, float gameSeconds, string status, string blockedStatus)

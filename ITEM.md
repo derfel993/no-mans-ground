@@ -17,6 +17,7 @@ non il limite totale dell'inventario o del deposito.
 | Pala | `Shovel` | Tool | 1 | Necessaria per scavare trincee. Il lavoratore la ritira dal deposito se non la possiede; non viene consumata. |
 | Accetta | `Axe` | Tool | 1 | Necessaria per tagliare gli alberi e ottenere Legna. Non viene consumata. |
 | Piccone | `Pickaxe` | Tool | 1 | Necessario per minare roccia e montagna e ottenere Pietra da costruzione. Non viene consumato. |
+| Martello da Costruzione | `ConstructionHammer` | Tool | 1 | Necessario per costruire pareti e porte, incluse quelle delle gallerie, e installare scale. Il lavoratore lo ritira dal deposito prima dei materiali e lo conserva dopo il lavoro. |
 | Razioni | `Rations` | Food | 250 | Viveri conservati nella dispensa: il cuoco ne utilizza 10 per preparare una razione di rancio. |
 | Legna | `Wood` | Resource | 250 | Ottenuta tagliando alberi. Materiale per edifici in legno e porte delle gallerie; viene consumata dai relativi lavori. |
 | Pietra da costruzione | `BuildingStone` | Resource | 250 | Ottenuta minando roccia o montagna. Materiale consumato per edifici in pietra. |
@@ -25,11 +26,30 @@ non il limite totale dell'inventario o del deposito.
 
 ## Disponibilita Iniziale
 
-- Deposito: 6 Pale, 2 Accette e 2 Picconi.
+- Deposito: 6 Pale, 2 Accette, 2 Picconi e 2 Martelli da Costruzione.
 - Dispensa: 1000 Razioni, in quattro stack da 250.
 - Ogni personaggio generato: 1 Borraccia piena (acqua).
 - Legna e Pietra da costruzione: ottenute dai lavori, senza scorte iniziali gratuite.
 - Borraccia vuota: prodotta dalla bevuta, non assegnata alla generazione.
+
+## Dotazione Per Compito
+
+Tutti iniziano **Trasportatore**, con la sola borraccia personale. Il cambio
+compito avviene passando fisicamente dal deposito: i vecchi utensili vengono
+restituiti e viene prelevato il nuovo, se disponibile. Gli utensili non vengono
+consumati dai job; borracce e risorse personali restano nell'inventario.
+
+| Compito | Tool richiesto |
+| --- | --- |
+| Trasportatore | Nessuno |
+| Taglialegna | Accetta |
+| Minatore | Piccone |
+| Scavatore | Pala |
+| Costruttore | Martello da Costruzione |
+| Cuoco | Nessuno |
+
+Senza il tool necessario il soldato resta in attesa; non viene equipaggiato
+gratuitamente e non riceve job di un altro compito.
 
 ## Previsto E Da Definire
 

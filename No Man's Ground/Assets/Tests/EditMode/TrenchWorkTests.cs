@@ -50,6 +50,7 @@ namespace NoMansGround.Tests
             }
             view.Render(map.Data);
             roster.Spawn(map.Data);
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Digger);
             for (int i = 0; i < 2; i++)
             {
                 Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Shovel, 1));
@@ -209,6 +210,7 @@ namespace NoMansGround.Tests
         public void ConstructionWaitsForMaterialsAndCancelledPickupKeepsResources()
         {
             PrepareBuildingArea();
+            EquipConstructionHammers();
             Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), ItemType.Wood));
             Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
             trenches.Tick(1f);
@@ -238,6 +240,7 @@ namespace NoMansGround.Tests
         public void EngineersBuildUsingGroundMaterialsWithoutDepositingThem(ItemType material)
         {
             PrepareBuildingArea();
+            EquipConstructionHammers();
             Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), material));
             for (int x = 45; x < 53; x++)
                 map.Data.AddGroundItem(new Vector2Int(x, 10), material);
@@ -256,7 +259,12 @@ namespace NoMansGround.Tests
                     soldier.AdvanceMovement(1000f);
                 trenches.Tick(10f);
             }
-            Assert.Zero(trenches.Jobs.Count);
+            var diagnostics = new List<string>();
+            foreach (TrenchJob job in trenches.Jobs)
+                diagnostics.Add($"{job.Cell}: {job.Status}, worker={job.Worker?.Cell}, pickup={job.PickingTool}, source={job.GroundPickupCell}");
+            foreach (SoldierView soldier in roster.Soldiers)
+                diagnostics.Add($"{soldier.Cell}: hammer={soldier.Data.Inventory.Count(ItemType.ConstructionHammer)}, material={soldier.Data.Inventory.Count(material)}");
+            Assert.Zero(trenches.Jobs.Count, string.Join("\n", diagnostics));
             Assert.IsTrue(map.Data.Buildings[0].IsComplete);
             Assert.Zero(map.Data.GroundItemCount);
             Assert.Zero(map.Data.StorageStockpile.Count(material));
@@ -269,6 +277,7 @@ namespace NoMansGround.Tests
         public void GroundMaterialPickupHandlesCancellationAndMissingResourceWithoutDuplication(bool cancel)
         {
             PrepareBuildingArea();
+            EquipConstructionHammers();
             var source = new Vector2Int(45, 10);
             map.Data.AddGroundItem(source, ItemType.Wood);
             Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), ItemType.Wood));
@@ -364,8 +373,19 @@ namespace NoMansGround.Tests
                 Assert.IsTrue(map.Data.HasTree(cell));
         }
 
+        private void EquipConstructionHammers()
+        {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Builder);
+            for (int index = 0; index < 2; index++)
+            {
+                Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 1));
+                roster.Soldiers[index].Data.Inventory.Add(ItemType.ConstructionHammer, 1);
+            }
+        }
+
         private void PrepareBuildingArea()
         {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Builder);
             for (int y = 9; y <= 13; y++)
                 for (int x = 49; x <= 53; x++)
                 {
@@ -443,7 +463,7 @@ namespace NoMansGround.Tests
             Assert.AreEqual(2, map.Data.StorageStockpile.Count(ItemType.Pickaxe));
             Assert.IsFalse(job.PickingTool.HasValue);
             Transform depotDisplay = view.transform.Find("Depot stockpile items");
-            Assert.AreEqual(4, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
+            Assert.AreEqual(5, depotDisplay.GetComponentsInChildren<SpriteRenderer>().Length);
             var labels = new HashSet<string>();
             foreach (TextMesh label in depotDisplay.GetComponentsInChildren<TextMesh>())
                 labels.Add(label.text);
@@ -471,6 +491,7 @@ namespace NoMansGround.Tests
         [Test]
         public void TreeCutCollectsAnAxeAndReplacesTheTreeWithWood()
         {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Woodcutter);
             var cell = new Vector2Int(50, 10);
             map.Data.SetTree(cell, true);
             view.Render(map.Data);
@@ -505,6 +526,7 @@ namespace NoMansGround.Tests
         [Test]
         public void TreeCutWaitsWhenNoAxeIsAvailable()
         {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Woodcutter);
             var cell = new Vector2Int(50, 10);
             map.Data.SetTree(cell, true);
             Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Axe, 2));
@@ -521,6 +543,7 @@ namespace NoMansGround.Tests
         public void MineJobCollectsPickaxeWorksTenSecondsAndDropsBuildingStoneOnExpectedTerrain(
             TerrainKind original, TerrainKind expected, string tileName)
         {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Miner);
             var cell = new Vector2Int(50, 10);
             map.Data[cell.x, cell.y] = original;
             foreach (Vector2Int offset in new[]
@@ -575,6 +598,7 @@ namespace NoMansGround.Tests
         public void MountainMiningOpensAccessToQueuedInteriorTunnelJobs()
         {
             PrepareBuildingArea();
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Miner);
             for (int y = 10; y <= 12; y++)
                 for (int x = 50; x <= 52; x++)
                     map.Data[x, y] = TerrainKind.Mountain;
@@ -687,6 +711,88 @@ namespace NoMansGround.Tests
             Assert.AreSame(tunnelAfter, view.Tilemap.GetTile(entrancePosition));
         }
 
+        [Test]
+        public void BuilderFetchesHammerBeforeMaterialAndKeepsItAfterFinishing()
+        {
+            PrepareBuildingArea();
+            var door = new Vector2Int(51, 10);
+            map.Data[50, 10] = TerrainKind.Mountain;
+            map.Data[52, 10] = TerrainKind.Mountain;
+            map.Data[51, 10] = TerrainKind.Tunnel;
+            map.Data[51, 11] = TerrainKind.Tunnel;
+            map.Data.StorageStockpile.Add(ItemType.Wood, 1);
+            view.Render(map.Data);
+            Assert.IsTrue(trenches.DesignateDoor(door));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            SoldierView worker = job.Worker;
+            Assert.IsNotNull(worker);
+            Assert.AreEqual(ItemType.ConstructionHammer, job.PickingTool);
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.Wood));
+            Assert.Zero(job.Progress);
+            worker.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.AreEqual(1, worker.Data.Inventory.Count(ItemType.ConstructionHammer));
+            Assert.AreEqual(ItemType.Wood, job.PickingTool);
+            Assert.AreSame(worker, job.Worker);
+            worker.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.AreEqual(1, worker.Data.Inventory.Count(ItemType.Wood));
+            for (int iteration = 0; iteration < 30 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.GetTunnelDoor(door).IsBuilt);
+            Assert.AreEqual(1, worker.Data.Inventory.Count(ItemType.ConstructionHammer));
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.ConstructionHammer));
+            Assert.Zero(worker.Data.Inventory.Count(ItemType.Wood));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ConstructionAndLaddersWaitForHammerAndRetryWhenOneBecomesAvailable(bool ladder)
+        {
+            PrepareBuildingArea();
+            var cell = new Vector2Int(51, 10);
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 2));
+            if (ladder)
+            {
+                view.CompleteTrench(map.Data, cell);
+                Assert.IsTrue(trenches.DesignateLadder(cell));
+            }
+            else
+            {
+                map.Data[50, 10] = TerrainKind.Mountain;
+                map.Data[52, 10] = TerrainKind.Mountain;
+                map.Data[51, 10] = TerrainKind.Tunnel;
+                map.Data[51, 11] = TerrainKind.Tunnel;
+                Assert.IsTrue(trenches.DesignateDoor(cell));
+            }
+            map.Data.StorageStockpile.Add(ItemType.Wood, 1);
+            trenches.Tick(1f);
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.Zero(trenches.Jobs[0].Progress);
+            StringAssert.Contains("martello", trenches.Jobs[0].Status);
+            Assert.AreEqual(1, map.Data.StorageStockpile.Count(ItemType.Wood));
+            map.Data.StorageStockpile.Add(ItemType.ConstructionHammer, 1);
+            for (int iteration = 0; iteration < 40 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            if (ladder) Assert.IsTrue(map.Data.HasLadder(cell));
+            else Assert.IsTrue(map.Data.GetTunnelDoor(cell).IsBuilt);
+            int hammers = map.Data.StorageStockpile.Count(ItemType.ConstructionHammer);
+            foreach (SoldierView soldier in roster.Soldiers)
+                hammers += soldier.Data.Inventory.Count(ItemType.ConstructionHammer);
+            Assert.AreEqual(1, hammers);
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void TunnelDoorUsesWoodFromGroundOrStorageAndClosesShelterWithoutBlockingMovement(bool fromGround)
@@ -739,6 +845,7 @@ namespace NoMansGround.Tests
         public void TunnelDoorWaitsForWoodAndCancellationRemovesOnlyThePlan()
         {
             PrepareBuildingArea();
+            EquipConstructionHammers();
             var door = new Vector2Int(51, 10);
             map.Data[50, 10] = TerrainKind.Mountain;
             map.Data[52, 10] = TerrainKind.Mountain;
@@ -759,6 +866,7 @@ namespace NoMansGround.Tests
         [Test]
         public void CollectJobPicksUpGroundResourceAndDeliversItToTheDepot()
         {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Hauler);
             var cell = new Vector2Int(50, 10);
             map.Data.AddGroundItem(cell, ItemType.Wood);
             view.Render(map.Data);
@@ -1032,6 +1140,7 @@ namespace NoMansGround.Tests
         [Test]
         public void LadderWorkUsesAdjacentWorkerExactDurationExperienceAndPersistentTile()
         {
+            EquipConstructionHammers();
             SoldierView worker = roster.Soldiers[0];
             Vector2Int cell = worker.Cell + Vector2Int.down;
             view.CompleteTrench(map.Data, cell);
@@ -1071,6 +1180,7 @@ namespace NoMansGround.Tests
         [Test]
         public void LadderCancellationPreservesTrenchAndDoesNotOpenAccessOrAwardExperience()
         {
+            EquipConstructionHammers();
             var worker = roster.Soldiers[0];
             var cell = worker.Cell + Vector2Int.down;
             Assert.IsFalse(trenches.DesignateLadder(cell));
@@ -1091,6 +1201,7 @@ namespace NoMansGround.Tests
         [Test]
         public void LadderTravelDoesNotCountAsInstallationAndUnreachableWorkWaits()
         {
+            EquipConstructionHammers();
             var cell = new Vector2Int(50, 10);
             view.CompleteTrench(map.Data, cell);
             foreach (Vector2Int delta in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })

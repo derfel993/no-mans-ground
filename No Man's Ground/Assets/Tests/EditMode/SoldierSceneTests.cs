@@ -39,6 +39,9 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
                 soldier.Data.ReceiveRation();
                 Assert.AreEqual("Borraccia piena (acqua) x1", inventory.text);
+                Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 1));
+                soldier.Data.Inventory.Add(ItemType.ConstructionHammer, 1);
+                StringAssert.Contains("Martello da Costruzione x1", inventory.text);
                 Assert.AreSame(soldier, panel.Selected);
             }
             finally

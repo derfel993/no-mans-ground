@@ -230,7 +230,7 @@ namespace NoMansGround.Map
         private readonly Tile[] runtimeGroundItemTiles = new Tile[Enum.GetValues(typeof(ItemType)).Length];
         private MapData stockpileMap;
         private GameObject storageItemsRoot;
-        private readonly GameObject[] storageItemDisplays = new GameObject[6];
+        private readonly GameObject[] storageItemDisplays = new GameObject[Enum.GetValues(typeof(ItemType)).Length];
         private readonly Sprite[] runtimeItemSprites = new Sprite[Enum.GetValues(typeof(ItemType)).Length];
         private readonly Texture2D[] runtimeItemTextures = new Texture2D[Enum.GetValues(typeof(ItemType)).Length];
         [SerializeField] private TileBase dirtTile;
@@ -472,11 +472,12 @@ namespace NoMansGround.Map
             storageItemsRoot.SetActive(true);
 
             ItemType[] types =
-                { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations, ItemType.Wood, ItemType.BuildingStone };
+                { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations, ItemType.Wood, ItemType.BuildingStone,
+                    ItemType.ConstructionHammer };
             Vector2Int[] depotSlots =
             {
                 new Vector2Int(0, 2), new Vector2Int(1, 2), new Vector2Int(2, 2),
-                Vector2Int.zero, new Vector2Int(0, 1), new Vector2Int(1, 1)
+                Vector2Int.zero, new Vector2Int(0, 1), new Vector2Int(1, 1), new Vector2Int(3, 2)
             };
             for (int i = 0; i < types.Length; i++)
             {
@@ -490,14 +491,15 @@ namespace NoMansGround.Map
                     continue;
                 }
 
-                if (runtimeItemSprites[i] == null)
-                    runtimeItemSprites[i] = CreateItemSprite(types[i], i);
+                int itemIndex = (int)types[i];
+                if (runtimeItemSprites[itemIndex] == null)
+                    runtimeItemSprites[itemIndex] = CreateItemSprite(types[i], itemIndex);
                 if (storageItemDisplays[i] == null)
                     storageItemDisplays[i] = CreateStorageItemDisplay(types[i]);
                 GameObject display = storageItemDisplays[i];
                 display.SetActive(true);
                 SpriteRenderer renderer = display.GetComponent<SpriteRenderer>();
-                renderer.sprite = runtimeItemSprites[i];
+                renderer.sprite = runtimeItemSprites[itemIndex];
                 Vector2Int cell = isFood
                     ? map.PantryOrigin + new Vector2Int(0, 2)
                     : map.StorageOrigin + depotSlots[i];
@@ -505,7 +507,8 @@ namespace NoMansGround.Map
                 display.transform.localScale = Vector3.one * 0.8f;
                 display.transform.GetChild(0).localPosition = new Vector3(0f, -0.58f, 0f);
                 string quantity = isFood ? GetStackSummary(stockpile, types[i]) : $"x{count}";
-                display.GetComponentInChildren<TextMesh>().text = $"{ItemCatalog.Get(types[i]).DisplayName} {quantity}";
+                display.GetComponentInChildren<TextMesh>().text = types[i] == ItemType.ConstructionHammer
+                    ? $"Martello\n{quantity}" : $"{ItemCatalog.Get(types[i]).DisplayName} {quantity}";
             }
         }
 
@@ -587,6 +590,16 @@ namespace NoMansGround.Map
                     SetPixel(pixels, 2, 14, metal);
                     SetPixel(pixels, 13, 14, metal);
                     SetPixel(pixels, 14, 14, metalDark);
+                    break;
+                case ItemType.ConstructionHammer:
+                    for (int y = 2; y <= 11; y++)
+                    {
+                        SetPixel(pixels, 7, y, wood);
+                        SetPixel(pixels, 8, y, woodLight);
+                    }
+                    for (int y = 10; y <= 14; y++)
+                        for (int x = 3; x <= 12; x++)
+                            SetPixel(pixels, x, y, y == 14 || x == 3 ? metal : metalDark);
                     break;
                 case ItemType.Rations:
                     for (int y = 3; y <= 12; y++)

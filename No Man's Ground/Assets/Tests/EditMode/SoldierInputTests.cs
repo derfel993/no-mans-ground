@@ -97,6 +97,8 @@ namespace NoMansGround.Tests
             yield return new EnterPlayMode();
             yield return null;
             var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
+            TaskTestSetup.AssignCook(Object.FindAnyObjectByType<SoldierRoster>());
+            kitchen.Rebuild();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var view = Object.FindAnyObjectByType<MapTilemapView>();
             kitchen.Cook.AdvanceMovement(100f);
