@@ -74,7 +74,26 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 
 La fog of war si attiva automaticamente nella scena di gioco e usa la visuale
 condivisa di tutti i soldati attivi, indipendentemente da Guardia/Lavoro o compito.
-Ogni soldato scopre un raggio iniziale di **12 tile** dalla propria cella.
+Ogni soldato scopre un **cono di 180 gradi**, con raggio iniziale di **12 tile**
+dalla propria cella, orientato nella direzione dello sguardo: non vede a 360 gradi.
+Camminando guarda verso il passo che sta percorrendo; all'arrivo conserva
+l'ultima direzione. Le sprite provvisorie ruotano per rendere leggibile lo sguardo.
+
+Una **guardia ferma e senza incarichi** scruta alternativamente a sinistra
+e a destra della direzione base, con oscillazione morbida di **45 gradi per lato**
+e ciclo completo di **6 secondi di gioco**. Il cono segue lo sguardo e scopre
+progressivamente i fianchi; le zone che escono dal cono restano esplorate ma
+attenuate. Camminando o tornando in Lavoro la scansione si interrompe.
+Pausa e velocita della simulazione si applicano anche all'oscillazione.
+
+Per orientare una guardia ferma, **premere il destro sul soldato e trascinare**:
+lo sguardo segue il cursore senza impartire movimento e senza cambiare il soldato
+selezionato. Durante il trascinamento la scansione automatica e sospesa;
+al rilascio riprende centrata sulla nuova direzione. La guardia deve essere
+visibile, libera e senza cambi di dotazione pendenti. Anche in pausa si puo
+orientare manualmente. Uscire dall'area di gioco, passare sulla UI o cambiare
+modalita annulla il trascinamento, conservando l'ultimo orientamento valido.
+Un clic destro sul terreno resta invece un normale ordine di movimento.
 
 - **Nero**: terreno mai esplorato, completamente nascosto.
 - **Attenuato**: zona gia esplorata ma fuori dalla visuale attuale. Si vede
@@ -113,6 +132,7 @@ prima di Play e salvarla; il sistema riutilizza quello presente.
 | Clic sinistro sul terreno | Deseleziona |
 | Pulsanti Guardia / Lavoro nella scheda | Cambia lo stato del soldato selezionato |
 | Clic destro sul terreno | Muove soltanto il soldato selezionato in Guardia |
+| Destro su una guardia ferma + trascinamento | Orienta lo sguardo; al rilascio la scansione riprende attorno alla nuova direzione |
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
 | A / pulsante Taglia | Attiva/disattiva il taglio degli alberi con clic o rettangolo |
 | Sinistro + trascinamento in modalita Taglia | Accoda il taglio di tutti gli alberi nel rettangolo |

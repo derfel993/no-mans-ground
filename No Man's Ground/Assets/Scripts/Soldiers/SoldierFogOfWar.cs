@@ -12,7 +12,7 @@ namespace NoMansGround.Soldiers
         private MapTilemapView view;
         private SoldierRoster roster;
         private float nextRefresh;
-        private readonly List<Vector2Int> observers = new List<Vector2Int>();
+        private readonly List<FogObserver> observers = new List<FogObserver>();
 
         public int SightRadius => sightRadius;
 
@@ -78,7 +78,7 @@ namespace NoMansGround.Soldiers
             observers.Clear();
             foreach (SoldierView soldier in roster.Soldiers)
                 if (soldier != null && soldier.isActiveAndEnabled && soldier.Data != null)
-                    observers.Add(soldier.Cell);
+                    observers.Add(new FogObserver(soldier.Cell, soldier.LookDirection));
             map.Data.Fog.Update(map.Data, observers, Mathf.Clamp(sightRadius, 1, 64));
             view.RenderFog(map.Data);
         }

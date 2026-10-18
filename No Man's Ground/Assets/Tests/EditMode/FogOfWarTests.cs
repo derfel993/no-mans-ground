@@ -11,6 +11,45 @@ namespace NoMansGround.Tests
     public sealed class FogOfWarTests
     {
         [Test]
+        public void OneHundredEightyDegreeConeExcludesRearAndRotatesWithObserver()
+        {
+            var map = new MapData(25, 25);
+            var origin = new Vector2Int(12, 12);
+            map.Fog.Enable();
+            map.Fog.Update(map, new[] { new FogObserver(origin, Vector2.up) }, 8);
+            Assert.IsTrue(map.Fog.IsVisible(origin));
+            Assert.IsTrue(map.Fog.IsVisible(origin + new Vector2Int(0, 7)));
+            Assert.IsTrue(map.Fog.IsVisible(origin + new Vector2Int(7, 0)));
+            Assert.IsTrue(map.Fog.IsVisible(origin + new Vector2Int(-7, 0)));
+            Assert.IsFalse(map.Fog.IsVisible(origin + new Vector2Int(7, -1)));
+            Assert.IsFalse(map.Fog.IsVisible(origin + new Vector2Int(6, -2)));
+            Assert.IsFalse(map.Fog.IsVisible(origin + new Vector2Int(0, -7)));
+            map.Fog.Update(map, new[] { new FogObserver(origin, Vector2.down) }, 8);
+            Assert.IsTrue(map.Fog.IsVisible(origin + new Vector2Int(0, -7)));
+            Assert.IsFalse(map.Fog.IsVisible(origin + new Vector2Int(0, 7)));
+            Assert.IsTrue(map.Fog.IsExplored(origin + new Vector2Int(0, 7)));
+        }
+
+        [Test]
+        public void DirectionalObserversShareVisionWithoutSeeingThroughSolids()
+        {
+            var map = new MapData(25, 25);
+            var origin = new Vector2Int(12, 12);
+            map[12, 14] = TerrainKind.Mountain;
+            map.Fog.Enable();
+            map.Fog.Update(map, new[]
+            {
+                new FogObserver(origin, Vector2.up),
+                new FogObserver(origin, Vector2.down)
+            }, 8);
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(12, 14)));
+            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(12, 15)));
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(12, 5)));
+            Assert.Throws<System.ArgumentException>(() => new FogObserver(origin, Vector2.zero));
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => new FogObserver(origin, Vector2.up, 361f));
+        }
+
+        [Test]
         public void VisionUsesSharedRadiusAndRetainsExplorationAfterObserversLeave()
         {
             var map = new MapData(30, 20);
@@ -238,6 +277,32 @@ namespace NoMansGround.Tests
                 Assert.Less(((Vector4)memory - (Vector4)Sample(new Vector2Int(4, 3))).sqrMagnitude, 0.0001f);
                 System.IO.File.WriteAllBytes(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
                     $"NoMansGround-Fog-{width}x{height}.png"), pixels.EncodeToPNG());
+                hidden.SetActive(false);
+                var origin = new Vector2Int(10, 6);
+                Vector2 leftLook = Quaternion.Euler(0, 0, 45f) * Vector2.up;
+                Vector2 rightLook = Quaternion.Euler(0, 0, -45f) * Vector2.up;
+                map.Fog.Enable();
+                map.Fog.Update(map, new[] { new FogObserver(origin, leftLook) }, 8);
+                view.RenderFog(map);
+                camera.Render();
+                RenderTexture.active = target;
+                pixels.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                pixels.Apply();
+                Color leftFlank = Sample(new Vector2Int(4, 3));
+                Assert.Greater(leftFlank.grayscale, 0.02f);
+                Assert.Less(Sample(new Vector2Int(16, 3)).maxColorComponent, 0.01f);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"NoMansGround-GuardLeft-{width}x{height}.png"), pixels.EncodeToPNG());
+                map.Fog.Update(map, new[] { new FogObserver(origin, rightLook) }, 8);
+                view.RenderFog(map);
+                camera.Render();
+                RenderTexture.active = target;
+                pixels.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                pixels.Apply();
+                Assert.Greater(Sample(new Vector2Int(16, 3)).grayscale, 0.02f);
+                Assert.Less(Sample(new Vector2Int(4, 3)).grayscale, leftFlank.grayscale);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"NoMansGround-GuardRight-{width}x{height}.png"), pixels.EncodeToPNG());
             }
             finally
             {
@@ -248,6 +313,86 @@ namespace NoMansGround.Tests
                 if (hidden != null) Object.DestroyImmediate(hidden);
                 Object.DestroyImmediate(target);
                 Object.DestroyImmediate(pixels);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
+        public void GuardSweepChangesVisibleFlanksWithoutChangingPositionAndStopsWhenWorkingOrPaused()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                SoldierView soldier = roster.Soldiers[0];
+                Vector3 position = soldier.transform.position;
+                Vector2 facing = soldier.FacingDirection;
+                soldier.RequestDuty(SoldierDuty.Guard);
+                soldier.AdvanceLook(1.5f);
+                Vector2 left = soldier.LookDirection;
+                Assert.AreEqual(45f, Vector2.SignedAngle(facing, left), 0.001f);
+                soldier.AdvanceLook(0f);
+                Assert.AreEqual(left, soldier.LookDirection);
+                soldier.AdvanceLook(3f);
+                Vector2 right = soldier.LookDirection;
+                Assert.AreEqual(-45f, Vector2.SignedAngle(facing, right), 0.001f);
+                soldier.AdvanceLook(3f);
+                Assert.Less(Vector2.Distance(left, soldier.LookDirection), 0.0001f);
+                Assert.AreEqual(position, soldier.transform.position);
+                var ground = new MapData(25, 25);
+                var center = new Vector2Int(12, 12);
+                ground.Fog.Enable();
+                ground.Fog.Update(ground, new[] { new FogObserver(center, left) }, 8);
+                Assert.IsTrue(ground.Fog.IsVisible(new Vector2Int(6, 9)));
+                Assert.IsFalse(ground.Fog.IsVisible(new Vector2Int(18, 9)));
+                ground.Fog.Update(ground, new[] { new FogObserver(center, right) }, 8);
+                Assert.IsFalse(ground.Fog.IsVisible(new Vector2Int(6, 9)));
+                Assert.IsTrue(ground.Fog.IsVisible(new Vector2Int(18, 9)));
+                Assert.IsTrue(ground.Fog.IsExplored(new Vector2Int(6, 9)));
+                soldier.RequestDuty(SoldierDuty.Work);
+                soldier.AdvanceLook(3f);
+                Assert.AreEqual(facing, soldier.LookDirection);
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
+        public void MovingSoldierLooksAlongCurrentStepAndKeepsLastDirectionOnArrival()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                SoldierView soldier = roster.Soldiers[0];
+                Vector2Int start = soldier.Cell;
+                soldier.RequestDuty(SoldierDuty.Guard);
+                soldier.AdvanceLook(1.5f);
+                soldier.BeginMove(view, new[] { start, start + Vector2Int.right, start + Vector2Int.right + Vector2Int.up });
+                soldier.AdvanceMovement(0.01f);
+                soldier.AdvanceLook(1f);
+                Assert.Less(Vector2.Distance(Vector2.right, soldier.LookDirection), 0.0001f);
+                soldier.AdvanceMovement(100f);
+                Assert.IsFalse(soldier.IsMoving);
+                Assert.AreEqual(Vector2.up, soldier.FacingDirection);
+                soldier.AdvanceLook(1.5f);
+                Assert.AreEqual(45f, Vector2.SignedAngle(Vector2.up, soldier.LookDirection), 0.001f);
+                soldier.RequestDuty(SoldierDuty.Work);
+                soldier.AdvanceLook(0f);
+                Assert.AreEqual(Vector2.up, soldier.LookDirection);
+                Assert.Throws<System.ArgumentOutOfRangeException>(() => soldier.AdvanceLook(float.NaN));
+            }
+            finally
+            {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
         }

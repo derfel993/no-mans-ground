@@ -352,6 +352,97 @@ namespace NoMansGround.Tests
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void RightDragOnGuardAimsWithoutMovingOrChangingSelection(bool anotherGuardSelected)
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 24);
+            Camera camera = Camera.main;
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var orders = roster.GetComponent<SoldierMovementOrders>();
+                SoldierView guard = roster.Soldiers[0];
+                SoldierView other = roster.Soldiers[1];
+                guard.RequestDuty(SoldierDuty.Guard);
+                other.RequestDuty(SoldierDuty.Guard);
+                orders.Selected = anotherGuardSelected ? other : null;
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                var mouse = InputSystem.AddDevice<Mouse>();
+                Vector2 pointer = camera.WorldToScreenPoint(guard.transform.position);
+                Vector3 position = guard.transform.position;
+                Set(mouse.position, pointer);
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsFalse(guard.IsMoving);
+                Set(mouse.position, pointer + new Vector2(80f, 0f));
+                UpdateOrders(orders);
+                Assert.IsTrue(guard.IsManualLook);
+                Assert.Less(Vector2.Distance(Vector2.right, guard.FacingDirection), 0.0001f);
+                guard.AdvanceLook(3f);
+                Assert.AreEqual(guard.FacingDirection, guard.LookDirection);
+                Assert.AreEqual(position, guard.transform.position);
+                Assert.AreSame(anotherGuardSelected ? other : null, orders.Selected);
+                Assert.IsFalse(other.IsMoving);
+                var sight = new MapData(25, 25);
+                sight.Fog.Enable();
+                sight.Fog.Update(sight, new[] { new FogObserver(new Vector2Int(12, 12), guard.LookDirection) }, 6);
+                Assert.IsTrue(sight.Fog.IsVisible(new Vector2Int(17, 12)));
+                Assert.IsFalse(sight.Fog.IsVisible(new Vector2Int(7, 12)));
+                Release(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsFalse(guard.IsManualLook);
+                Assert.IsFalse(guard.IsMoving);
+                guard.AdvanceLook(1.5f);
+                Assert.AreEqual(45f, Vector2.SignedAngle(Vector2.right, guard.LookDirection), 0.001f);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(other.transform.position));
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Set(mouse.position, new Vector2(-10f, -10f));
+                UpdateOrders(orders);
+                Release(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsFalse(other.IsManualLook);
+                Assert.IsFalse(other.IsMoving);
+                Assert.IsFalse(other.SetManualLook(Vector2.zero));
+                other.RequestDuty(SoldierDuty.Work);
+                Assert.IsFalse(other.SetManualLook(Vector2.left));
+                for (int x = 45; x <= 69; x++)
+                {
+                    map.Data[x, 10] = TerrainKind.Dirt;
+                    map.Data.SetTree(new Vector2Int(x, 10), false);
+                    map.Data.SetWalkable(new Vector2Int(x, 10), true);
+                }
+                orders.Selected = guard;
+                var destination = new Vector2Int(50, 10);
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(destination.x, destination.y, 0))));
+                Press(mouse.rightButton);
+                UpdateOrders(orders);
+                Assert.IsTrue(guard.IsMoving);
+                Assert.AreEqual(destination, guard.Destination);
+                Set(mouse.position, pointer + new Vector2(80f, 0f));
+                UpdateOrders(orders);
+                Assert.AreEqual(destination, guard.Destination);
+                Assert.IsFalse(guard.IsManualLook);
+                Release(mouse.rightButton);
+                UpdateOrders(orders);
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                Object.DestroyImmediate(viewport);
+                EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
         private static void UpdateOrders(SoldierMovementOrders orders)
         {
             typeof(SoldierMovementOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)

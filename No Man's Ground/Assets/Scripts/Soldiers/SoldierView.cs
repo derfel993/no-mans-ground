@@ -15,6 +15,12 @@ namespace NoMansGround.Soldiers
         private MapTilemapView movementMap;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
+        private double guardScanSeconds;
+        public Vector2 FacingDirection { get; private set; } = Vector2.up;
+        public bool IsManualLook { get; private set; }
+        public Vector2 LookDirection => !IsManualLook && Duty == SoldierDuty.Guard && !IsMoving && !HasWorkAssignment
+            ? (Vector2)(Quaternion.Euler(0f, 0f, 45f * Mathf.Sin((float)(guardScanSeconds / 6d * System.Math.PI * 2d)))
+                * FacingDirection) : FacingDirection;
         public bool HasWorkAssignment { get; private set; }
         public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
         public SoldierDuty Duty { get; private set; } = SoldierDuty.Work;
@@ -45,10 +51,34 @@ namespace NoMansGround.Soldiers
         public event Action DutyChanged;
         public event Action TaskChanged;
 
+        public bool SetManualLook(Vector2 direction)
+        {
+            if (!CanTakeGuardMove || IsMoving || !float.IsFinite(direction.x) || !float.IsFinite(direction.y)
+                || direction.sqrMagnitude < 0.0001f)
+                return false;
+            IsManualLook = true;
+            FacingDirection = direction.normalized;
+            guardScanSeconds = 0d;
+            AdvanceLook(0f);
+            MovementChanged?.Invoke();
+            return true;
+        }
+
+        public void StopManualLook()
+        {
+            if (!IsManualLook)
+                return;
+            IsManualLook = false;
+            guardScanSeconds = 0d;
+            AdvanceLook(0f);
+            MovementChanged?.Invoke();
+        }
+
         public void RequestTask(SoldierTask task)
         {
             if (!Enum.IsDefined(typeof(SoldierTask), task))
                 throw new ArgumentOutOfRangeException(nameof(task));
+            StopManualLook();
             if (task == Data.Task && !IsChangingTaskEquipment)
             {
                 RequestedTask = null;
@@ -98,6 +128,7 @@ namespace NoMansGround.Soldiers
         {
             if (!Enum.IsDefined(typeof(SoldierDuty), duty))
                 throw new ArgumentOutOfRangeException(nameof(duty));
+            StopManualLook();
             if (Data.Task == SoldierTask.Cook && duty == SoldierDuty.Guard)
             {
                 Debug.LogWarning("Il cuoco resta in Lavoro.", this);
@@ -105,7 +136,10 @@ namespace NoMansGround.Soldiers
             }
             GuardRequested = duty == SoldierDuty.Guard && HasWorkAssignment;
             if (!GuardRequested)
+            {
+                if (Duty != duty) guardScanSeconds = 0d;
                 Duty = duty;
+            }
             DutyChanged?.Invoke();
             MovementChanged?.Invoke();
             return true;
@@ -154,6 +188,7 @@ namespace NoMansGround.Soldiers
             if (cells == null || cells.Count < 2 || cells[0] != Cell)
                 throw new ArgumentException("A movement path must start at the soldier cell and include a destination.", nameof(cells));
             movementMap = mapView;
+            StopManualLook();
             path = new List<Vector2Int>(cells).AsReadOnly();
             waypoint = 1;
             MovementChanged?.Invoke();
@@ -168,6 +203,7 @@ namespace NoMansGround.Soldiers
             {
                 GuardRequested = false;
                 Duty = SoldierDuty.Guard;
+                guardScanSeconds = 0d;
                 DutyChanged?.Invoke();
             }
             MovementChanged?.Invoke();
@@ -181,6 +217,7 @@ namespace NoMansGround.Soldiers
                 throw new InvalidOperationException("Initialize the soldier before assigning a guard path.");
             if (!CanTakeGuardMove)
                 throw new InvalidOperationException("Only guards without a work assignment can receive guard paths.");
+            StopManualLook();
             Vector2Int start = GuardPathStart;
             if (cells == null || cells.Count == 0 || cells[0] != start)
                 throw new ArgumentException("The guard path must start at the next reachable cell centre.", nameof(cells));
@@ -198,6 +235,19 @@ namespace NoMansGround.Soldiers
         {
             Data.Needs.AdvanceTime(Time.deltaTime);
             AdvanceMovement(Time.deltaTime);
+            AdvanceLook(Time.deltaTime);
+        }
+
+        public void AdvanceLook(float deltaTime)
+        {
+            if (!float.IsFinite(deltaTime) || deltaTime < 0f)
+                throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            if (!IsManualLook && Duty == SoldierDuty.Guard && !IsMoving && !HasWorkAssignment)
+                guardScanSeconds = (guardScanSeconds + deltaTime) % 6d;
+            else
+                guardScanSeconds = 0d;
+            Vector2 direction = LookDirection;
+            transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f);
         }
 
         public void AdvanceMovement(float deltaTime)
@@ -212,6 +262,14 @@ namespace NoMansGround.Soldiers
                 Vector2Int cell = path[waypoint];
                 Vector3 target = movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 float distance = Vector3.Distance(transform.position, target);
+                Vector2 direction = target - transform.position;
+                if (direction.sqrMagnitude > 0.000001f)
+                {
+                    FacingDirection = direction.normalized;
+                    guardScanSeconds = 0d;
+                    transform.rotation = Quaternion.Euler(0f, 0f,
+                        Mathf.Atan2(FacingDirection.y, FacingDirection.x) * Mathf.Rad2Deg - 90f);
+                }
                 if (distance > remainingDistance)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, target, remainingDistance);

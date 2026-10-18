@@ -20,6 +20,8 @@ namespace NoMansGround.Soldiers
         private SpriteRenderer destinationMarker;
         private SoldierView routeSoldier;
         private Material routeMaterial;
+        private SoldierView lookSoldier;
+        private Vector2 lookDragOrigin;
         public SoldierView Selected { get; set; }
 
         public string Status { get; private set; } = "Destro: muovi la guardia scelta.\nMaiusc+destro: ostacolo debug.";
@@ -75,6 +77,7 @@ namespace NoMansGround.Soldiers
 
         private void OnDisable()
         {
+            EndLookDrag();
             if (roster != null)
                 roster.Rebuilt -= ResetOrders;
             ClearRoute();
@@ -90,11 +93,36 @@ namespace NoMansGround.Soldiers
         {
             UpdateRoute();
             if (trenchOrders != null && trenchOrders.BlocksWorldCommands)
+            {
+                EndLookDrag();
                 return;
+            }
             Mouse mouse = Mouse.current;
-            if (mouse == null || !mouse.rightButton.wasPressedThisFrame)
+            if (mouse == null)
+            {
+                EndLookDrag();
                 return;
+            }
             Vector2 pointer = mouse.position.ReadValue();
+            if (lookSoldier != null)
+            {
+                if (!mouse.rightButton.isPressed || !lookSoldier.CanTakeGuardMove || lookSoldier.IsMoving
+                    || !mapCamera.pixelRect.Contains(pointer)
+                    || (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
+                {
+                    EndLookDrag();
+                    return;
+                }
+                if ((pointer - lookDragOrigin).sqrMagnitude >= 16f)
+                {
+                    Vector3 lookPoint = mapCamera.ScreenToWorldPoint(new Vector3(pointer.x, pointer.y,
+                        mapView.transform.position.z - mapCamera.transform.position.z));
+                    lookSoldier.SetManualLook(lookPoint - lookSoldier.transform.position);
+                }
+                return;
+            }
+            if (!mouse.rightButton.wasPressedThisFrame)
+                return;
             if (!mapCamera.pixelRect.Contains(pointer)
                 || (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
                 return;
@@ -106,7 +134,49 @@ namespace NoMansGround.Soldiers
             if (keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed))
                 ToggleObstacle(cell);
             else
-                IssueMove(cell);
+            {
+                SoldierView guard = FindGuardAtPointer(pointer);
+                if (guard != null)
+                {
+                    lookSoldier = guard;
+                    lookDragOrigin = pointer;
+                    SetStatus($"Orientamento di {guard.Data.FullName}.");
+                }
+                else
+                    IssueMove(cell);
+            }
+        }
+
+        private SoldierView FindGuardAtPointer(Vector2 pointer)
+        {
+            SoldierView closest = null;
+            float best = 14f * 14f;
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                if (soldier == null || !soldier.CanTakeGuardMove || soldier.IsMoving
+                    || map.Data == null || !map.Data.Fog.IsVisible(soldier.Cell))
+                    continue;
+                Vector3 screen = mapCamera.WorldToScreenPoint(soldier.transform.position);
+                float distance = ((Vector2)screen - pointer).sqrMagnitude;
+                if (screen.z > 0f && distance < best)
+                {
+                    best = distance;
+                    closest = soldier;
+                }
+            }
+            return closest;
+        }
+
+        private void EndLookDrag()
+        {
+            if (lookSoldier != null)
+                lookSoldier.StopManualLook();
+            lookSoldier = null;
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) EndLookDrag();
         }
 
         public bool IssueMove(Vector2Int destination)

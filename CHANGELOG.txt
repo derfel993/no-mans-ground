@@ -8,6 +8,54 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.2 - 2026-10-18
+===============================================================================
+
+Orientamento manuale delle guardie
+- Tenendo premuto il destro su una guardia ferma e trascinando il mouse,
+  lo sguardo e il cono visivo seguono il cursore senza impartire movimento.
+- Il gesto funziona anche senza selezionare la guardia e non modifica
+  l'eventuale altro soldato selezionato.
+- Durante il trascinamento la scansione automatica e sospesa; al rilascio
+  riprende centrata sulla nuova direzione. L'orientamento e possibile anche in pausa.
+- Il trascinamento termina anche uscendo dall'area di gioco, passando sulla UI,
+  cambiando modalita o perdendo il focus. Il destro sul terreno continua a muovere
+  soltanto la guardia selezionata.
+
+Campo visivo
+- Ridotto il cono dei soldati da 200 a 180 gradi, mantenendo orientamento
+  manuale, scansione delle guardie, ostacoli e memoria delle zone esplorate.
+
+Test e documentazione
+- Aggiornato il README con gesto di orientamento e nuovo campo visivo.
+- Superati tutti i 17 test mirati di fog e input con il cono a 180 gradi.
+- Verifica completa precedente alla riduzione del cono: 196 test superati
+  su 211, con gli stessi 15 fallimenti preesistenti e nessuna nuova regressione.
+
+===============================================================================
+0.4.1 - 2026-10-18
+===============================================================================
+
+Visuale direzionale
+- La fog of war usa un cono di 200 gradi orientato nella direzione dello
+  sguardo del soldato, invece di una visuale a 360 gradi.
+- Durante il movimento lo sguardo segue il passo corrente; all'arrivo viene
+  conservata l'ultima direzione. Le sprite provvisorie ruotano di conseguenza.
+- Le guardie ferme e senza incarichi scrutano alternativamente a sinistra
+  e a destra, con oscillazione di 45 gradi per lato e ciclo di 6 secondi di gioco.
+- La scansione si interrompe camminando o tornando in Lavoro; pausa e velocita
+  della simulazione si applicano anche all'oscillazione.
+- Restano attivi visuale condivisa, ostacoli e memoria esplorata: le zone
+  uscite dal cono diventano attenuate senza tornare inesplorate.
+
+Test e documentazione
+- Aggiornato il README con cono visivo, orientamento e scansione delle guardie.
+- Superati tutti i 15 test della fog of war, inclusi limiti angolari, movimento,
+  pausa, oscillazione e controlli grafici dei due estremi in due formati.
+- Suite completa: 194 test superati su 209; restano gli stessi 15 fallimenti
+  preesistenti, senza nuove regressioni rilevate.
+
+===============================================================================
 0.4.0 - 2026-10-18
 ===============================================================================
 
