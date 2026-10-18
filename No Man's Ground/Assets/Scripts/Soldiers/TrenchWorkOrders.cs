@@ -290,6 +290,11 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateDoor(Vector2Int cell)
         {
+            if (map.Data == null || !map.Data.Fog.IsExplored(cell))
+            {
+                Notify("Porta non valida: esplora prima la cella.");
+                return false;
+            }
             if (isActiveAndEnabled && map.Data != null && map.Data.IsTunnel(cell))
             {
                 TunnelDoor door = map.Data.GetTunnelDoor(cell);
@@ -332,7 +337,7 @@ namespace NoMansGround.Soldiers
 
         public bool Designate(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.IsWalkable(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell) || !map.Data.IsWalkable(cell)
                 || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.IsTunnel(cell) || map.Data.HasTree(cell)
                 || map.Data.TryGetZone(cell, out _) || map.Data.GetBuilding(cell) != null
                 || map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell)
@@ -362,7 +367,7 @@ namespace NoMansGround.Soldiers
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (map.Data.HasTree(cell) && !jobs.Exists(job => job.Cell == cell)
+                    if (map.Data.Fog.IsVisible(cell) && map.Data.HasTree(cell) && !jobs.Exists(job => job.Cell == cell)
                         && DesignateTree(cell))
                         changed++;
                 }
@@ -373,7 +378,7 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateTree(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.HasTree(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsVisible(cell) || !map.Data.HasTree(cell)
                 || jobs.Exists(job => job.Cell == cell))
             {
                 Notify("Taglio non valido: serve un albero senza job gia presente.");
@@ -389,7 +394,7 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateMine(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.Contains(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell) || !map.Data.Contains(cell)
                 || !map.Data.IsMineable(cell) || jobs.Exists(job => job.Cell == cell))
             {
                 Notify("Mina non valida: serve roccia o montagna senza job gia presente.");
@@ -421,7 +426,7 @@ namespace NoMansGround.Soldiers
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (map.Data.TryGetGroundItem(cell, out ItemType item)
+                    if (map.Data.Fog.IsVisible(cell) && map.Data.TryGetGroundItem(cell, out ItemType item)
                         && ItemCatalog.Get(item).Category == ItemCategory.Resource
                         && !jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell)
                         && DesignateCollection(cell))
@@ -434,7 +439,8 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateCollection(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.TryGetGroundItem(cell, out ItemType item)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsVisible(cell)
+                || !map.Data.TryGetGroundItem(cell, out ItemType item)
                 || ItemCatalog.Get(item).Category != ItemCategory.Resource
                 || jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell))
             {
@@ -489,7 +495,7 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateLadder(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.IsTrench(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell) || !map.Data.IsTrench(cell)
                 || !map.Data.IsWalkable(cell) || map.Data.HasLadder(cell) || jobs.Exists(job => job.Cell == cell))
             {
                 Notify("Scala non valida: serve una trincea\nsenza scala o lavoro gia presente.");
@@ -864,7 +870,7 @@ namespace NoMansGround.Soldiers
                     for (int x = 0; x < map.Data.Width; x++)
                     {
                         var cell = new Vector2Int(x, y);
-                        if (map.Data.TryGetGroundItem(cell, out ItemType item) && item == tool
+                        if (map.Data.Fog.IsExplored(cell) && map.Data.TryGetGroundItem(cell, out ItemType item) && item == tool
                             && !jobs.Exists(other => other.GroundPickupCell == cell
                                 || (other.Kind == TrenchJobKind.CollectItem && other.Cell == cell)))
                             pickupCells.Add(cell);

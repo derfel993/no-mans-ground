@@ -66,8 +66,16 @@ namespace NoMansGround.Soldiers
                 return;
             }
             map.Generated += Spawn;
+            ConfigureFog();
             if (map.Data != null)
                 Spawn(map.Data);
+        }
+
+        private void ConfigureFog()
+        {
+            SoldierFogOfWar fog = GetComponent<SoldierFogOfWar>();
+            if (fog == null) fog = gameObject.AddComponent<SoldierFogOfWar>();
+            fog.Configure(map, mapView, this);
         }
 
         private void OnDisable()

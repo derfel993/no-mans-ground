@@ -11,6 +11,85 @@ namespace NoMansGround.Map
     public sealed class MapTilemapView : MonoBehaviour
     {
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
+        private Tilemap fogTilemap;
+        private Tilemap fogMemoryTilemap;
+        private Tile fogTile;
+        private MapData fogMap;
+        private TileBase[] rememberedTerrain;
+        private Color[] rememberedColors;
+        private byte[] renderedFog;
+
+        public void RenderFog(MapData map)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (!map.Fog.Enabled)
+            {
+                if (fogTilemap != null) fogTilemap.ClearAllTiles();
+                if (fogMemoryTilemap != null) fogMemoryTilemap.ClearAllTiles();
+                fogMap = null;
+                return;
+            }
+            if (fogTilemap == null)
+            {
+                var layer = new GameObject("Fog of War", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                fogTilemap = layer.GetComponent<Tilemap>();
+                layer.GetComponent<TilemapRenderer>().sortingOrder = 50;
+                layer.GetComponent<TilemapRenderer>().sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+                var memory = new GameObject("Explored Terrain", typeof(Tilemap), typeof(TilemapRenderer));
+                memory.transform.SetParent(transform, false);
+                fogMemoryTilemap = memory.GetComponent<Tilemap>();
+                memory.GetComponent<TilemapRenderer>().sortingOrder = 51;
+                memory.GetComponent<TilemapRenderer>().sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+                var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+                texture.SetPixel(0, 0, Color.black);
+                texture.Apply();
+                fogTile = ScriptableObject.CreateInstance<Tile>();
+                fogTile.name = "Unexplored";
+                fogTile.sprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+                fogTile.flags = TileFlags.None;
+                fogTile.colliderType = Tile.ColliderType.None;
+            }
+            if (fogMap != map)
+            {
+                fogMap = map;
+                int count = map.Width * map.Height;
+                rememberedTerrain = new TileBase[count];
+                rememberedColors = new Color[count];
+                renderedFog = new byte[count];
+                var tiles = new TileBase[count];
+                for (int index = 0; index < count; index++) tiles[index] = fogTile;
+                fogTilemap.ClearAllTiles();
+                fogMemoryTilemap.ClearAllTiles();
+                fogTilemap.SetTilesBlock(new BoundsInt(0, 0, 0, map.Width, map.Height, 1), tiles);
+            }
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    var position = new Vector3Int(x, y, 0);
+                    int index = y * map.Width + x;
+                    byte state = map.Fog.IsVisible(cell) ? (byte)2 : map.Fog.IsExplored(cell) ? (byte)1 : (byte)0;
+                    if (state == 2)
+                    {
+                        rememberedTerrain[index] = Tilemap.GetTile(position);
+                        rememberedColors[index] = Tilemap.GetColor(position);
+                    }
+                    if (state == renderedFog[index])
+                        continue;
+                    renderedFog[index] = state;
+                    fogTilemap.SetTile(position, state == 2 ? null : fogTile);
+                    fogMemoryTilemap.SetTile(position, state == 1 ? rememberedTerrain[index] : null);
+                    if (state == 1 && rememberedTerrain[index] != null)
+                    {
+                        Color tint = rememberedColors[index] * 0.3f;
+                        tint.a = 1f;
+                        fogMemoryTilemap.SetTileFlags(position, TileFlags.None);
+                        fogMemoryTilemap.SetColor(position, tint);
+                    }
+                }
+        }
         private Tilemap buildingTilemap;
         private readonly Tile[] buildingTiles = new Tile[4];
         private readonly Tile[] mountainTerrainTiles = new Tile[17];
@@ -169,7 +248,7 @@ namespace NoMansGround.Map
                     transform.position.z - camera.transform.position.z));
                 Vector3Int position = Tilemap.WorldToCell(world);
                 BuildingRoom room = roofMap.GetBuilding(new Vector2Int(position.x, position.y));
-                if (room != null && room.IsComplete)
+                if (room != null && room.IsComplete && roofMap.Fog.IsVisible(new Vector2Int(position.x, position.y)))
                     hovered = room;
             }
             if (hiddenRoof == hovered)
@@ -410,6 +489,7 @@ namespace NoMansGround.Map
             RenderStorageArea(map);
             RenderTrees(map);
             RenderBuildings(map);
+            RenderFog(map);
         }
 
         private void RenderStorageArea(MapData map)
@@ -740,6 +820,14 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            if (fogTilemap != null) DestroyGeneratedObject(fogTilemap.gameObject);
+            if (fogMemoryTilemap != null) DestroyGeneratedObject(fogMemoryTilemap.gameObject);
+            if (fogTile != null)
+            {
+                DestroyGeneratedObject(fogTile.sprite.texture);
+                DestroyGeneratedObject(fogTile.sprite);
+                DestroyGeneratedObject(fogTile);
+            }
             foreach (Tile tile in mountainTerrainTiles)
                 if (tile != null)
                 {

@@ -212,6 +212,8 @@ namespace NoMansGround.Soldiers
             {
                 if (soldier == null || !soldier.gameObject.activeInHierarchy)
                     continue;
+                if (gameMap != null && gameMap.Data != null && !gameMap.Data.Fog.IsVisible(soldier.Cell))
+                    continue;
                 Vector3 screen = mapCamera.WorldToScreenPoint(soldier.transform.position);
                 float candidate = ((Vector2)screen - pointer).sqrMagnitude;
                 if (screen.z > 0f && candidate < distance)

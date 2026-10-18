@@ -8,6 +8,36 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.0 - 2026-10-18
+===============================================================================
+
+Fog of war
+- Aggiunta la fog of war, attiva automaticamente all'avvio della mappa,
+  con visuale condivisa tra tutti i soldati attivi e raggio iniziale di 12 tile.
+- Le celle mai esplorate sono nere; quelle esplorate ma fuori vista mostrano
+  solo il terreno ricordato e attenuato, senza rivelare gli oggetti presenti.
+- Rocce, montagne, celle bloccate, pareti e porte completate interrompono
+  la visuale. Il primo ostacolo resta visibile; non si vede attraverso gli angoli.
+- La visuale segue i soldati e lo scavo delle gallerie, aggiornandosi ogni
+  0,1 secondi reali. Il raggio e configurabile nel componente Soldier Fog Of War.
+- Rigenerare la mappa azzera l'esplorazione e scopre nuovamente l'area della squadra.
+
+Comandi ed esplorazione
+- Movimento, scavi, minatura, costruzioni e zone richiedono celle gia esplorate.
+  Le guardie esplorano avanzando verso il bordo della zona nota.
+- Taglia e Raccogli accettano soltanto alberi e risorse attualmente visibili;
+  i lavori gia designati non vengono annullati quando escono dalla visuale.
+- Ispezione delle strutture e ostacoli debug non permettono di interagire
+  attraverso la nebbia; le risorse ignote non vengono selezionate dai costruttori.
+
+Test e documentazione
+- Aggiornato il README con stati della nebbia, ostacoli, esplorazione e configurazione.
+- Superati tutti gli 11 nuovi test della fog of war, inclusi memoria del terreno,
+  visuale condivisa, protezione dei comandi e controlli sui pixel in due formati.
+- Suite completa: 190 test superati su 205; restano gli stessi 15 fallimenti
+  preesistenti, senza nuovi nomi tra i test falliti.
+
+===============================================================================
 0.3.8 - 2026-10-18
 ===============================================================================
 

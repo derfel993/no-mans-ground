@@ -113,6 +113,8 @@ namespace NoMansGround.Soldiers
         {
             if (map.Data == null)
                 return Reject("La mappa non e ancora pronta.");
+            if (!map.Data.Fog.IsExplored(destination))
+                return Reject("Destinazione non esplorata: avanza verso il bordo visibile.");
             if (!map.Data.IsWalkable(destination))
                 return Reject("Destinazione fuori mappa o bloccata.");
 
@@ -153,6 +155,8 @@ namespace NoMansGround.Soldiers
         {
             if (map.Data == null || !map.Data.Contains(cell))
                 return Reject("Ostacolo fuori dalla mappa.");
+            if (!map.Data.Fog.IsVisible(cell))
+                return Reject("Ostacolo debug: la cella non e visibile.");
             var kitchen = roster.GetComponent<KitchenSystem>();
             if (kitchen != null && kitchen.HasFacilities && (cell == kitchen.KitchenCell || cell == kitchen.DepotCell))
                 return Reject("Non puoi modificare gli edifici con gli ostacoli debug.");

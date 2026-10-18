@@ -225,6 +225,14 @@ namespace NoMansGround.Map
                 || this[cell.x, cell.y] == TerrainKind.Mountain);
         }
 
+        public bool BlocksSight(Vector2Int cell)
+        {
+            if (!IsWalkable(cell) || GetTunnelDoor(cell)?.IsBuilt == true)
+                return true;
+            BuildingRoom room = GetBuilding(cell);
+            return room != null && room.IsPerimeter(cell) && room.IsBuilt(cell);
+        }
+
         public bool TryPlanBuilding(Vector2Int from, Vector2Int to, ItemType material, out BuildingRoom room)
         {
             room = null;
@@ -241,7 +249,7 @@ namespace NoMansGround.Map
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (!IsWalkable(cell) || IsTrench(cell) || IsTunnel(cell) || HasTree(cell) || TryGetGroundItem(cell, out _)
+                    if (!Fog.IsExplored(cell) || !IsWalkable(cell) || IsTrench(cell) || IsTunnel(cell) || HasTree(cell) || TryGetGroundItem(cell, out _)
                         || IsStorageCell(cell) || IsPantryCell(cell) || TryGetZone(cell, out _)
                         || GetBuilding(cell) != null || this[x, y] == TerrainKind.Road)
                         return false;
@@ -274,6 +282,7 @@ namespace NoMansGround.Map
 
         public int Width { get; }
         public int Height { get; }
+        public FogOfWarData Fog { get; }
         public int TreeCount { get; private set; }
         public int GroundItemCount { get; private set; }
         public bool HasStorageArea { get; private set; }
@@ -294,6 +303,7 @@ namespace NoMansGround.Map
 
             Width = width;
             Height = height;
+            Fog = new FogOfWarData(width, height);
             cells = new TerrainKind[checked(width * height)];
             blocked = new bool[cells.Length];
             ladders = new bool[cells.Length];
@@ -449,7 +459,7 @@ namespace NoMansGround.Map
                 {
                     var cell = new Vector2Int(x, y);
                     int index = y * Width + x;
-                    if (!IsWalkable(cell) || IsTrench(cell) || GetBuilding(cell) != null || storageCells[index] || pantryCells[index]
+                    if (!Fog.IsExplored(cell) || !IsWalkable(cell) || IsTrench(cell) || GetBuilding(cell) != null || storageCells[index] || pantryCells[index]
                         || (zones[index].HasValue && zones[index] != kind))
                         return false;
                 }

@@ -70,6 +70,38 @@ ridotta alle dimensioni disponibili.
 E il futuro accesso per i rifornimenti e l'evacuazione dei feriti:
 convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 
+### Fog of war
+
+La fog of war si attiva automaticamente nella scena di gioco e usa la visuale
+condivisa di tutti i soldati attivi, indipendentemente da Guardia/Lavoro o compito.
+Ogni soldato scopre un raggio iniziale di **12 tile** dalla propria cella.
+
+- **Nero**: terreno mai esplorato, completamente nascosto.
+- **Attenuato**: zona gia esplorata ma fuori dalla visuale attuale. Si vede
+  soltanto il terreno ricordato dall'ultima osservazione, non gli oggetti presenti.
+- **Normale**: zona attualmente visibile, con terreno, risorse e strutture aggiornati.
+
+Rocce, montagne, celle bloccate, pareti e porte completate interrompono la
+visuale; il primo ostacolo resta visibile ma le celle dietro sono nascoste.
+Non si vede diagonalmente attraverso gli angoli chiusi. Alberi e trincee non
+bloccano la visuale. Una porta designata ma non ancora costruita non la blocca.
+Entrando su una porta o in una galleria il soldato scopre lo spazio dall'interno.
+
+I comandi di movimento, scavo, minatura, costruzione e zona richiedono celle
+gia esplorate. Per scoprire nuove aree, spostare una guardia verso il bordo
+della zona nota; avanzando amplia la visuale. Taglia e Raccogli accettano solo
+alberi o risorse attualmente visibili. I lavori gia designati non vengono
+annullati quando escono dalla visuale. Non si possono ispezionare strutture,
+usare ostacoli debug o designare risorse nascoste attraverso la nebbia.
+
+La visuale viene aggiornata ogni **0,1 secondi reali**, anche durante la pausa;
+nessun movimento o lavoro avanza per questo motivo. Rigenerare elimina tutta
+la memoria esplorata e scopre nuovamente soltanto l'area della squadra.
+Il componente **Soldier Fog Of War** viene aggiunto all'oggetto Soldiers
+durante Play: **Sight Radius** regola il raggio tra 1 e 64 tile. Per conservare
+un valore personalizzato si puo aggiungere lo stesso componente alla scena
+prima di Play e salvarla; il sistema riutilizza quello presente.
+
 ### Comandi
 
 | Input | Azione |
@@ -113,6 +145,8 @@ in modo da non mostrare spazio esterno.
   trincea e scala.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
+- Oggetto **Soldiers**, componente **Soldier Fog Of War**: raggio della visuale
+  condivisa; viene aggiunto automaticamente durante Play se non presente.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
   del componente **Map Prototype**. Le modifiche fatte durante Play non sono persistenti.
 

@@ -284,6 +284,8 @@ namespace NoMansGround.Soldiers
                 mapView.transform.position.z - camera.transform.position.z));
             Vector3Int cell = mapView.Tilemap.WorldToCell(world);
             var position = new Vector2Int(cell.x, cell.y);
+            if (!map.Data.Fog.IsVisible(position))
+                return false;
             depot = map.Data.IsPantryCell(position);
             return depot || position == KitchenCell;
         }
