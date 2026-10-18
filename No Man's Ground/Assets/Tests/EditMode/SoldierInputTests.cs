@@ -14,6 +14,82 @@ namespace NoMansGround.Tests
 {
     public sealed class SoldierInputTests : InputTestFixture
     {
+        [Test]
+        public void CompletedRoomRoofDisappearsOnMouseHoverAndReturnsOnExit()
+        {
+            EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath);
+            var view = Object.FindAnyObjectByType<MapTilemapView>();
+            var data = new MapData(128, 128);
+            Assert.IsTrue(data.TryPlanBuilding(new Vector2Int(50, 12), new Vector2Int(52, 14), ItemType.Wood, out BuildingRoom room));
+            Assert.IsTrue(data.TrySetBuildingDoor(new Vector2Int(51, 12)));
+            foreach (Vector2Int cell in TrenchWorkOrders.RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one))
+                Assert.IsTrue(data.CompleteBuildingTile(cell));
+            view.Render(data);
+            Tilemap roofs = view.transform.Find("Roofs").GetComponent<Tilemap>();
+            Camera camera = Camera.main;
+            var controller = camera.GetComponent<MapCameraController>();
+            controller.enabled = false;
+            var viewport = new RenderTexture(800, 600, 24);
+            RenderTexture oldTarget = camera.targetTexture;
+            Vector3 oldPosition = camera.transform.position;
+            float oldSize = camera.orthographicSize;
+            Mouse mouse = InputSystem.AddDevice<Mouse>();
+            try
+            {
+                camera.targetTexture = viewport;
+                camera.orthographicSize = 6f;
+                camera.transform.position = new Vector3(54f, 13f, -10f);
+                Vector2 outside = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(new Vector3Int(54, 13, 0)));
+                Vector2 inside = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(new Vector3Int(51, 13, 0)));
+                Set(mouse.position, outside);
+                typeof(MapTilemapView).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
+                Assert.AreEqual(1f, roofs.GetColor(new Vector3Int(51, 13, 0)).a);
+                Color covered = RenderPixel(camera, viewport, inside);
+                Set(mouse.position, inside);
+                typeof(MapTilemapView).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
+                Assert.AreSame(mouse, Mouse.current);
+                Assert.AreEqual(inside, mouse.position.ReadValue());
+                Assert.Zero(roofs.GetColor(new Vector3Int(51, 13, 0)).a);
+                Color uncovered = RenderPixel(camera, viewport, inside);
+                Assert.Greater(((Vector4)covered - (Vector4)uncovered).sqrMagnitude, 0.01f);
+                Assert.IsTrue(data.IsIndoors(new Vector2Int(51, 13)));
+                Set(mouse.position, outside);
+                typeof(MapTilemapView).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(view, null);
+                Assert.AreEqual(1f, roofs.GetColor(new Vector3Int(51, 13, 0)).a);
+                Color restored = RenderPixel(camera, viewport, inside);
+                Assert.Less(((Vector4)covered - (Vector4)restored).sqrMagnitude, 0.001f);
+            }
+            finally
+            {
+                camera.targetTexture = oldTarget;
+                camera.transform.position = oldPosition;
+                camera.orthographicSize = oldSize;
+                controller.enabled = true;
+                Object.DestroyImmediate(viewport);
+                InputSystem.RemoveDevice(mouse);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        private static Color RenderPixel(Camera camera, RenderTexture viewport, Vector2 pointer)
+        {
+            RenderTexture previous = RenderTexture.active;
+            var pixel = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            try
+            {
+                camera.Render();
+                RenderTexture.active = viewport;
+                pixel.ReadPixels(new Rect(Mathf.FloorToInt(pointer.x), Mathf.FloorToInt(pointer.y), 1, 1), 0, 0);
+                pixel.Apply();
+                return pixel.GetPixel(0, 0);
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                Object.DestroyImmediate(pixel);
+            }
+        }
+
         [UnityTest]
         public IEnumerator KitchenClickTakesPrecedenceOverNearbyCookAtDistantZoom()
         {
@@ -360,6 +436,113 @@ namespace NoMansGround.Tests
                 Press(keyboard.lKey);
                 UpdateTrenches(trenches);
                 Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(false, true)]
+        [TestCase(true, true)]
+        public void AreaWorkModesSupportRectangleAndSingleClickAndCancelUnreleasedDrag(bool reverse, bool cutTrees)
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 24);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var orders = roster.GetComponent<SoldierMovementOrders>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                for (int y = 9; y <= 15; y++)
+                    for (int x = 59; x <= 65; x++)
+                    {
+                        var cell = new Vector2Int(x, y);
+                        map.Data[x, y] = TerrainKind.Dirt;
+                        map.Data.SetTree(cell, false);
+                        map.Data.SetWalkable(cell, true);
+                    }
+                var from = new Vector2Int(60, 10);
+                var to = new Vector2Int(64, 14);
+                var interior = new Vector2Int(62, 12);
+                var outside = new Vector2Int(65, 14);
+                var cancelled = new Vector2Int(59, 14);
+                if (cutTrees)
+                    foreach (Vector2Int cell in new[] { from, to, interior, outside, cancelled })
+                        map.Data.SetTree(cell, true);
+                else
+                {
+                    map.Data.AddGroundItem(from, ItemType.Wood);
+                    map.Data.AddGroundItem(to, ItemType.BuildingStone);
+                    map.Data.AddGroundItem(interior, ItemType.Wood);
+                    map.Data.AddGroundItem(outside, ItemType.BuildingStone);
+                    map.Data.AddGroundItem(cancelled, ItemType.Wood);
+                }
+                map.Data.AddGroundItem(new Vector2Int(61, 11), ItemType.Axe);
+                view.Render(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                var mouse = InputSystem.AddDevice<Mouse>();
+                var keyboard = InputSystem.AddDevice<Keyboard>();
+                var modeKey = cutTrees ? keyboard.aKey : keyboard.cKey;
+                Press(modeKey);
+                UpdateTrenches(trenches);
+                Release(modeKey);
+                Assert.AreEqual(cutTrees ? DiggingMode.Cut : DiggingMode.Collect, trenches.Mode);
+                Vector2 ScreenCell(Vector2Int cell) => camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0)));
+                Set(mouse.position, ScreenCell(reverse ? to : from));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Set(mouse.position, ScreenCell(reverse ? from : to));
+                UpdateTrenches(trenches);
+                Assert.Zero(trenches.Jobs.Count);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(3, trenches.Jobs.Count);
+                var targets = new System.Collections.Generic.List<Vector2Int>();
+                foreach (TrenchJob job in trenches.Jobs)
+                {
+                    Assert.AreEqual(cutTrees ? TrenchJobKind.CutTree : TrenchJobKind.CollectItem, job.Kind);
+                    targets.Add(job.Cell);
+                }
+                CollectionAssert.AreEquivalent(new[] { from, interior, to }, targets);
+                Set(mouse.position, ScreenCell(outside));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(3, trenches.Jobs.Count);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(4, trenches.Jobs.Count);
+                Set(mouse.position, ScreenCell(cancelled));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                orders.Selected = roster.Soldiers[0];
+                orders.Selected.RequestDuty(SoldierDuty.Guard);
+                if (reverse) Press(keyboard.escapeKey);
+                else Press(mouse.rightButton);
+                UpdateTrenches(trenches);
+                UpdateOrders(orders);
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
+                Assert.IsFalse(orders.Selected.IsMoving);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(4, trenches.Jobs.Count);
             }
             finally
             {

@@ -1,11 +1,65 @@
 NO MAN'S GROUND - CHANGELOG
 
 Versioni in ordine dalla piu recente alla meno recente.
-Aggiornare questo file solo su richiesta dell'utente, dopo la sua conferma
-di aver effettuato un commit. Ogni voce riporta versione, data e novita.
+Aggiornare questo file su richiesta dell'utente, senza chiedere conferma
+del commit. Ogni voce riporta versione, data e novita.
 Non aggiornare il changelog automaticamente durante lo sviluppo.
-La versione delle voci successive viene concordata con l'utente.
+Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z+1).
 Le attivita ancora da implementare restano nei TODO del README.
+
+===============================================================================
+0.3.5 - 2026-10-18
+===============================================================================
+
+Splash iniziale
+- Aggiunta la scena Splash con l'immagine del gioco, mostrata per almeno
+  3 secondi prima del passaggio automatico alla scena di test MapPrototype.
+- L'immagine mantiene le proporzioni senza ritagli, con bande nere dove
+  necessario, sia su schermi orizzontali sia su schermi verticali.
+- La scena di test viene precaricata durante lo splash; la transizione
+  attende che il caricamento sia pronto e funziona anche con il tempo in pausa.
+- Configurato l'ordine delle scene di build con Splash prima di MapPrototype.
+- Immagine, durata e scena successiva sono configurabili nell'Inspector.
+
+Tetti automatici
+- Le costruzioni ricevono automaticamente un tetto visibile quando pareti
+  e porta sono complete, senza costi o lavori aggiuntivi.
+- Il tetto copre l'intero rettangolo ed e disegnato sopra pareti e soldati.
+- Passare con il mouse su pareti, porta o interno nasconde soltanto il tetto
+  della costruzione puntata; uscendo dal rettangolo il tetto ricompare.
+- Il puntatore sull'interfaccia non nasconde i tetti degli edifici sottostanti.
+  La visibilita del tetto non modifica lo stato interno o la percorribilita.
+- Rigenerare la mappa elimina anche i tetti.
+
+Raccolta rettangolare
+- Il comando Raccogli accetta sia il clic sulla singola risorsa sia il
+  trascinamento di un rettangolo, con anteprima del contorno.
+- Al rilascio del sinistro vengono accodate tutte le risorse nell'area,
+  incluse le celle interne, indipendentemente dal verso del trascinamento.
+- Celle vuote, utensili, risorse gia assegnate alla raccolta o prenotate
+  dai costruttori vengono ignorati, senza duplicare gli ordini.
+- Esc o destro annullano il trascinamento senza aggiungere lavori
+  o impartire ordini di movimento.
+
+Taglio rettangolare
+- Il comando Taglia accetta il clic sul singolo albero oppure il trascinamento
+  di un rettangolo, con anteprima del contorno, come il comando Raccogli.
+- Al rilascio del sinistro viene accodato un job per ogni albero nell'area,
+  incluse le celle interne e indipendentemente dal verso del trascinamento.
+- Celle senza alberi e lavori gia presenti vengono ignorati, senza duplicati.
+  Esc o destro annullano il trascinamento senza aggiungere ordini.
+- Restano invariati il requisito dell'Accetta e la produzione di Legna.
+
+Verifiche
+- Verificati riferimenti dell'immagine, ordine delle scene, adattamento
+  orizzontale e verticale con controlli sui pixel e passaggio alla mappa.
+- Aggiunti test per generazione a perimetro completo, visibilita indipendente
+  delle costruzioni, passaggio del mouse e ripristino del tetto, inclusi
+  controlli sui pixel renderizzati.
+- Verificati raccolta rettangolare nei due versi, clic singolo, annullamento,
+  esclusione degli utensili e rispetto delle prenotazioni dei costruttori.
+- Verificati taglio rettangolare nei due versi, alberi interni, clic singolo,
+  annullamento, prevenzione dei duplicati, ritiro dell'Accetta e drop di Legna.
 
 ===============================================================================
 0.3.0 - 2026-10-18

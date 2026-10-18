@@ -110,9 +110,9 @@ namespace NoMansGround.Soldiers
             ClearPreview();
             Notify(mode == DiggingMode.Dig ? "SCAVA: trascina una linea.\nEsc o destro: esci."
                 : mode == DiggingMode.Ladder ? "SCALA: clic su una trincea.\nEsc o destro: esci."
-                : mode == DiggingMode.Cut ? "TAGLIA: trascina sugli alberi.\nEsc o destro: esci."
+                : mode == DiggingMode.Cut ? "TAGLIA: clic o rettangolo.\nEsc o destro: esci."
                 : mode == DiggingMode.Mine ? "MINA: trascina sulle rocce.\nEsc o destro: esci."
-                : mode == DiggingMode.Collect ? "RACCOGLI: clicca una risorsa.\nEsc o destro: esci."
+                : mode == DiggingMode.Collect ? "RACCOGLI: clic o rettangolo.\nEsc o destro: esci."
                 : mode == DiggingMode.BuildWood ? "LEGNO: trascina un rettangolo."
                 : mode == DiggingMode.BuildStone ? "PIETRA: trascina un rettangolo."
                 : mode == DiggingMode.Door ? "PORTA: scegli un lato del perimetro."
@@ -169,12 +169,6 @@ namespace NoMansGround.Soldiers
                     DesignateLadder(cell);
                 return;
             }
-            if (Mode == DiggingMode.Collect)
-            {
-                if (mouse.leftButton.wasPressedThisFrame && valid)
-                    DesignateCollection(cell);
-                return;
-            }
             if (Mode == DiggingMode.Door)
             {
                 if (valid) ShowPreview(new[] { cell });
@@ -190,6 +184,7 @@ namespace NoMansGround.Soldiers
             }
             if (dragging && valid)
                 ShowPreview(Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone
+                    || Mode == DiggingMode.Collect || Mode == DiggingMode.Cut
                     ? RectanglePerimeter(dragStart, cell) : RasterLine(dragStart, cell));
             if (dragging && mouse.leftButton.wasReleasedThisFrame)
             {
@@ -197,6 +192,16 @@ namespace NoMansGround.Soldiers
                 ClearPreview();
                 if (!valid)
                     return;
+                if (Mode == DiggingMode.Collect)
+                {
+                    DesignateCollection(dragStart, cell);
+                    return;
+                }
+                if (Mode == DiggingMode.Cut)
+                {
+                    DesignateTree(dragStart, cell);
+                    return;
+                }
                 if (Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone)
                 {
                     if (DesignateBuilding(dragStart, cell,
@@ -207,11 +212,9 @@ namespace NoMansGround.Soldiers
                 int changed = 0;
                 foreach (Vector2Int target in RasterLine(dragStart, cell))
                     if (Mode == DiggingMode.Dig ? Designate(target)
-                        : Mode == DiggingMode.Cut ? DesignateTree(target)
                         : Mode == DiggingMode.Mine ? DesignateMine(target) : Cancel(target))
                         changed++;
                 string action = Mode == DiggingMode.Dig ? "designate"
-                    : Mode == DiggingMode.Cut ? "alberi designati"
                     : Mode == DiggingMode.Mine ? "rocce designate" : "annullate";
                 Notify(changed > 0 ? $"{changed} celle {action}."
                     : "Nessuna cella valida: lavoro gia presente,\nbloccato o fuori mappa.", changed == 0);
@@ -327,6 +330,28 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
+        public int DesignateTree(Vector2Int from, Vector2Int to)
+        {
+            int changed = 0;
+            if (!isActiveAndEnabled || map.Data == null)
+                return changed;
+            int minX = Mathf.Max(0, Mathf.Min(from.x, to.x));
+            int maxX = Mathf.Min(map.Data.Width - 1, Mathf.Max(from.x, to.x));
+            int minY = Mathf.Max(0, Mathf.Min(from.y, to.y));
+            int maxY = Mathf.Min(map.Data.Height - 1, Mathf.Max(from.y, to.y));
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (map.Data.HasTree(cell) && !jobs.Exists(job => job.Cell == cell)
+                        && DesignateTree(cell))
+                        changed++;
+                }
+            Notify(changed > 0 ? $"Taglio in coda: {changed} alberi."
+                : "Nessun nuovo albero disponibile nell'area.");
+            return changed;
+        }
+
         public bool DesignateTree(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.HasTree(cell)
@@ -359,10 +384,40 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
+        public int DesignateCollection(Vector2Int from, Vector2Int to)
+        {
+            int changed = 0;
+            if (!isActiveAndEnabled || map.Data == null)
+                return changed;
+            if (!map.Data.HasStorageArea)
+            {
+                Notify("Nessun deposito disponibile per le risorse.");
+                return changed;
+            }
+            int minX = Mathf.Max(0, Mathf.Min(from.x, to.x));
+            int maxX = Mathf.Min(map.Data.Width - 1, Mathf.Max(from.x, to.x));
+            int minY = Mathf.Max(0, Mathf.Min(from.y, to.y));
+            int maxY = Mathf.Min(map.Data.Height - 1, Mathf.Max(from.y, to.y));
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (map.Data.TryGetGroundItem(cell, out ItemType item)
+                        && ItemCatalog.Get(item).Category == ItemCategory.Resource
+                        && !jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell)
+                        && DesignateCollection(cell))
+                        changed++;
+                }
+            Notify(changed > 0 ? $"Raccolta in coda: {changed} risorse."
+                : "Nessuna nuova risorsa disponibile nell'area.");
+            return changed;
+        }
+
         public bool DesignateCollection(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.TryGetGroundItem(cell, out ItemType item)
-                || ItemCatalog.Get(item).Category != ItemCategory.Resource || jobs.Exists(job => job.Cell == cell))
+                || ItemCatalog.Get(item).Category != ItemCategory.Resource
+                || jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell))
             {
                 Notify("Raccolta non valida: clicca una risorsa senza un job gia presente.");
                 return false;
@@ -915,6 +970,7 @@ namespace NoMansGround.Soldiers
             for (int i = 0; i < cells.Count; i++)
             {
                 Color color = Mode == DiggingMode.Dig || Mode == DiggingMode.Ladder
+                    || Mode == DiggingMode.Collect
                     || Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone || Mode == DiggingMode.Door
                     ? new Color(0.3f, 0.8f, 1f, 0.6f)
                     : Mode == DiggingMode.Cut ? new Color(0.48f, 0.78f, 0.35f, 0.72f)

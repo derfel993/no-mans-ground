@@ -93,6 +93,66 @@ namespace NoMansGround.Tests
             Assert.IsFalse(data.CanStep(new Vector2Int(2, 1), door));
         }
 
+        [TestCase(ItemType.Wood)]
+        [TestCase(ItemType.BuildingStone)]
+        public void RoofAppearsOnlyOnCompletionAndHoverHidesOnlyThePointedBuilding(ItemType material)
+        {
+            var data = new MapData(12, 10);
+            Assert.IsTrue(data.TryPlanBuilding(new Vector2Int(2, 2), new Vector2Int(4, 4), material, out BuildingRoom first));
+            Assert.IsTrue(data.TryPlanBuilding(new Vector2Int(6, 2), new Vector2Int(8, 4), material, out BuildingRoom second));
+            var door = new Vector2Int(3, 2);
+            Assert.IsTrue(data.TrySetBuildingDoor(door));
+            Assert.IsTrue(data.TrySetBuildingDoor(new Vector2Int(7, 2)));
+            foreach (BuildingRoom room in data.Buildings)
+                foreach (Vector2Int cell in TrenchWorkOrders.RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one))
+                    if (cell != door)
+                        Assert.IsTrue(data.CompleteBuildingTile(cell));
+            view.Render(data);
+            Tilemap roofs = view.transform.Find("Roofs").GetComponent<Tilemap>();
+            Assert.IsFalse(roofs.HasTile(new Vector3Int(3, 3, 0)));
+            Assert.IsTrue(roofs.HasTile(new Vector3Int(7, 3, 0)));
+            Assert.IsTrue(data.CompleteBuildingTile(door));
+            view.RenderBuildings(data);
+            view.UpdateRoofVisibility(null, null);
+            int roofCells = 0;
+            foreach (TileBase tile in roofs.GetTilesBlock(roofs.cellBounds))
+                if (tile != null) roofCells++;
+            Assert.AreEqual(18, roofCells);
+            foreach (SpriteRenderer renderer in roster.Soldiers[0].GetComponentsInChildren<SpriteRenderer>())
+                Assert.Greater(roofs.GetComponent<TilemapRenderer>().sortingOrder, renderer.sortingOrder);
+            Camera camera = Camera.main;
+            var viewport = new RenderTexture(800, 600, 0);
+            Vector3 oldPosition = camera.transform.position;
+            float oldSize = camera.orthographicSize;
+            RenderTexture oldTarget = camera.targetTexture;
+            try
+            {
+                camera.targetTexture = viewport;
+                camera.orthographicSize = 6f;
+                camera.transform.position = new Vector3(6f, 4f, -10f);
+                view.UpdateRoofVisibility(camera, camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(new Vector3Int(3, 3, 0))));
+                Assert.Zero(roofs.GetColor(new Vector3Int(3, 3, 0)).a);
+                Assert.AreEqual(1f, roofs.GetColor(new Vector3Int(7, 3, 0)).a);
+                view.UpdateRoofVisibility(camera, camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(new Vector3Int(6, 2, 0))));
+                Assert.AreEqual(1f, roofs.GetColor(new Vector3Int(3, 3, 0)).a);
+                Assert.Zero(roofs.GetColor(new Vector3Int(7, 3, 0)).a);
+                view.UpdateRoofVisibility(camera, new Vector2(-1f, -1f));
+                Assert.AreEqual(1f, roofs.GetColor(new Vector3Int(7, 3, 0)).a);
+                view.UpdateRoofVisibility(camera, null);
+                Assert.IsTrue(data.IsIndoors(new Vector2Int(3, 3)));
+                view.Render(new MapData(12, 10));
+                Assert.IsFalse(roofs.HasTile(new Vector3Int(3, 3, 0)));
+                Assert.IsFalse(roofs.HasTile(new Vector3Int(7, 3, 0)));
+            }
+            finally
+            {
+                camera.targetTexture = oldTarget;
+                camera.transform.position = oldPosition;
+                camera.orthographicSize = oldSize;
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
         [Test]
         public void BuildingPlansRejectSmallBlockedOccupiedAndOverlappingAreas()
         {
@@ -223,6 +283,7 @@ namespace NoMansGround.Tests
                     pickups++;
                 }
             Assert.AreEqual(1, pickups);
+            Assert.Zero(trenches.DesignateCollection(source, source));
             SoldierView worker = pickup.Worker;
             if (cancel)
                 Assert.IsTrue(trenches.Cancel(new Vector2Int(51, 10)));
@@ -240,6 +301,67 @@ namespace NoMansGround.Tests
             Assert.Zero(worker.Data.Inventory.Count(ItemType.Wood));
             Assert.Zero(worker.Data.Inventory.Count(ItemType.BuildingStone));
             Assert.Zero(map.Data.StorageStockpile.Count(ItemType.Wood));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CollectionRectangleIncludesInteriorSkipsToolsAndDoesNotDuplicateJobs(bool reverse)
+        {
+            PrepareBuildingArea();
+            var from = new Vector2Int(49, 9);
+            var to = new Vector2Int(53, 13);
+            var first = new Vector2Int(49, 9);
+            var interior = new Vector2Int(51, 11);
+            var last = new Vector2Int(53, 13);
+            var outside = new Vector2Int(54, 10);
+            map.Data.AddGroundItem(first, ItemType.Wood);
+            map.Data.AddGroundItem(interior, ItemType.BuildingStone);
+            map.Data.AddGroundItem(last, ItemType.Wood);
+            map.Data.AddGroundItem(new Vector2Int(50, 10), ItemType.Shovel);
+            map.Data.AddGroundItem(outside, ItemType.BuildingStone);
+            Assert.IsTrue(trenches.DesignateCollection(first));
+            Assert.AreEqual(2, trenches.DesignateCollection(reverse ? to : from, reverse ? from : to));
+            Assert.AreEqual(3, trenches.Jobs.Count);
+            var targets = new List<Vector2Int>();
+            foreach (TrenchJob job in trenches.Jobs)
+            {
+                Assert.AreEqual(TrenchJobKind.CollectItem, job.Kind);
+                targets.Add(job.Cell);
+            }
+            CollectionAssert.AreEquivalent(new[] { first, interior, last }, targets);
+            Assert.Zero(trenches.DesignateCollection(from, to));
+            Assert.AreEqual(3, trenches.Jobs.Count);
+            Assert.AreEqual(1, trenches.DesignateCollection(outside, outside));
+            Assert.AreEqual(4, trenches.Jobs.Count);
+            Assert.AreEqual(5, map.Data.GroundItemCount);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void TreeCutRectangleIncludesInteriorAndSkipsEmptyCellsAndExistingJobs(bool reverse)
+        {
+            PrepareBuildingArea();
+            var from = new Vector2Int(49, 9);
+            var to = new Vector2Int(53, 13);
+            var interior = new Vector2Int(51, 11);
+            var outside = new Vector2Int(54, 10);
+            foreach (Vector2Int cell in new[] { from, interior, to, outside })
+                map.Data.SetTree(cell, true);
+            Assert.IsTrue(trenches.DesignateTree(from));
+            Assert.AreEqual(2, trenches.DesignateTree(reverse ? to : from, reverse ? from : to));
+            Assert.AreEqual(3, trenches.Jobs.Count);
+            var targets = new List<Vector2Int>();
+            foreach (TrenchJob job in trenches.Jobs)
+            {
+                Assert.AreEqual(TrenchJobKind.CutTree, job.Kind);
+                targets.Add(job.Cell);
+            }
+            CollectionAssert.AreEquivalent(new[] { from, interior, to }, targets);
+            Assert.Zero(trenches.DesignateTree(from, to));
+            Assert.AreEqual(1, trenches.DesignateTree(outside, outside));
+            Assert.AreEqual(4, trenches.Jobs.Count);
+            foreach (Vector2Int cell in targets)
+                Assert.IsTrue(map.Data.HasTree(cell));
         }
 
         private void PrepareBuildingArea()

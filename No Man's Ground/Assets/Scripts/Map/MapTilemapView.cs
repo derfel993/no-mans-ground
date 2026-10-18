@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.Tilemaps;
 
 namespace NoMansGround.Map
@@ -11,6 +13,11 @@ namespace NoMansGround.Map
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
         private Tilemap buildingTilemap;
         private readonly Tile[] buildingTiles = new Tile[4];
+        private Tilemap roofTilemap;
+        private Tile roofTile;
+        private MapData roofMap;
+        private BuildingRoom hiddenRoof;
+        private Camera roofCamera;
 
         public void RenderBuildings(MapData map)
         {
@@ -38,6 +45,101 @@ namespace NoMansGround.Map
                         buildingTilemap.SetColor(position, room.IsBuilt(cell)
                             ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
                     }
+            RenderRoofs(map);
+        }
+
+        private void RenderRoofs(MapData map)
+        {
+            roofMap = map;
+            hiddenRoof = null;
+            if (roofTilemap == null)
+            {
+                var layer = new GameObject("Roofs", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                roofTilemap = layer.GetComponent<Tilemap>();
+                layer.GetComponent<TilemapRenderer>().sortingOrder = 20;
+            }
+            roofTilemap.ClearAllTiles();
+            foreach (BuildingRoom room in map.Buildings)
+            {
+                if (!room.IsComplete)
+                    continue;
+                if (roofTile == null)
+                    roofTile = CreateRoofTile();
+                for (int y = room.Bounds.yMin; y < room.Bounds.yMax; y++)
+                    for (int x = room.Bounds.xMin; x < room.Bounds.xMax; x++)
+                        roofTilemap.SetTile(new Vector3Int(x, y, 0), roofTile);
+            }
+            RefreshRoofPointer();
+        }
+
+        private Tile CreateRoofTile()
+        {
+            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            var pixels = new Color32[256];
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                    pixels[y * 16 + x] = x % 8 == 0 || y == 0
+                        ? new Color32(53, 65, 62, 255)
+                        : x % 8 == 1 ? new Color32(143, 160, 150, 255)
+                        : new Color32(100, 121, 111, 255);
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.name = "Roof";
+            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.flags = TileFlags.None;
+            tile.colliderType = Tile.ColliderType.None;
+            return tile;
+        }
+
+        private void LateUpdate()
+        {
+            RefreshRoofPointer();
+        }
+
+        private void RefreshRoofPointer()
+        {
+            if (roofCamera == null || !roofCamera.isActiveAndEnabled)
+                roofCamera = Camera.main;
+            Mouse mouse = Mouse.current;
+            Vector2? pointer = mouse != null && (EventSystem.current == null
+                || !EventSystem.current.IsPointerOverGameObject()) ? mouse.position.ReadValue() : (Vector2?)null;
+            UpdateRoofVisibility(roofCamera, pointer);
+        }
+
+        public void UpdateRoofVisibility(Camera camera, Vector2? pointer)
+        {
+            BuildingRoom hovered = null;
+            if (roofMap != null && camera != null && pointer.HasValue && camera.pixelRect.Contains(pointer.Value))
+            {
+                Vector3 world = camera.ScreenToWorldPoint(new Vector3(pointer.Value.x, pointer.Value.y,
+                    transform.position.z - camera.transform.position.z));
+                Vector3Int position = Tilemap.WorldToCell(world);
+                BuildingRoom room = roofMap.GetBuilding(new Vector2Int(position.x, position.y));
+                if (room != null && room.IsComplete)
+                    hovered = room;
+            }
+            if (hiddenRoof == hovered)
+                return;
+            SetRoofColor(hiddenRoof, Color.white);
+            hiddenRoof = hovered;
+            SetRoofColor(hiddenRoof, Color.clear);
+        }
+
+        private void SetRoofColor(BuildingRoom room, Color color)
+        {
+            if (room == null || roofTilemap == null)
+                return;
+            for (int y = room.Bounds.yMin; y < room.Bounds.yMax; y++)
+                for (int x = room.Bounds.xMin; x < room.Bounds.xMax; x++)
+                    roofTilemap.SetColor(new Vector3Int(x, y, 0), color);
+        }
+
+        private void OnDisable()
+        {
+            UpdateRoofVisibility(null, null);
         }
 
         private Tile CreateBuildingTile(ItemType material, bool door)
@@ -565,6 +667,12 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            if (roofTile != null)
+            {
+                DestroyGeneratedObject(roofTile.sprite.texture);
+                DestroyGeneratedObject(roofTile.sprite);
+                DestroyGeneratedObject(roofTile);
+            }
             foreach (Tile tile in buildingTiles)
                 if (tile != null)
                 {

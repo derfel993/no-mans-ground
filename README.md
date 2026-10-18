@@ -7,10 +7,27 @@ con visuale dall'alto. Il progetto Unity si trova in `No Man's Ground`.
 
 Le versioni e le novita implementate sono raccolte in [CHANGELOG.txt](CHANGELOG.txt),
 con la versione piu recente in alto. Il file viene aggiornato soltanto quando
-l'utente lo richiede confermando di aver effettuato un commit, non automaticamente
-a ogni modifica. Ogni voce indica versione, data e novita rispetto alla precedente;
+l'utente lo richiede, senza chiedere conferma del commit, non automaticamente
+a ogni modifica. Salvo indicazione diversa, ogni aggiornamento incrementa di uno
+la versione patch (per esempio, da 0.3.0 a 0.3.1).
+Ogni voce indica versione, data e novita rispetto alla precedente;
 la prima versione, 0.1.0, riepiloga il prototipo esistente.
 I lavori futuri restano nelle checklist TODO di questo README.
+
+## Avvio del gioco
+
+Aprire `Assets/Scenes/Splash.unity` e premere **Play** per provare l'avvio
+completo: l'immagine `Assets/Art/UI/Splash/SplashScreen.jpg` viene mostrata
+per almeno **3 secondi**, poi viene caricata la scena di test `MapPrototype`.
+La mappa viene precaricata durante lo splash; il passaggio attende anche
+che il caricamento sia pronto. Il tempo dello splash non dipende dalla pausa.
+
+L'immagine mantiene le proporzioni senza ritagli; eventuali spazi vuoti
+vengono riempiti in nero. Sul componente **Game Splash Screen** dell'oggetto
+**Game Startup** si possono modificare immagine, durata e scena successiva.
+La lista delle scene di build inizia con Splash, seguita da MapPrototype;
+SampleScene viene conservata. Aprire direttamente MapPrototype in Editor
+continua a permettere di provare soltanto la mappa, saltando lo splash.
 
 ## Step 1: mappa e navigazione
 
@@ -59,9 +76,11 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 | Pulsanti Guardia / Lavoro nella scheda | Cambia lo stato del soldato selezionato |
 | Clic destro sul terreno | Muove soltanto il soldato selezionato in Guardia |
 | T / pulsante Scava | Attiva/disattiva la designazione degli scavi |
-| A / pulsante Taglia | Attiva/disattiva il taglio degli alberi lungo una linea |
+| A / pulsante Taglia | Attiva/disattiva il taglio degli alberi con clic o rettangolo |
+| Sinistro + trascinamento in modalita Taglia | Accoda il taglio di tutti gli alberi nel rettangolo |
 | M / pulsante Mina | Attiva/disattiva la designazione di rocce da minare |
-| C / pulsante Raccogli | Attiva/disattiva la raccolta di una risorsa cliccata |
+| C / pulsante Raccogli | Attiva/disattiva la raccolta con clic o rettangolo |
+| Sinistro + trascinamento in modalita Raccogli | Accoda la raccolta delle risorse nel rettangolo |
 | L / pulsante Installa scala | Clic su una trincea completata per ordinare l'installazione di una scala |
 | Sinistro + trascinamento in modalita Scava | Designa una linea di celle; un clic designa una cella |
 | Pulsanti Discarica / Materiali / Cimitero | Seleziona il tipo di zona da disegnare |
@@ -348,11 +367,20 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   Le trincee e le scale completate non vengono rimosse.
 - **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
   In queste modalita il sinistro non cambia il soldato selezionato.
-- **A** o **Taglia** attiva la designazione degli alberi lungo una linea. Il job
-  richiede un'**Accetta**: il lavoratore la ritira dal deposito se non l'ha gia
+- **A** o **Taglia** permette di cliccare un singolo albero oppure trascinare
+  un rettangolo per accodare il taglio di tutti gli alberi al suo interno.
+  L'anteprima mostra il contorno; i job partono al rilascio del sinistro,
+  indipendentemente dal verso del trascinamento. Celle senza alberi e lavori
+  gia presenti vengono ignorati. Esc o destro annullano il trascinamento.
+  Il job richiede un'**Accetta**: il lavoratore la ritira dal deposito se non l'ha gia
   nell'inventario. Senza Accette il lavoro resta in attesa. Completato il taglio,
   l'albero viene sostituito da un item **Legna** sulla stessa cella.
-- **C** o **Raccogli** attiva la raccolta: cliccare un item Resource a terra.
+- **C** o **Raccogli** attiva la raccolta: cliccare un item Resource a terra
+  oppure trascinare un rettangolo per raccogliere tutte le risorse al suo interno.
+  L'anteprima mostra il contorno; gli ordini vengono accodati al rilascio del
+  sinistro, in qualunque verso si trascini. Celle vuote, utensili e risorse gia
+  assegnate alla raccolta o prenotate da un costruttore vengono ignorati.
+  Esc o destro annullano il trascinamento senza aggiungere ordini.
   Un lavoratore in Lavoro lo prende, lo mostra nell'Inventario e lo porta al
   deposito; la quantita compare nello stockpile.
 - Annullare perde il progresso di quella cella e libera l'assegnazione senza XP.
@@ -625,7 +653,13 @@ Le pareti finite bloccano il movimento, la porta finita resta attraversabile.
 Il completamento aspetta che celle occupate e percorsi gia assegnati siano liberi.
 La stanza e **completa solo quando tutto il perimetro, porta inclusa, e costruito**.
 Il pannello indica stanze complete/totali e risorse rimaste nel deposito.
-L'interno viene riconosciuto nei dati, ma non viene ancora generato un tetto.
+Quando la stanza e completa viene generato automaticamente un **tetto visibile**
+su tutto il rettangolo, senza costi o lavori aggiuntivi. Passare con il mouse
+su pareti, porta o interno nasconde soltanto il tetto di quella costruzione,
+per vedere e selezionare i soldati all'interno; uscendo dal rettangolo il tetto
+ricompare. Il passaggio del mouse sull'interfaccia non scopre gli edifici
+sottostanti. Nascondere il tetto non modifica lo stato interno della stanza
+ne la percorribilita. La rigenerazione elimina anche i tetti.
 
 **Annulla [X]** sul perimetro ferma i lavori della stanza; le parti gia costruite
 restano e i materiali trasportati rimangono nell'inventario. Se non e stato
@@ -665,9 +699,9 @@ Rigenerare la mappa elimina progetti e costruzioni.
 - [x] Automatizzare il ritiro delle risorse a terra necessarie ai cantieri.
 - [x] **Rifugi rettangolari con costruzione a celle, in stile RimWorld**: designare pareti
   e porte, richiedere materiali e assegnare i lavori di costruzione ai soldati.
-- [ ] **Tetti automatici**: quando le pareti e le porte costruite chiudono
+- [x] **Tetti automatici**: quando le pareti e le porte costruite chiudono
   un perimetro, riconoscere lo spazio interno e generare automaticamente
-  il tetto del rifugio.
+  il tetto del rifugio; nasconderlo al passaggio del mouse sulla costruzione.
 
 ### TODO stati e inventario
 

@@ -20,9 +20,9 @@ MonoBehaviour:
     rid: 4614761744543252579
   m_ActivePlatformGuid: 
   m_AdditionalPlatformBuildSettings: []
-  m_OverrideGlobalSceneList: 1
+  m_OverrideGlobalSceneList: 0
   m_Scenes:
-  - m_enabled: 1
+  - m_enabled: 0
     m_path: Assets/Scenes/MapPrototype.unity
     m_guid: b16aa4f63a92bcf42973d964dd718753
   m_HasScriptingDefines: 0
