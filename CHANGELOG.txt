@@ -8,6 +8,63 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.3.7 - 2026-10-18
+===============================================================================
+
+Porte e rifugi in galleria
+- Il comando Porta permette di costruire porte di legno nei passaggi di
+  galleria larghi un tile, tra due pareti rocciose opposte e con accessi liberi.
+- Ogni porta richiede 1 Legna, ritirata da terra o dal deposito e consumata
+  solo al completamento; senza materiale raggiungibile il lavoro resta in attesa.
+- I soldati attraversano normalmente le porte completate. Un rifugio viene
+  riconosciuto come chiuso solo quando tutte le uscite sono separate
+  dall'esterno da porte costruite; una nuova uscita scavata lo riapre.
+- Il pannello distingue rifugi chiusi e gallerie aperte e aggiorna i conteggi
+  dopo costruzione e rigenerazione. Le porte incomplete possono essere annullate.
+- La copertura naturale resta distinta dalla chiusura del rifugio;
+  non vengono ancora applicati effetti termici.
+
+Test e documentazione
+- Verificati piazzamento, consumo dei materiali, annullamento, passaggio dei
+  soldati, ingressi multipli, riapertura dopo scavi e resa grafica delle porte.
+- Corretto il test del clic sullo splash e aggiornate le istruzioni ai
+  13 secondi di attesa seguiti da un nuovo clic sinistro.
+- Il test del profilo Windows verifica la lista di scene effettivamente usata,
+  rispettando anche la configurazione che eredita la lista globale.
+- Suite completa: 147 test superati su 162; i 15 fallimenti rimasti coincidono
+  con quelli della baseline precedente, senza nuovi test falliti.
+
+===============================================================================
+0.3.6 - 2026-10-18
+===============================================================================
+
+Montagne e gallerie
+- Aggiunto il terreno Montagna, non percorribile e con texture piu scura
+  della roccia, generato nelle zone piu elevate del rumore della mappa.
+- Mina funziona anche sulla montagna: richiede un Piccone e, dopo 10 secondi
+  di lavoro, apre una Galleria percorribile e lascia Pietra da costruzione.
+- Le gallerie mostrano pavimento e bordi rocciosi; scavando celle adiacenti
+  il bordo comune si apre, permettendo di creare corridoi e camere.
+- I lavori interni proseguono quando lo scavo apre un accesso raggiungibile;
+  i soldati entrano a piedi senza bisogno di scale.
+- Le gallerie sono riconosciute come interni sotto copertura naturale,
+  utilizzabili come base per rifugi scavati; non applicano ancora bonus termici.
+- La rigenerazione ricrea la montagna ed elimina le gallerie scavate.
+
+Minatura della roccia
+- La roccia normale minata diventa terra percorribile, non piu ghiaia,
+  mantenendo il rilascio di Pietra da costruzione.
+
+Splash iniziale
+- Durata minima aumentata da 3 a 13 secondi; trascorso il tempo, lo splash
+  attende un nuovo clic sinistro prima di passare alla scena di test.
+- I clic anticipati o mantenuti premuti non fanno proseguire lo splash.
+
+Verifiche
+- Superati 35 test selezionati di mappa, generazione, pathfinding e minatura,
+  inclusi scavo progressivo delle gallerie e controlli grafici su due formati.
+
+===============================================================================
 0.3.5 - 2026-10-18
 ===============================================================================
 
