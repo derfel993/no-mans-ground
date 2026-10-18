@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NoMansGround.Map;
 using NoMansGround.Soldiers;
 using NUnit.Framework;
 using UnityEngine;
@@ -25,6 +26,8 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(100f, first[i].Needs.Hunger);
                 Assert.AreEqual(100f, first[i].Needs.Thirst);
                 Assert.AreEqual(100f, first[i].Needs.PhysicalNeeds);
+                Assert.AreEqual(1, first[i].Inventory.Count(ItemType.FullCanteen));
+                Assert.Zero(first[i].Inventory.Count(ItemType.EmptyCanteen));
                 Assert.AreEqual(first[i].Needs.Hunger, second[i].Needs.Hunger);
                 Assert.AreEqual(first[i].Needs.Thirst, second[i].Needs.Thirst);
                 Assert.AreEqual(first[i].Needs.PhysicalNeeds, second[i].Needs.PhysicalNeeds);
@@ -44,6 +47,77 @@ namespace NoMansGround.Tests
             }
             Assert.AreEqual(state, UnityEngine.Random.state);
             Assert.AreNotEqual(first[0].FullName, SoldierGenerator.Generate(64, 1918)[0].FullName);
+        }
+
+        [TestCase(SoldierProfession.Soldier)]
+        [TestCase(SoldierProfession.Engineer)]
+        [TestCase(SoldierProfession.Cook)]
+        public void EveryProfessionStartsWithOneFullCanteen(SoldierProfession profession)
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 }, profession);
+            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.AreEqual(ItemCategory.Equipment, ItemCatalog.Get(ItemType.FullCanteen).Category);
+            Assert.AreEqual(1, ItemCatalog.Get(ItemType.EmptyCanteen).StackSize);
+        }
+
+        [Test]
+        public void CanteenIsUsedOnlyBelowTwentyPercentAndCannotBeUsedTwice()
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 20, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            Assert.IsFalse(soldier.TryDrinkWater());
+            Assert.AreEqual(20f, soldier.Needs.Thirst);
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
+            soldier.Needs.AdvanceTime(0.1f);
+            Assert.AreEqual(100f, soldier.Needs.Thirst);
+            Assert.Zero(soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.EmptyCanteen));
+            Assert.IsFalse(soldier.TryDrinkWater());
+            soldier.Needs.AdvanceTime(soldier.Needs.ThirstDepletionSeconds);
+            Assert.Zero(soldier.Needs.Thirst);
+            Assert.IsFalse(soldier.TryDrinkWater());
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.EmptyCanteen));
+            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+        }
+
+        [Test]
+        public void RationReplacesEmptyCanteenWithoutDuplicatingFullOnes()
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(50, 19, 75, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            Assert.IsTrue(soldier.TryDrinkWater());
+            soldier.ReceiveRation();
+            Assert.AreEqual(100f, soldier.Needs.Hunger);
+            Assert.AreEqual(100f, soldier.Needs.Thirst);
+            Assert.AreEqual(75f, soldier.Needs.PhysicalNeeds);
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.Zero(soldier.Inventory.Count(ItemType.EmptyCanteen));
+            soldier.ReceiveRation();
+            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            soldier.Needs.AdvanceTime(soldier.Needs.ThirstDepletionSeconds);
+            Assert.Zero(soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.EmptyCanteen));
+            soldier.Needs.AdvanceTime(soldier.Needs.ThirstDepletionSeconds);
+            Assert.Zero(soldier.Needs.Thirst);
+            soldier.ReceiveRation();
+            Assert.AreEqual(100f, soldier.Needs.Thirst);
+            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+        }
+
+        [Test]
+        public void RefillingCanteenDoesNotRestoreThirstUntilSoldierDrinks()
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(40, 60, 75, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            Assert.IsTrue(soldier.Inventory.TryTake(ItemType.FullCanteen, 1));
+            soldier.Inventory.Add(ItemType.EmptyCanteen, 1);
+            soldier.ReceiveRation();
+            Assert.AreEqual(100f, soldier.Needs.Hunger);
+            Assert.AreEqual(60f, soldier.Needs.Thirst);
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.Zero(soldier.Inventory.Count(ItemType.EmptyCanteen));
         }
 
         [TestCase(0)]

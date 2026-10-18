@@ -13,6 +13,41 @@ namespace NoMansGround.Tests
 {
     public sealed class SoldierSceneTests
     {
+        [Test]
+        public void InventoryPanelShowsFullEmptyAndRefilledCanteenWithoutReselectingSoldier()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                typeof(SoldierDetailsPanel).GetMethod("Awake", flags).Invoke(panel, null);
+                typeof(SoldierDetailsPanel).GetMethod("OnEnable", flags).Invoke(panel, null);
+                SoldierView soldier = roster.Soldiers[0];
+                panel.Select(soldier);
+                var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
+                FindButton(canvas, "Inventario").onClick.Invoke();
+                Text inventory = canvas.transform.Find("Soldier Details Panel/Inventario content")
+                    .GetComponentInChildren<Text>(true);
+                Assert.AreEqual("Borraccia piena (acqua) x1", inventory.text);
+                soldier.Data.Needs.AdvanceTime(soldier.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
+                Assert.AreEqual("Borraccia vuota x1", inventory.text);
+                Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
+                soldier.Data.ReceiveRation();
+                Assert.AreEqual("Borraccia piena (acqua) x1", inventory.text);
+                Assert.AreSame(soldier, panel.Selected);
+            }
+            finally
+            {
+                typeof(SoldierDetailsPanel).GetMethod("OnDisable", flags).Invoke(panel, null);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
         [UnityTest]
         public IEnumerator SavedSceneSpawnsSelectsLevelsAndRegeneratesSoldiers()
         {
@@ -102,11 +137,11 @@ namespace NoMansGround.Tests
             Assert.IsTrue(inventoryPage.gameObject.activeSelf);
             Text inventoryText = inventoryPage.GetComponentInChildren<Text>(true);
             Assert.IsNotNull(inventoryText);
-            Assert.IsEmpty(inventoryText.text);
+            Assert.AreEqual("Borraccia piena (acqua) x1", inventoryText.text);
             selected.Data.Inventory.Add(ItemType.Pickaxe, 1);
-            Assert.AreEqual("Piccone x1", inventoryText.text);
+            Assert.AreEqual("Piccone x1\nBorraccia piena (acqua) x1", inventoryText.text);
             Assert.IsTrue(selected.Data.Inventory.TryTake(ItemType.Pickaxe, 1));
-            Assert.IsEmpty(inventoryText.text);
+            Assert.AreEqual("Borraccia piena (acqua) x1", inventoryText.text);
             FindButton(canvas, "Info").onClick.Invoke();
             SkillProgress strength = selected.Data.GetSkill(SoldierSkill.Strength);
             float initialCarryWeight = selected.Data.MaxCarryWeightKg;

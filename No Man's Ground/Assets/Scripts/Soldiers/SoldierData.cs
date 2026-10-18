@@ -66,6 +66,12 @@ namespace NoMansGround.Soldiers
             Changed?.Invoke();
         }
 
+        public void DrinkWater()
+        {
+            thirst = 100d;
+            Changed?.Invoke();
+        }
+
         public void AdvanceTime(float gameSeconds)
         {
             if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)
@@ -180,6 +186,30 @@ namespace NoMansGround.Soldiers
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = new SkillProgress(skillLevels[i]);
             Skills = Array.AsReadOnly(skills);
+            Inventory.Add(ItemType.FullCanteen, 1);
+            Needs.Changed += HandleNeedsChanged;
+        }
+
+        private void HandleNeedsChanged()
+        {
+            TryDrinkWater();
+        }
+
+        public bool TryDrinkWater()
+        {
+            if (Needs.Thirst >= 20f || !Inventory.TryTake(ItemType.FullCanteen, 1))
+                return false;
+            Inventory.Add(ItemType.EmptyCanteen, 1);
+            Needs.DrinkWater();
+            return true;
+        }
+
+        public void ReceiveRation()
+        {
+            int emptyCanteens = Inventory.Count(ItemType.EmptyCanteen);
+            if (emptyCanteens > 0 && Inventory.TryTake(ItemType.EmptyCanteen, emptyCanteens))
+                Inventory.Add(ItemType.FullCanteen, emptyCanteens);
+            Needs.EatRation();
         }
 
         public SkillProgress GetSkill(SoldierSkill skill)

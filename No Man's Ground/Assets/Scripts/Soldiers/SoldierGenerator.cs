@@ -21,6 +21,11 @@ namespace NoMansGround.Soldiers
 
         public static IReadOnlyList<SoldierData> Generate(int count, int seed)
         {
+            return Generate(count, seed, false);
+        }
+
+        internal static IReadOnlyList<SoldierData> Generate(int count, int seed, bool includeCook)
+        {
             if (count < 1 || count > MaximumSoldiers)
                 throw new ArgumentOutOfRangeException(nameof(count), "Soldier count must be between 1 and 64.");
 
@@ -44,7 +49,8 @@ namespace NoMansGround.Soldiers
                 for (int skill = 0; skill < levels.Length; skill++)
                     levels[skill] = random.Next(1, 11);
                 soldiers[i] = new SoldierData(i, FirstNames[identity / LastNames.Length],
-                    LastNames[identity % LastNames.Length], needs, levels, SoldierProfession.Engineer);
+                    LastNames[identity % LastNames.Length], needs, levels,
+                    includeCook && i == count - 1 ? SoldierProfession.Cook : SoldierProfession.Engineer);
             }
             return Array.AsReadOnly(soldiers);
         }

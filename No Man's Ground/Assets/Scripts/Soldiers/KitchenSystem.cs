@@ -433,7 +433,7 @@ namespace NoMansGround.Soldiers
                 if (CarriedRations > 0 && mealRecipients.Remove(Cook))
                 {
                     CarriedRations--;
-                    Cook.Data.Needs.EatRation();
+                    Cook.Data.ReceiveRation();
                 }
                 Changed?.Invoke();
             }
@@ -460,7 +460,7 @@ namespace NoMansGround.Soldiers
                     || !map.Data.CanStep(Cook.Cell, soldier.Cell)
                     || Vector3.Distance(Cook.transform.position, soldier.transform.position) > 1.05f)
                     continue;
-                soldier.Data.Needs.EatRation();
+                soldier.Data.ReceiveRation();
                 CarriedRations--;
                 mealRecipients.RemoveAt(i);
                 Changed?.Invoke();

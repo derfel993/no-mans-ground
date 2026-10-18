@@ -551,6 +551,59 @@ namespace NoMansGround.Tests
             }
         }
 
+        [Test]
+        public void DoorModeQueuesTunnelDoorWithoutMovingTheSelectedGuard()
+        {
+            EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath);
+            var viewport = new RenderTexture(800, 600, 24);
+            Camera camera = Camera.main;
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var movement = roster.GetComponent<SoldierMovementOrders>();
+                var door = new Vector2Int(62, 10);
+                map.Data[61, 10] = TerrainKind.Mountain;
+                map.Data[63, 10] = TerrainKind.Mountain;
+                map.Data[62, 10] = TerrainKind.Mountain;
+                map.Data[62, 11] = TerrainKind.Mountain;
+                map.Data[62, 10] = TerrainKind.Tunnel;
+                map.Data[62, 11] = TerrainKind.Tunnel;
+                view.Render(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                movement.Selected = roster.Soldiers[0];
+                movement.Selected.RequestDuty(SoldierDuty.Guard);
+                var mouse = InputSystem.AddDevice<Mouse>();
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(
+                    view.Tilemap.GetCellCenterWorld(new Vector3Int(door.x, door.y, 0))));
+                trenches.SetMode(DiggingMode.Door);
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(1, trenches.Jobs.Count);
+                Assert.AreEqual(TrenchJobKind.BuildDoor, trenches.Jobs[0].Kind);
+                Assert.AreEqual(door, trenches.Jobs[0].Cell);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.AreEqual(1, trenches.Jobs.Count);
+                Press(mouse.rightButton);
+                UpdateTrenches(trenches);
+                UpdateOrders(movement);
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
+                Assert.IsFalse(movement.Selected.IsMoving);
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                Object.DestroyImmediate(viewport);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
         private static void UpdateTrenches(TrenchWorkOrders orders)
         {
             typeof(TrenchWorkOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)

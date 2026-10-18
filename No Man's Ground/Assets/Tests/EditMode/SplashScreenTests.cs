@@ -4,13 +4,15 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
 namespace NoMansGround.Tests
 {
-    public sealed class SplashScreenTests
+    public sealed class SplashScreenTests : InputTestFixture
     {
         [Test]
         public void StartupSceneUsesSplashImageAndBuildLoadsSplashBeforeMap()
@@ -23,7 +25,7 @@ namespace NoMansGround.Tests
                 var settings = new SerializedObject(splash);
                 Assert.AreSame(AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/UI/Splash/SplashScreen.jpg"),
                     settings.FindProperty("image").objectReferenceValue);
-                Assert.AreEqual(3f, settings.FindProperty("displaySeconds").floatValue);
+                Assert.AreEqual(13f, settings.FindProperty("displaySeconds").floatValue);
                 Assert.AreEqual("Assets/Scenes/MapPrototype.unity", settings.FindProperty("nextScene").stringValue);
                 Assert.AreEqual("Assets/Scenes/Splash.unity", EditorBuildSettings.scenes[0].path);
                 Assert.IsTrue(EditorBuildSettings.scenes[0].enabled);
@@ -42,15 +44,23 @@ namespace NoMansGround.Tests
             var profile = AssetDatabase.LoadMainAssetAtPath("Assets/Settings/Build Profiles/Windows.asset");
             Assert.IsNotNull(profile);
             var settings = new SerializedObject(profile);
-            Assert.IsTrue(settings.FindProperty("m_OverrideGlobalSceneList").boolValue);
-            var scenes = settings.FindProperty("m_Scenes");
-            Assert.GreaterOrEqual(scenes.arraySize, 2);
-            Assert.IsTrue(scenes.GetArrayElementAtIndex(0).FindPropertyRelative("m_enabled").boolValue);
-            Assert.AreEqual("Assets/Scenes/Splash.unity",
-                scenes.GetArrayElementAtIndex(0).FindPropertyRelative("m_path").stringValue);
-            Assert.IsTrue(scenes.GetArrayElementAtIndex(1).FindPropertyRelative("m_enabled").boolValue);
-            Assert.AreEqual("Assets/Scenes/MapPrototype.unity",
-                scenes.GetArrayElementAtIndex(1).FindPropertyRelative("m_path").stringValue);
+            var paths = new System.Collections.Generic.List<string>();
+            if (settings.FindProperty("m_OverrideGlobalSceneList").boolValue)
+            {
+                var scenes = settings.FindProperty("m_Scenes");
+                for (int index = 0; index < scenes.arraySize; index++)
+                {
+                    var scene = scenes.GetArrayElementAtIndex(index);
+                    if (scene.FindPropertyRelative("m_enabled").boolValue)
+                        paths.Add(scene.FindPropertyRelative("m_path").stringValue);
+                }
+            }
+            else
+                foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+                    if (scene.enabled) paths.Add(scene.path);
+            Assert.GreaterOrEqual(paths.Count, 2);
+            Assert.AreEqual("Assets/Scenes/Splash.unity", paths[0]);
+            Assert.AreEqual("Assets/Scenes/MapPrototype.unity", paths[1]);
         }
 
         [TestCase(1280, 720)]
@@ -102,30 +112,45 @@ namespace NoMansGround.Tests
         }
 
         [UnityTest]
-        public IEnumerator SplashShowsImageThenLoadsMapEvenWhenTimeIsPaused()
+        public IEnumerator SplashWaitsThirteenSecondsThenRequiresNewClickEvenWhenTimeIsPaused()
         {
             EditorSceneManager.OpenScene("Assets/Scenes/Splash.unity");
-            yield return new EnterPlayMode();
-            Time.timeScale = 0f;
-            yield return null;
-            var picture = Object.FindAnyObjectByType<RawImage>();
-            Assert.IsNotNull(picture);
-            Assert.IsNotNull(picture.texture);
-            Assert.AreEqual("Splash", SceneManager.GetActiveScene().name);
-            var fitter = picture.GetComponent<AspectRatioFitter>();
-            Assert.AreEqual(AspectRatioFitter.AspectMode.FitInParent, fitter.aspectMode);
-            Assert.AreEqual((float)picture.texture.width / picture.texture.height, fitter.aspectRatio, 0.0001f);
-            float started = Time.realtimeSinceStartup;
-            yield return new WaitForSecondsRealtime(0.5f);
-            Assert.AreEqual("Splash", SceneManager.GetActiveScene().name);
-            while (SceneManager.GetActiveScene().name == "Splash" && Time.realtimeSinceStartup - started < 15f)
-                yield return null;
-            Assert.AreEqual("MapPrototype", SceneManager.GetActiveScene().name);
-            Assert.IsNotNull(Object.FindAnyObjectByType<MapPrototype>());
-            Assert.IsNull(Object.FindAnyObjectByType<GameSplashScreen>());
-            Debug.Log("Splash transition verified: Splash -> MapPrototype, even while paused.");
-            Time.timeScale = 1f;
-            yield return new ExitPlayMode();
+            float previousSpeed = Time.timeScale;
+            Mouse mouse = InputSystem.AddDevice<Mouse>();
+            try
+            {
+                Time.timeScale = 0f;
+                var splash = Object.FindAnyObjectByType<GameSplashScreen>();
+                var waiting = (IEnumerator)typeof(GameSplashScreen).GetMethod("WaitForContinue",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(splash, null);
+                float started = Time.realtimeSinceStartup;
+                Assert.IsTrue(waiting.MoveNext());
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 });
+                InputSystem.Update();
+                Assert.IsTrue(waiting.MoveNext());
+                while (Time.realtimeSinceStartup - started < 13.2f)
+                    yield return null;
+                InputSystem.Update();
+                Assert.IsTrue(waiting.MoveNext(),
+                    "An early click held past the timer must not dismiss the splash.");
+                InputSystem.QueueStateEvent(mouse, new MouseState());
+                InputSystem.Update();
+                Assert.IsTrue(waiting.MoveNext());
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });
+                InputSystem.Update();
+                Assert.IsTrue(waiting.MoveNext());
+                InputSystem.QueueStateEvent(mouse, new MouseState());
+                InputSystem.Update();
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 });
+                InputSystem.Update();
+                Assert.IsFalse(waiting.MoveNext());
+            }
+            finally
+            {
+                Time.timeScale = previousSpeed;
+                InputSystem.RemoveDevice(mouse);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
         }
     }
 }

@@ -43,6 +43,7 @@ namespace NoMansGround.Map
             float offsetY = (float)random.NextDouble() * 10000f;
             var map = new MapData(settings.width, settings.height);
             const int spawnSafeRows = 10;
+            float mountainThreshold = Mathf.Lerp(settings.rockThreshold, 1f, 0.25f);
 
             for (int y = 0; y < map.Height; y++)
             {
@@ -50,7 +51,8 @@ namespace NoMansGround.Map
                 {
                     float noise = Mathf.PerlinNoise(offsetX + x / settings.noiseScale,
                         offsetY + y / settings.noiseScale);
-                    map[x, y] = y >= spawnSafeRows && noise >= settings.rockThreshold ? TerrainKind.Rock
+                    map[x, y] = y >= spawnSafeRows && noise >= mountainThreshold ? TerrainKind.Mountain
+                        : y >= spawnSafeRows && noise >= settings.rockThreshold ? TerrainKind.Rock
                         : noise < settings.mudThreshold ? TerrainKind.Mud
                         : noise >= settings.grassThreshold ? TerrainKind.Grass : TerrainKind.Dirt;
                 }
@@ -68,7 +70,7 @@ namespace NoMansGround.Map
             var treeCandidates = new List<Vector2Int>();
             for (int y = 0; y < map.Height; y++)
                 for (int x = 0; x < map.Width; x++)
-                    if (map[x, y] != TerrainKind.Rock
+                    if (!map.IsMineable(new Vector2Int(x, y))
                         && !map.IsStorageCell(new Vector2Int(x, y))
                         && !map.IsPantryCell(new Vector2Int(x, y)))
                         treeCandidates.Add(new Vector2Int(x, y));

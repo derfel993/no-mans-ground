@@ -516,11 +516,13 @@ namespace NoMansGround.Tests
             Assert.IsTrue(map.Data.HasTree(cell));
         }
 
-        [Test]
-        public void MineJobCollectsPickaxeWorksTenSecondsAndDropsBuildingStoneOnGravel()
+        [TestCase(TerrainKind.Rock, TerrainKind.Dirt, "Dirt")]
+        [TestCase(TerrainKind.Mountain, TerrainKind.Tunnel, "Galleria")]
+        public void MineJobCollectsPickaxeWorksTenSecondsAndDropsBuildingStoneOnExpectedTerrain(
+            TerrainKind original, TerrainKind expected, string tileName)
         {
             var cell = new Vector2Int(50, 10);
-            map.Data[cell.x, cell.y] = TerrainKind.Rock;
+            map.Data[cell.x, cell.y] = original;
             foreach (Vector2Int offset in new[]
                 { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
             {
@@ -553,16 +555,205 @@ namespace NoMansGround.Tests
 
             float remainingWork = 10f * (1f - job.Progress);
             trenches.Tick(remainingWork - 0.01f);
-            Assert.AreEqual(TerrainKind.Rock, map.Data[cell.x, cell.y]);
+            Assert.AreEqual(original, map.Data[cell.x, cell.y]);
             Assert.IsFalse(map.Data.TryGetGroundItem(cell, out _));
             trenches.Tick(0.02f);
             Assert.Zero(trenches.Jobs.Count);
-            Assert.AreEqual(TerrainKind.Gravel, map.Data[cell.x, cell.y]);
+            Assert.AreEqual(expected, map.Data[cell.x, cell.y]);
+            Assert.IsTrue(map.Data.IsWalkable(cell));
+            Assert.AreEqual(original == TerrainKind.Mountain, map.Data.IsIndoors(cell));
             Assert.IsTrue(map.Data.TryGetGroundItem(cell, out ItemType drop));
             Assert.AreEqual(ItemType.BuildingStone, drop);
-            Assert.AreEqual("Gravel", view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            Assert.AreEqual(tileName, view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
             Tilemap nature = view.transform.Find("Trees").GetComponent<Tilemap>();
             Assert.AreEqual("Pietra da costruzione", nature.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+            view.Render(map.Data);
+            Assert.AreEqual(tileName, view.Tilemap.GetTile(new Vector3Int(cell.x, cell.y, 0)).name);
+        }
+
+        [Test]
+        public void MountainMiningOpensAccessToQueuedInteriorTunnelJobs()
+        {
+            PrepareBuildingArea();
+            for (int y = 10; y <= 12; y++)
+                for (int x = 50; x <= 52; x++)
+                    map.Data[x, y] = TerrainKind.Mountain;
+            view.Render(map.Data);
+            var entrance = new Vector2Int(51, 10);
+            var interior = new Vector2Int(51, 11);
+            Assert.IsTrue(trenches.DesignateMine(interior));
+            Assert.IsTrue(trenches.DesignateMine(entrance));
+            trenches.Tick(0.01f);
+            Assert.AreEqual(ItemType.Pickaxe, trenches.Jobs[0].PickingTool);
+            Assert.Zero(trenches.Jobs[0].Progress);
+            Assert.AreEqual(TerrainKind.Mountain, map.Data[interior.x, interior.y]);
+            for (int iteration = 0; iteration < 60 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.IsTunnel(entrance));
+            Assert.IsTrue(map.Data.IsTunnel(interior));
+            Assert.IsTrue(map.Data.IsIndoors(interior));
+            Assert.IsFalse(map.Data.IsWalkable(new Vector2Int(50, 11)));
+            GridPath path = GridPathfinder.FindNearest(map.Data, new[] { new Vector2Int(51, 9) }, interior);
+            Assert.IsNotNull(path);
+            CollectionAssert.Contains(path.Cells, entrance);
+            Assert.IsTrue(map.Data.TryGetGroundItem(entrance, out ItemType firstDrop));
+            Assert.AreEqual(ItemType.BuildingStone, firstDrop);
+            Assert.IsTrue(map.Data.TryGetGroundItem(interior, out ItemType secondDrop));
+            Assert.AreEqual(ItemType.BuildingStone, secondDrop);
+            Assert.IsFalse(trenches.Designate(interior));
+        }
+
+        [TestCase(1280, 720)]
+        [TestCase(600, 1000)]
+        public void MountainTextureIsDarkerAndTunnelWallsOpenWhenMiningContinues(int width, int height)
+        {
+            PrepareBuildingArea();
+            for (int y = 10; y <= 12; y++)
+                for (int x = 50; x <= 52; x++)
+                    map.Data[x, y] = TerrainKind.Mountain;
+            map.Data[49, 10] = TerrainKind.Rock;
+            view.Render(map.Data);
+            var entrance = new Vector2Int(51, 10);
+            var interior = new Vector2Int(51, 11);
+            var entrancePosition = new Vector3Int(51, 10, 0);
+            Tile mountain = view.Tilemap.GetTile<Tile>(entrancePosition);
+            Assert.AreEqual("Montagna", mountain.name);
+            view.CompleteRockMine(map.Data, entrance);
+            Tile tunnelBefore = view.Tilemap.GetTile<Tile>(entrancePosition);
+            Assert.AreEqual("Galleria", tunnelBefore.name);
+            Assert.Less(tunnelBefore.sprite.texture.GetPixel(8, 15).grayscale,
+                tunnelBefore.sprite.texture.GetPixel(8, 8).grayscale);
+            view.CompleteRockMine(map.Data, interior);
+            Tile tunnelAfter = view.Tilemap.GetTile<Tile>(entrancePosition);
+            Assert.AreNotSame(tunnelBefore, tunnelAfter);
+            Assert.Greater(tunnelAfter.sprite.texture.GetPixel(8, 15).grayscale,
+                tunnelBefore.sprite.texture.GetPixel(8, 15).grayscale);
+            map.Data.TryTakeGroundItem(entrance, out _);
+            map.Data.TryTakeGroundItem(interior, out _);
+            view.RefreshGroundItems(map.Data);
+            Camera camera = Camera.main;
+            var target = new RenderTexture(width, height, 24);
+            var pixels = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture previousTarget = camera.targetTexture;
+            Vector3 previousPosition = camera.transform.position;
+            float previousSize = camera.orthographicSize;
+            try
+            {
+                camera.targetTexture = target;
+                camera.orthographicSize = 4.5f;
+                camera.transform.position = new Vector3(51.5f, 11f, -10f);
+                camera.Render();
+                RenderTexture.active = target;
+                pixels.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                pixels.Apply();
+                Color Sample(Vector3Int cell)
+                {
+                    Vector3 screen = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(cell));
+                    return pixels.GetPixel(Mathf.FloorToInt(screen.x), Mathf.FloorToInt(screen.y));
+                }
+                Assert.Less(Sample(new Vector3Int(50, 11, 0)).grayscale, Sample(new Vector3Int(49, 10, 0)).grayscale);
+                Assert.Greater(Sample(new Vector3Int(51, 11, 0)).grayscale, Sample(new Vector3Int(50, 11, 0)).grayscale);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"NoMansGround-MountainTunnel-{width}x{height}.png"), pixels.EncodeToPNG());
+                Color beforeDoor = Sample(entrancePosition);
+                Assert.IsTrue(map.Data.TryPlanTunnelDoor(entrance));
+                Assert.IsTrue(map.Data.CompleteTunnelDoor(entrance));
+                view.RenderBuildings(map.Data);
+                Assert.IsTrue(map.Data.IsClosedShelter(interior));
+                camera.Render();
+                RenderTexture.active = target;
+                pixels.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                pixels.Apply();
+                Assert.Greater(((Vector4)beforeDoor - (Vector4)Sample(entrancePosition)).sqrMagnitude, 0.001f);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                    $"NoMansGround-MountainRefuge-{width}x{height}.png"), pixels.EncodeToPNG());
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                camera.targetTexture = previousTarget;
+                camera.transform.position = previousPosition;
+                camera.orthographicSize = previousSize;
+                Object.DestroyImmediate(pixels);
+                Object.DestroyImmediate(target);
+            }
+            view.Render(map.Data);
+            Assert.AreSame(tunnelAfter, view.Tilemap.GetTile(entrancePosition));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void TunnelDoorUsesWoodFromGroundOrStorageAndClosesShelterWithoutBlockingMovement(bool fromGround)
+        {
+            PrepareBuildingArea();
+            for (int y = 10; y <= 12; y++)
+                for (int x = 50; x <= 52; x++)
+                    map.Data[x, y] = TerrainKind.Mountain;
+            var door = new Vector2Int(51, 10);
+            var inside = new Vector2Int(51, 11);
+            map.Data[door.x, door.y] = TerrainKind.Tunnel;
+            map.Data[inside.x, inside.y] = TerrainKind.Tunnel;
+            var source = new Vector2Int(45, 10);
+            if (fromGround) map.Data.AddGroundItem(source, ItemType.Wood);
+            else map.Data.StorageStockpile.Add(ItemType.Wood, 1);
+            view.Render(map.Data);
+            Assert.IsFalse(map.Data.IsClosedShelter(inside));
+            Assert.IsTrue(trenches.DesignateDoor(door));
+            Assert.IsFalse(trenches.DesignateDoor(door));
+            Assert.AreEqual(TrenchJobKind.BuildDoor, trenches.Jobs[0].Kind);
+            Assert.AreEqual(ItemType.Wood, trenches.Jobs[0].Material);
+            Assert.IsFalse(map.Data.GetTunnelDoor(door).IsBuilt);
+            for (int iteration = 0; iteration < 40 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.GetTunnelDoor(door).IsBuilt);
+            Assert.IsTrue(map.Data.IsClosedShelter(inside));
+            Assert.AreEqual(1, map.Data.ClosedTunnelShelterCount);
+            Assert.Zero(map.Data.OpenTunnelCount);
+            Assert.IsTrue(map.Data.CanStep(new Vector2Int(51, 9), door));
+            Assert.IsTrue(map.Data.CanStep(door, inside));
+            Assert.IsNotNull(GridPathfinder.FindNearest(map.Data, new[] { new Vector2Int(51, 9) }, inside));
+            Assert.Zero(map.Data.StorageStockpile.Count(ItemType.Wood));
+            Assert.IsFalse(map.Data.TryGetGroundItem(source, out _));
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.Wood));
+            Tilemap buildings = view.transform.Find("Buildings").GetComponent<Tilemap>();
+            Assert.AreEqual("WoodDoor", buildings.GetTile(new Vector3Int(door.x, door.y, 0)).name);
+            map.Regenerate();
+            Assert.Zero(map.Data.TunnelDoors.Count);
+            Assert.Zero(map.Data.ClosedTunnelShelterCount);
+            Assert.IsFalse(buildings.HasTile(new Vector3Int(door.x, door.y, 0)));
+        }
+
+        [Test]
+        public void TunnelDoorWaitsForWoodAndCancellationRemovesOnlyThePlan()
+        {
+            PrepareBuildingArea();
+            var door = new Vector2Int(51, 10);
+            map.Data[50, 10] = TerrainKind.Mountain;
+            map.Data[52, 10] = TerrainKind.Mountain;
+            map.Data[51, 10] = TerrainKind.Tunnel;
+            map.Data[51, 11] = TerrainKind.Tunnel;
+            view.Render(map.Data);
+            Assert.IsTrue(trenches.DesignateDoor(door));
+            trenches.Tick(1f);
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.Zero(trenches.Jobs[0].Progress);
+            Assert.IsTrue(trenches.Cancel(door));
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsNull(map.Data.GetTunnelDoor(door));
+            Assert.IsTrue(map.Data.IsTunnel(door));
+            Assert.IsTrue(map.Data.IsWalkable(door));
         }
 
         [Test]

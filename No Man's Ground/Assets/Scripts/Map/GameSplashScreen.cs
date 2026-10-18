@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -8,7 +9,7 @@ namespace NoMansGround.Map
     public sealed class GameSplashScreen : MonoBehaviour
     {
         [SerializeField] private Texture2D image;
-        [SerializeField, Min(0f)] private float displaySeconds = 3f;
+        [SerializeField, Min(0f)] private float displaySeconds = 13f;
         [SerializeField] private string nextScene = "Assets/Scenes/MapPrototype.unity";
 
         private void Awake()
@@ -49,12 +50,19 @@ namespace NoMansGround.Map
         private IEnumerator Start()
         {
             yield return null;
-            float showUntil = Time.realtimeSinceStartup + displaySeconds;
             AsyncOperation loading = SceneManager.LoadSceneAsync(nextScene, LoadSceneMode.Single);
             loading.allowSceneActivation = false;
-            while (Time.realtimeSinceStartup < showUntil || loading.progress < 0.9f)
-                yield return null;
+            yield return WaitForContinue();
             loading.allowSceneActivation = true;
+        }
+
+        private IEnumerator WaitForContinue()
+        {
+            float showUntil = Time.realtimeSinceStartup + displaySeconds;
+            while (Time.realtimeSinceStartup < showUntil)
+                yield return null;
+            while (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+                yield return null;
         }
     }
 }

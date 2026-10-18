@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   image: {fileID: 2800000, guid: cf085ca7a238b424fb434bff6d43a101, type: 3}
-  displaySeconds: 3
+  displaySeconds: 13
   nextScene: Assets/Scenes/MapPrototype.unity
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

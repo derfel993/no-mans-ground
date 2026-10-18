@@ -8,7 +8,8 @@ namespace NoMansGround.Map
         Tool,
         Weapon,
         Food,
-        Resource
+        Resource,
+        Equipment
     }
 
     public enum ItemType
@@ -18,7 +19,9 @@ namespace NoMansGround.Map
         Pickaxe,
         Rations,
         Wood,
-        BuildingStone
+        BuildingStone,
+        FullCanteen,
+        EmptyCanteen
     }
 
     public enum ItemAction
@@ -60,6 +63,10 @@ namespace NoMansGround.Map
                 case ItemType.Wood: return new ItemDefinition(type, "Legna", ItemCategory.Resource, null, 250);
                 case ItemType.BuildingStone:
                     return new ItemDefinition(type, "Pietra da costruzione", ItemCategory.Resource, null, 250);
+                case ItemType.FullCanteen:
+                    return new ItemDefinition(type, "Borraccia piena (acqua)", ItemCategory.Equipment, null, 1);
+                case ItemType.EmptyCanteen:
+                    return new ItemDefinition(type, "Borraccia vuota", ItemCategory.Equipment, null, 1);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

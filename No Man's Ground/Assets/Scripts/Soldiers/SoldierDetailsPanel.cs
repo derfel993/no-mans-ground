@@ -416,6 +416,7 @@ namespace NoMansGround.Soldiers
         private void HandleRosterRebuilt()
         {
             RefreshDutyCounts();
+            RefreshDigging();
             Select(roster.Soldiers.Count > 0 ? roster.Soldiers[0] : null);
             if (Selected != null && mapCamera.TryGetComponent(out MapCameraController controller))
                 controller.FocusOn(Selected.transform.position);
@@ -514,7 +515,7 @@ namespace NoMansGround.Soldiers
             if (Selected == null)
                 return;
             foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
-                ItemType.Wood, ItemType.BuildingStone })
+                ItemType.Wood, ItemType.BuildingStone, ItemType.FullCanteen, ItemType.EmptyCanteen })
             {
                 int count = Selected.Data.Inventory.Count(type);
                 if (count > 0)
@@ -544,6 +545,7 @@ namespace NoMansGround.Soldiers
                 foreach (BuildingRoom room in gameMap.Data.Buildings)
                     if (room.IsComplete) complete++;
                 buildingStatus.text = $"Stanze: {complete}/{gameMap.Data.Buildings.Count}\n"
+                    + $"Rifugi galleria: {gameMap.Data.ClosedTunnelShelterCount}\nGallerie aperte: {gameMap.Data.OpenTunnelCount}\n"
                     + $"Legna: {gameMap.Data.StorageStockpile.Count(ItemType.Wood)} | Pietra: {gameMap.Data.StorageStockpile.Count(ItemType.BuildingStone)}";
             }
             if (diggingStatus == null || trenchOrders == null)
@@ -646,7 +648,7 @@ namespace NoMansGround.Soldiers
                     CreateButton(content, "Pietra", DiggingMode.BuildStone),
                     CreateButton(content, "Porta", DiggingMode.Door)
                 };
-                buildingStatus = CreateText(content, "", 9, 32f);
+                buildingStatus = CreateText(content, "", 9, 56f);
                 diggingStatus = CreateText(content, "", 10, 66f);
                 RefreshDigging();
             }

@@ -40,6 +40,17 @@ namespace NoMansGround.Map
         internal bool Complete(Vector2Int cell) => IsPerimeter(cell) && completed.Add(cell);
     }
 
+    public sealed class TunnelDoor
+    {
+        public Vector2Int Cell { get; }
+        public bool IsBuilt { get; internal set; }
+
+        internal TunnelDoor(Vector2Int cell)
+        {
+            Cell = cell;
+        }
+    }
+
     public enum MapZoneKind
     {
         Dump,
@@ -55,7 +66,9 @@ namespace NoMansGround.Map
         Trench,
         Road,
         Rock,
-        Gravel
+        Gravel,
+        Mountain,
+        Tunnel
     }
 
     public sealed class MapData
@@ -69,7 +82,123 @@ namespace NoMansGround.Map
         private readonly ItemType?[] groundItems;
         private readonly MapZoneKind?[] zones;
         private readonly List<BuildingRoom> buildings = new List<BuildingRoom>();
+        private readonly List<TunnelDoor> tunnelDoors = new List<TunnelDoor>();
+        private readonly byte[] tunnelShelterStates;
+        private bool sheltersDirty = true;
+        private int closedTunnelShelterCount;
+        private int openTunnelCount;
         public IReadOnlyList<BuildingRoom> Buildings => buildings.AsReadOnly();
+        public IReadOnlyList<TunnelDoor> TunnelDoors => tunnelDoors.AsReadOnly();
+        public int ClosedTunnelShelterCount { get { UpdateTunnelShelters(); return closedTunnelShelterCount; } }
+        public int OpenTunnelCount { get { UpdateTunnelShelters(); return openTunnelCount; } }
+
+        public TunnelDoor GetTunnelDoor(Vector2Int cell)
+        {
+            foreach (TunnelDoor door in tunnelDoors)
+                if (door.Cell == cell)
+                    return door;
+            return null;
+        }
+
+        public bool TryPlanTunnelDoor(Vector2Int cell)
+        {
+            if (!IsTunnel(cell) || !IsWalkable(cell) || GetTunnelDoor(cell) != null
+                || TryGetGroundItem(cell, out _))
+                return false;
+            bool horizontalWalls = IsMineable(cell + Vector2Int.left) && IsMineable(cell + Vector2Int.right);
+            bool verticalWalls = IsMineable(cell + Vector2Int.down) && IsMineable(cell + Vector2Int.up);
+            Vector2Int along = horizontalWalls ? Vector2Int.up : Vector2Int.right;
+            if ((!horizontalWalls && !verticalWalls) || !IsWalkable(cell + along) || !IsWalkable(cell - along)
+                || IsTrench(cell + along) || IsTrench(cell - along)
+                || (!IsTunnel(cell + along) && !IsTunnel(cell - along)))
+                return false;
+            tunnelDoors.Add(new TunnelDoor(cell));
+            return true;
+        }
+
+        public bool CompleteTunnelDoor(Vector2Int cell)
+        {
+            TunnelDoor door = GetTunnelDoor(cell);
+            if (door == null || door.IsBuilt || !IsTunnel(cell) || !IsWalkable(cell))
+                return false;
+            door.IsBuilt = true;
+            sheltersDirty = true;
+            return true;
+        }
+
+        public void CancelTunnelDoor(Vector2Int cell)
+        {
+            TunnelDoor door = GetTunnelDoor(cell);
+            if (door != null && !door.IsBuilt)
+                tunnelDoors.Remove(door);
+        }
+
+        public bool IsClosedShelter(Vector2Int cell)
+        {
+            if (!IsTunnel(cell))
+                return IsIndoors(cell);
+            UpdateTunnelShelters();
+            return tunnelShelterStates[cell.y * Width + cell.x] == 2;
+        }
+
+        private void UpdateTunnelShelters()
+        {
+            if (!sheltersDirty)
+                return;
+            Array.Clear(tunnelShelterStates, 0, tunnelShelterStates.Length);
+            closedTunnelShelterCount = 0;
+            openTunnelCount = 0;
+            var pending = new Queue<Vector2Int>();
+            var region = new List<int>();
+            Vector2Int[] offsets = { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up };
+            for (int y = 0; y < Height; y++)
+                for (int x = 0; x < Width; x++)
+                {
+                    var start = new Vector2Int(x, y);
+                    if (!IsTunnel(start) || !IsWalkable(start) || GetTunnelDoor(start)?.IsBuilt == true
+                        || tunnelShelterStates[y * Width + x] != 0)
+                        continue;
+                    region.Clear();
+                    pending.Enqueue(start);
+                    tunnelShelterStates[y * Width + x] = 1;
+                    bool closed = true;
+                    while (pending.Count > 0)
+                    {
+                        Vector2Int cell = pending.Dequeue();
+                        region.Add(cell.y * Width + cell.x);
+                        foreach (Vector2Int offset in offsets)
+                        {
+                            Vector2Int neighbour = cell + offset;
+                            if (!Contains(neighbour))
+                            {
+                                closed = false;
+                                continue;
+                            }
+                            if (!IsWalkable(neighbour) || GetTunnelDoor(neighbour)?.IsBuilt == true)
+                                continue;
+                            if (!IsTunnel(neighbour))
+                            {
+                                closed = false;
+                                continue;
+                            }
+                            int index = neighbour.y * Width + neighbour.x;
+                            if (tunnelShelterStates[index] != 0)
+                                continue;
+                            tunnelShelterStates[index] = 1;
+                            pending.Enqueue(neighbour);
+                        }
+                    }
+                    if (closed)
+                    {
+                        closedTunnelShelterCount++;
+                        foreach (int index in region)
+                            tunnelShelterStates[index] = 2;
+                    }
+                    else
+                        openTunnelCount++;
+                }
+            sheltersDirty = false;
+        }
 
         public BuildingRoom GetBuilding(Vector2Int cell)
         {
@@ -82,7 +211,18 @@ namespace NoMansGround.Map
         public bool IsIndoors(Vector2Int cell)
         {
             BuildingRoom room = GetBuilding(cell);
-            return room != null && room.IsComplete && !room.IsPerimeter(cell);
+            return IsTunnel(cell) || (room != null && room.IsComplete && !room.IsPerimeter(cell));
+        }
+
+        public bool IsTunnel(Vector2Int cell)
+        {
+            return Contains(cell) && this[cell.x, cell.y] == TerrainKind.Tunnel;
+        }
+
+        public bool IsMineable(Vector2Int cell)
+        {
+            return Contains(cell) && (this[cell.x, cell.y] == TerrainKind.Rock
+                || this[cell.x, cell.y] == TerrainKind.Mountain);
         }
 
         public bool TryPlanBuilding(Vector2Int from, Vector2Int to, ItemType material, out BuildingRoom room)
@@ -101,7 +241,7 @@ namespace NoMansGround.Map
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (!IsWalkable(cell) || IsTrench(cell) || HasTree(cell) || TryGetGroundItem(cell, out _)
+                    if (!IsWalkable(cell) || IsTrench(cell) || IsTunnel(cell) || HasTree(cell) || TryGetGroundItem(cell, out _)
                         || IsStorageCell(cell) || IsPantryCell(cell) || TryGetZone(cell, out _)
                         || GetBuilding(cell) != null || this[x, y] == TerrainKind.Road)
                         return false;
@@ -128,6 +268,7 @@ namespace NoMansGround.Map
             BuildingRoom room = GetBuilding(cell);
             if (room == null || !room.Door.HasValue || !room.Complete(cell))
                 return false;
+            sheltersDirty = true;
             return true;
         }
 
@@ -161,6 +302,7 @@ namespace NoMansGround.Map
             pantryCells = new bool[cells.Length];
             groundItems = new ItemType?[cells.Length];
             zones = new MapZoneKind?[cells.Length];
+            tunnelShelterStates = new byte[cells.Length];
         }
 
         public TerrainKind this[int x, int y]
@@ -169,13 +311,14 @@ namespace NoMansGround.Map
             set
             {
                 int index = IndexOf(x, y);
-                if (value == TerrainKind.Rock && (storageCells[index] || pantryCells[index]
+                if ((value == TerrainKind.Rock || value == TerrainKind.Mountain) && (storageCells[index] || pantryCells[index]
                     || groundItems[index].HasValue))
                     throw new InvalidOperationException("Storage areas cannot contain rock.");
                 cells[index] = value;
+                sheltersDirty = true;
                 if (value != TerrainKind.Trench)
                     ladders[index] = false;
-                if (value == TerrainKind.Rock && trees[index])
+                if ((value == TerrainKind.Rock || value == TerrainKind.Mountain) && trees[index])
                 {
                     trees[index] = false;
                     TreeCount--;
@@ -249,11 +392,12 @@ namespace NoMansGround.Map
                         trees[index] = false;
                         TreeCount--;
                     }
-                    if (cells[index] == TerrainKind.Rock)
+                    if (cells[index] == TerrainKind.Rock || cells[index] == TerrainKind.Mountain)
                         cells[index] = TerrainKind.Dirt;
                     blocked[index] = false;
                     area[index] = true;
                 }
+            sheltersDirty = true;
             return true;
         }
 
@@ -346,7 +490,7 @@ namespace NoMansGround.Map
 
         public bool IsWalkable(Vector2Int cell)
         {
-            if (!Contains(cell) || cells[cell.y * Width + cell.x] == TerrainKind.Rock
+            if (!Contains(cell) || IsMineable(cell)
                 || blocked[cell.y * Width + cell.x])
                 return false;
             BuildingRoom room = GetBuilding(cell);
@@ -356,6 +500,7 @@ namespace NoMansGround.Map
         public void SetWalkable(Vector2Int cell, bool walkable)
         {
             blocked[IndexOf(cell.x, cell.y)] = !walkable;
+            sheltersDirty = true;
         }
 
         public bool IsTrench(Vector2Int cell)
@@ -396,7 +541,7 @@ namespace NoMansGround.Map
             int index = IndexOf(cell.x, cell.y);
             if (!Enum.IsDefined(typeof(ItemType), item))
                 throw new ArgumentOutOfRangeException(nameof(item));
-            if (trees[index] || cells[index] == TerrainKind.Rock || storageCells[index] || pantryCells[index])
+            if (trees[index] || IsMineable(cell) || storageCells[index] || pantryCells[index])
                 throw new InvalidOperationException("An item cannot be dropped on a tree, rock or storage area.");
             if (groundItems[index].HasValue)
                 throw new InvalidOperationException("This cell already contains a ground item.");
@@ -407,7 +552,7 @@ namespace NoMansGround.Map
         public void SetTree(Vector2Int cell, bool hasTree)
         {
             int index = IndexOf(cell.x, cell.y);
-            if (hasTree && (cells[index] == TerrainKind.Rock || storageCells[index] || pantryCells[index]
+            if (hasTree && (IsMineable(cell) || IsTunnel(cell) || storageCells[index] || pantryCells[index]
                 || groundItems[index].HasValue))
                 throw new InvalidOperationException("A tree cannot be placed on rock, items or a storage area.");
             if (trees[index] != hasTree)

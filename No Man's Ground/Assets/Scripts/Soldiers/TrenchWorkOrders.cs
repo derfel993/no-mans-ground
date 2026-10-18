@@ -111,11 +111,11 @@ namespace NoMansGround.Soldiers
             Notify(mode == DiggingMode.Dig ? "SCAVA: trascina una linea.\nEsc o destro: esci."
                 : mode == DiggingMode.Ladder ? "SCALA: clic su una trincea.\nEsc o destro: esci."
                 : mode == DiggingMode.Cut ? "TAGLIA: clic o rettangolo.\nEsc o destro: esci."
-                : mode == DiggingMode.Mine ? "MINA: trascina sulle rocce.\nEsc o destro: esci."
+                : mode == DiggingMode.Mine ? "MINA: rocce e montagne.\nEsc o destro: esci."
                 : mode == DiggingMode.Collect ? "RACCOGLI: clic o rettangolo.\nEsc o destro: esci."
                 : mode == DiggingMode.BuildWood ? "LEGNO: trascina un rettangolo."
                 : mode == DiggingMode.BuildStone ? "PIETRA: trascina un rettangolo."
-                : mode == DiggingMode.Door ? "PORTA: scegli un lato del perimetro."
+                : mode == DiggingMode.Door ? "PORTA: parete o ingresso galleria."
                 : mode == DiggingMode.Cancel ? "ANNULLA: trascina sugli scavi.\nEsc o destro: esci."
                 : "T: scava | A: taglia | M: mina | C: raccogli | L: scala\nX: annulla | Esc: esci");
         }
@@ -289,6 +289,24 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateDoor(Vector2Int cell)
         {
+            if (isActiveAndEnabled && map.Data != null && map.Data.IsTunnel(cell))
+            {
+                TunnelDoor door = map.Data.GetTunnelDoor(cell);
+                if (jobs.Exists(existing => existing.Cell == cell) || door?.IsBuilt == true
+                    || (door == null && !map.Data.TryPlanTunnelDoor(cell)))
+                {
+                    Notify("Porta galleria non valida: serve un passaggio libero tra due pareti rocciose.");
+                    return false;
+                }
+                var tunnelJob = new TrenchJob(cell, TrenchJobKind.BuildDoor);
+                tunnelJob.Material = ItemType.Wood;
+                tunnelJob.Marker = CreateMarker(cell, new Color(0.4f, 0.8f, 0.9f, 0.6f), "Tunnel door designation");
+                jobs.Add(tunnelJob);
+                retryTimer = 0f;
+                mapView.RenderBuildings(map.Data);
+                Notify("Porta galleria in coda: 1 Legna.");
+                return true;
+            }
             if (!isActiveAndEnabled || map.Data == null || !map.Data.TrySetBuildingDoor(cell))
             {
                 Notify("Porta non valida: scegli un lato, non un angolo, di una stanza senza porta.");
@@ -314,7 +332,7 @@ namespace NoMansGround.Soldiers
         public bool Designate(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.IsWalkable(cell)
-                || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.HasTree(cell)
+                || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.IsTunnel(cell) || map.Data.HasTree(cell)
                 || map.Data.TryGetZone(cell, out _) || map.Data.GetBuilding(cell) != null
                 || map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell)
                 || jobs.Exists(job => job.Cell == cell))
@@ -371,9 +389,9 @@ namespace NoMansGround.Soldiers
         public bool DesignateMine(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.Contains(cell)
-                || map.Data[cell.x, cell.y] != TerrainKind.Rock || jobs.Exists(job => job.Cell == cell))
+                || !map.Data.IsMineable(cell) || jobs.Exists(job => job.Cell == cell))
             {
-                Notify("Mina non valida: serve una roccia senza job gia presente.");
+                Notify("Mina non valida: serve roccia o montagna senza job gia presente.");
                 return false;
             }
             var job = new TrenchJob(cell, TrenchJobKind.MineRock);
@@ -458,6 +476,11 @@ namespace NoMansGround.Soldiers
             }
             Release(jobs[index]);
             jobs.RemoveAt(index);
+            if (map.Data?.GetTunnelDoor(cell) != null)
+            {
+                map.Data.CancelTunnelDoor(cell);
+                mapView.RenderBuildings(map.Data);
+            }
             retryTimer = 0f;
             Changed?.Invoke();
             return true;
@@ -623,7 +646,10 @@ namespace NoMansGround.Soldiers
                         retryTimer = 0f;
                         continue;
                     }
-                    if (!map.Data.CompleteBuildingTile(job.Cell))
+                    bool tunnelDoor = job.Kind == TrenchJobKind.BuildDoor && map.Data.GetTunnelDoor(job.Cell) != null;
+                    bool completed = tunnelDoor ? map.Data.CompleteTunnelDoor(job.Cell)
+                        : map.Data.CompleteBuildingTile(job.Cell);
+                    if (!completed)
                     {
                         worker.Data.Inventory.Add(job.Material.Value, 1);
                         Release(job);
@@ -631,7 +657,8 @@ namespace NoMansGround.Soldiers
                         continue;
                     }
                     mapView.RenderBuildings(map.Data);
-                    Notify(map.Data.GetBuilding(job.Cell).IsComplete
+                    Notify(tunnelDoor ? "Porta galleria completata."
+                        : map.Data.GetBuilding(job.Cell).IsComplete
                         ? "Costruzione completata." : "Parte della costruzione completata.");
                 }
                 else if (job.Kind == TrenchJobKind.Dig || job.Kind == TrenchJobKind.CutTree)

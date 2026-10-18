@@ -12,6 +12,53 @@ namespace NoMansGround.Tests
 {
     public sealed class TrenchSceneTests
     {
+        [Test]
+        public void TunnelShelterCountersFollowDoorCompletionAndRegeneration()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            try
+            {
+                var map = Object.FindAnyObjectByType<MapPrototype>();
+                var roster = Object.FindAnyObjectByType<SoldierRoster>();
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                typeof(SoldierDetailsPanel).GetMethod("Awake", flags).Invoke(panel, null);
+                typeof(SoldierDetailsPanel).GetMethod("OnEnable", flags).Invoke(panel, null);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
+                for (int y = 10; y <= 12; y++)
+                    for (int x = 50; x <= 52; x++)
+                        map.Data[x, y] = TerrainKind.Mountain;
+                map.Data[51, 10] = TerrainKind.Tunnel;
+                map.Data[51, 11] = TerrainKind.Tunnel;
+                map.GetComponentInChildren<MapTilemapView>().Render(map.Data);
+                roster.Soldiers[0].Data.Inventory.Add(ItemType.Wood, 1);
+                Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
+                AssertTextContains(canvas, "Rifugi galleria: 0");
+                AssertTextContains(canvas, "Gallerie aperte: 1");
+                for (int iteration = 0; iteration < 40 && trenches.Jobs.Count > 0; iteration++)
+                {
+                    foreach (SoldierView soldier in roster.Soldiers)
+                        soldier.AdvanceMovement(1000f);
+                    trenches.Tick(10f);
+                }
+                Assert.Zero(trenches.Jobs.Count);
+                AssertTextContains(canvas, "Rifugi galleria: 1");
+                AssertTextContains(canvas, "Gallerie aperte: 0");
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                AssertTextContains(canvas, "Rifugi galleria: 0");
+            }
+            finally
+            {
+                typeof(SoldierDetailsPanel).GetMethod("OnDisable", System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.NonPublic).Invoke(panel, null);
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
         [UnityTest]
         public IEnumerator ConstructionButtonsToggleModesAndFollowWorkSystemAvailability()
         {

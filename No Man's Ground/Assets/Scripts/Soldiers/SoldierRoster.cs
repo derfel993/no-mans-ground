@@ -89,7 +89,7 @@ namespace NoMansGround.Soldiers
             int engineerCount = count;
             if (includeCook)
                 count++;
-            IReadOnlyList<SoldierData> generated = SoldierGenerator.Generate(count, seed);
+            IReadOnlyList<SoldierData> generated = SoldierGenerator.Generate(count, seed, includeCook);
 
             foreach (SoldierView soldier in soldiers)
             {
@@ -129,16 +129,7 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
-                SoldierData person = generated[i];
-                if (includeCook && i == engineerCount)
-                {
-                    var levels = new int[5];
-                    for (int skill = 0; skill < levels.Length; skill++)
-                        levels[skill] = person.GetSkill((SoldierSkill)skill).Level;
-                    person = new SoldierData(person.Id, person.FirstName, person.LastName,
-                        person.Needs, levels, SoldierProfession.Cook);
-                }
-                soldier.Initialize(person, cell, soldierSprite);
+                soldier.Initialize(generated[i], cell, soldierSprite);
                 soldier.DutyChanged += NotifyDutiesChanged;
                 soldiers.Add(soldier);
             }

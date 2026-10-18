@@ -52,13 +52,13 @@ namespace NoMansGround.Tests
                 {
                     counts[(int)first[x, y]]++;
                     var cell = new Vector2Int(x, y);
-                    if (first[x, y] != TerrainKind.Rock
+                    if (!first.IsMineable(cell)
                         && !first.IsStorageCell(cell) && !first.IsPantryCell(cell))
                         treeEligibleCells++;
                     if (first.HasTree(cell))
                     {
                         treeCells++;
-                        Assert.AreNotEqual(TerrainKind.Rock, first[x, y]);
+                        Assert.IsFalse(first.IsMineable(cell));
                         Assert.IsFalse(first.IsStorageCell(cell));
                         Assert.IsTrue(first.IsWalkable(cell));
                     }
@@ -69,10 +69,93 @@ namespace NoMansGround.Tests
             Assert.Greater(differences, first.Width * first.Height / 10);
             Assert.AreEqual(treeEligibleCells * 2 / 5, treeCells);
             foreach (TerrainKind terrain in new[]
-                { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road, TerrainKind.Rock })
+                { TerrainKind.Dirt, TerrainKind.Grass, TerrainKind.Mud, TerrainKind.Road, TerrainKind.Rock, TerrainKind.Mountain })
                 Assert.Greater(counts[(int)terrain], 0);
             Assert.AreEqual(24, counts[(int)TerrainKind.Road]);
             Assert.Zero(counts[(int)TerrainKind.Trench]);
+            Assert.Zero(counts[(int)TerrainKind.Tunnel]);
+        }
+
+        [Test]
+        public void MountainsAreSolidAndTunnelsAreWalkableCoveredSpace()
+        {
+            var map = new MapData(5, 5);
+            var cell = new Vector2Int(2, 2);
+            map.SetTree(cell, true);
+            map[cell.x, cell.y] = TerrainKind.Mountain;
+            Assert.IsTrue(map.IsMineable(cell));
+            Assert.IsFalse(map.IsWalkable(cell));
+            Assert.IsFalse(map.HasTree(cell));
+            Assert.Throws<InvalidOperationException>(() => map.SetTree(cell, true));
+            Assert.Throws<InvalidOperationException>(() => map.AddGroundItem(cell, ItemType.BuildingStone));
+            map[cell.x, cell.y] = TerrainKind.Tunnel;
+            Assert.IsTrue(map.IsWalkable(cell));
+            Assert.IsTrue(map.IsTunnel(cell));
+            Assert.IsTrue(map.IsIndoors(cell));
+            Assert.IsTrue(map.CanStep(cell + Vector2Int.down, cell));
+            Assert.IsFalse(map.IsMineable(cell));
+            Assert.Throws<InvalidOperationException>(() => map.SetTree(cell, true));
+            map.AddGroundItem(cell, ItemType.BuildingStone);
+            Assert.IsTrue(map.TryGetGroundItem(cell, out _));
+        }
+
+        [Test]
+        public void TunnelShelterClosesOnlyAfterEveryExitDoorIsBuiltAndReopensAfterMining()
+        {
+            var map = new MapData(9, 9);
+            for (int y = 1; y <= 7; y++)
+                for (int x = 2; x <= 6; x++)
+                    map[x, y] = TerrainKind.Mountain;
+            for (int y = 1; y <= 7; y++)
+                map[4, y] = TerrainKind.Tunnel;
+            var first = new Vector2Int(4, 1);
+            var second = new Vector2Int(4, 7);
+            var inside = new Vector2Int(4, 4);
+            Assert.IsTrue(map.IsIndoors(inside));
+            Assert.IsFalse(map.IsClosedShelter(inside));
+            Assert.AreEqual(1, map.OpenTunnelCount);
+            Assert.IsTrue(map.TryPlanTunnelDoor(first));
+            Assert.IsTrue(map.TryPlanTunnelDoor(second));
+            Assert.IsFalse(map.IsClosedShelter(inside));
+            Assert.IsTrue(map.CompleteTunnelDoor(first));
+            Assert.IsFalse(map.IsClosedShelter(inside));
+            Assert.IsTrue(map.CompleteTunnelDoor(second));
+            Assert.IsTrue(map.IsClosedShelter(inside));
+            Assert.AreEqual(1, map.ClosedTunnelShelterCount);
+            Assert.Zero(map.OpenTunnelCount);
+            Assert.IsTrue(map.CanStep(new Vector2Int(4, 0), first));
+            Assert.IsTrue(map.CanStep(first, new Vector2Int(4, 2)));
+            Assert.IsFalse(map.CanStep(new Vector2Int(3, 0), first));
+            map[3, 4] = TerrainKind.Tunnel;
+            map[2, 4] = TerrainKind.Tunnel;
+            Assert.IsFalse(map.IsClosedShelter(inside));
+            Assert.Zero(map.ClosedTunnelShelterCount);
+            Assert.AreEqual(1, map.OpenTunnelCount);
+        }
+
+        [Test]
+        public void TunnelDoorsRejectOpenRoomsResourcesAndDuplicatesAndCancellationLeavesNoDoor()
+        {
+            var map = new MapData(7, 7);
+            var door = new Vector2Int(3, 2);
+            map[3, 2] = TerrainKind.Tunnel;
+            map[3, 3] = TerrainKind.Tunnel;
+            Assert.IsFalse(map.TryPlanTunnelDoor(door));
+            map[2, 2] = TerrainKind.Mountain;
+            map[4, 2] = TerrainKind.Mountain;
+            map.AddGroundItem(door, ItemType.BuildingStone);
+            Assert.IsFalse(map.TryPlanTunnelDoor(door));
+            map.TryTakeGroundItem(door, out _);
+            Assert.IsTrue(map.TryPlanTunnelDoor(door));
+            Assert.IsFalse(map.TryPlanTunnelDoor(door));
+            map.CancelTunnelDoor(door);
+            Assert.IsNull(map.GetTunnelDoor(door));
+            Assert.IsFalse(map.CompleteTunnelDoor(door));
+            Assert.IsTrue(map.TryPlanTunnelDoor(door));
+            Assert.IsTrue(map.CompleteTunnelDoor(door));
+            map.CancelTunnelDoor(door);
+            Assert.IsTrue(map.GetTunnelDoor(door).IsBuilt);
+            Assert.IsTrue(map.IsWalkable(door));
         }
 
         [Test]
@@ -199,11 +282,12 @@ namespace NoMansGround.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => { TerrainKind unused = map[3, 0]; });
         }
 
-        [Test]
-        public void RockTerrainCannotBeMadeWalkable()
+        [TestCase(TerrainKind.Rock)]
+        [TestCase(TerrainKind.Mountain)]
+        public void SolidTerrainCannotBeMadeWalkable(TerrainKind terrain)
         {
             var map = new MapData(1, 1);
-            map[0, 0] = TerrainKind.Rock;
+            map[0, 0] = terrain;
             Assert.IsFalse(map.IsWalkable(Vector2Int.zero));
             Assert.Throws<InvalidOperationException>(() => map.SetTree(Vector2Int.zero, true));
             map.SetWalkable(Vector2Int.zero, true);
@@ -254,7 +338,8 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(new Vector3(10f, 20f, 0f), view.WorldBounds.min);
                 Assert.AreEqual(new Vector3(13f, 22f, 0f), view.WorldBounds.max);
                 view.CompleteRockMine(map, new Vector2Int(1, 1));
-                Assert.AreEqual(TerrainKind.Gravel, map[1, 1]);
+                Assert.AreEqual(TerrainKind.Dirt, map[1, 1]);
+                Assert.AreSame(dirt, view.Tilemap.GetTile(new Vector3Int(1, 1, 0)));
                 Assert.IsTrue(map.IsWalkable(new Vector2Int(1, 1)));
                 Assert.IsTrue(map.TryGetGroundItem(new Vector2Int(1, 1), out ItemType resource));
                 Assert.AreEqual(ItemType.BuildingStone, resource);
@@ -365,7 +450,7 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(camera);
                 prototype.Regenerate();
                 Assert.AreEqual(new Vector3Int(128, 128, 1), view.Tilemap.cellBounds.size);
-                Assert.AreEqual(5, view.Tilemap.GetUsedTilesCount());
+                Assert.AreEqual(6, view.Tilemap.GetUsedTilesCount());
                 Tile road = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Road.asset");
                 Tile rock = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Rock.asset");
                 Tile gravel = AssetDatabase.LoadAssetAtPath<Tile>("Assets/Art/Prototype/Gravel.asset");

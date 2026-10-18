@@ -13,6 +13,49 @@ namespace NoMansGround.Map
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
         private Tilemap buildingTilemap;
         private readonly Tile[] buildingTiles = new Tile[4];
+        private readonly Tile[] mountainTerrainTiles = new Tile[17];
+
+        private Tile GetMountainTerrainTile(int index)
+        {
+            if (mountainTerrainTiles[index] != null)
+                return mountainTerrainTiles[index];
+            bool mountain = index == 0;
+            int edges = index - 1;
+            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            var pixels = new Color32[256];
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                {
+                    bool grain = (x * 17 + y * 11) % 13 < 3;
+                    bool wall = !mountain && (((edges & 1) != 0 && x < 3)
+                        || ((edges & 2) != 0 && x >= 13) || ((edges & 4) != 0 && y < 3)
+                        || ((edges & 8) != 0 && y >= 13));
+                    pixels[y * 16 + x] = mountain || wall
+                        ? (grain ? new Color32(64, 68, 63, 255) : new Color32(43, 47, 44, 255))
+                        : (grain ? new Color32(114, 102, 81, 255) : new Color32(88, 78, 62, 255));
+                    if (!mountain && wall && (x == 2 || x == 13 || y == 2 || y == 13))
+                        pixels[y * 16 + x] = new Color32(26, 29, 27, 255);
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.name = mountain ? "Montagna" : "Galleria";
+            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.flags = TileFlags.None;
+            tile.colliderType = Tile.ColliderType.None;
+            mountainTerrainTiles[index] = tile;
+            return tile;
+        }
+
+        private Tile GetTunnelTile(MapData map, Vector2Int cell)
+        {
+            int edges = (map.IsMineable(cell + Vector2Int.left) ? 1 : 0)
+                | (map.IsMineable(cell + Vector2Int.right) ? 2 : 0)
+                | (map.IsMineable(cell + Vector2Int.down) ? 4 : 0)
+                | (map.IsMineable(cell + Vector2Int.up) ? 8 : 0);
+            return GetMountainTerrainTile(edges + 1);
+        }
         private Tilemap roofTilemap;
         private Tile roofTile;
         private MapData roofMap;
@@ -45,6 +88,14 @@ namespace NoMansGround.Map
                         buildingTilemap.SetColor(position, room.IsBuilt(cell)
                             ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
                     }
+            foreach (TunnelDoor door in map.TunnelDoors)
+            {
+                if (buildingTiles[1] == null)
+                    buildingTiles[1] = CreateBuildingTile(ItemType.Wood, true);
+                var position = new Vector3Int(door.Cell.x, door.Cell.y, 0);
+                buildingTilemap.SetTile(position, buildingTiles[1]);
+                buildingTilemap.SetColor(position, door.IsBuilt ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
+            }
             RenderRoofs(map);
         }
 
@@ -241,7 +292,7 @@ namespace NoMansGround.Map
         {
             if (map == null)
                 throw new ArgumentNullException(nameof(map));
-            if (!map.IsWalkable(cell))
+            if (!map.IsWalkable(cell) || map.IsTunnel(cell))
                 throw new InvalidOperationException("A trench requires a walkable cell.");
             if (map.IsStorageCell(cell) || map.IsPantryCell(cell))
                 throw new InvalidOperationException("Storage areas cannot be excavated.");
@@ -273,16 +324,23 @@ namespace NoMansGround.Map
         {
             if (map == null)
                 throw new ArgumentNullException(nameof(map));
-            if (!map.Contains(cell) || map[cell.x, cell.y] != TerrainKind.Rock)
+            if (!map.IsMineable(cell))
                 throw new InvalidOperationException("Rock must exist before it can be mined.");
-            if (gravelTile == null)
-                throw new InvalidOperationException("Assign a gravel tile before mining rock.");
-            map[cell.x, cell.y] = TerrainKind.Gravel;
+            bool mountain = map[cell.x, cell.y] == TerrainKind.Mountain;
+            if (!mountain && dirtTile == null)
+                throw new InvalidOperationException("Assign a dirt tile before mining rock.");
+            map[cell.x, cell.y] = mountain ? TerrainKind.Tunnel : TerrainKind.Dirt;
             map.AddGroundItem(cell, ItemType.BuildingStone);
             var position = new Vector3Int(cell.x, cell.y, 0);
-            Tilemap.SetTile(position, gravelTile);
+            Tilemap.SetTile(position, mountain ? GetTunnelTile(map, cell) : dirtTile);
             Tilemap.SetTileFlags(position, TileFlags.None);
             Tilemap.SetColor(position, Color.white);
+            foreach (Vector2Int offset in new[] { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up })
+            {
+                Vector2Int neighbour = cell + offset;
+                if (map.IsTunnel(neighbour))
+                    Tilemap.SetTile(new Vector3Int(neighbour.x, neighbour.y, 0), GetTunnelTile(map, neighbour));
+            }
             RenderTrees(map);
         }
 
@@ -304,6 +362,8 @@ namespace NoMansGround.Map
                         case TerrainKind.Dirt: tiles[y * map.Width + x] = dirtTile; break;
                         case TerrainKind.Grass: tiles[y * map.Width + x] = grassTile; break;
                         case TerrainKind.Mud: tiles[y * map.Width + x] = mudTile; break;
+                        case TerrainKind.Mountain: tiles[y * map.Width + x] = GetMountainTerrainTile(0); break;
+                        case TerrainKind.Tunnel: tiles[y * map.Width + x] = GetTunnelTile(map, new Vector2Int(x, y)); break;
                         case TerrainKind.Rock:
                             if (rockTile == null)
                                 throw new InvalidOperationException("Assign a rock tile before rendering rocks.");
@@ -667,6 +727,13 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            foreach (Tile tile in mountainTerrainTiles)
+                if (tile != null)
+                {
+                    DestroyGeneratedObject(tile.sprite.texture);
+                    DestroyGeneratedObject(tile.sprite);
+                    DestroyGeneratedObject(tile);
+                }
             if (roofTile != null)
             {
                 DestroyGeneratedObject(roofTile.sprite.texture);
@@ -764,7 +831,7 @@ namespace NoMansGround.Map
             if (!map.IsWalkable(cell))
             {
                 Tilemap.SetTileFlags(position, TileFlags.None);
-                Tilemap.SetColor(position, map[cell.x, cell.y] == TerrainKind.Rock
+                Tilemap.SetColor(position, map.IsMineable(cell)
                     ? Color.white : new Color(0.20f, 0.13f, 0.13f));
             }
         }

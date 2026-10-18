@@ -18,7 +18,9 @@ I lavori futuri restano nelle checklist TODO di questo README.
 
 Aprire `Assets/Scenes/Splash.unity` e premere **Play** per provare l'avvio
 completo: l'immagine `Assets/Art/UI/Splash/SplashScreen.jpg` viene mostrata
-per almeno **3 secondi**, poi viene caricata la scena di test `MapPrototype`.
+per almeno **13 secondi**, poi attende un **nuovo clic sinistro** per caricare
+la scena di test `MapPrototype`. I clic anticipati, anche se mantenuti premuti,
+non fanno proseguire lo splash; il destro non conferma.
 La mappa viene precaricata durante lo splash; il passaggio attende anche
 che il caricamento sia pronto. Il tempo dello splash non dipende dalla pausa.
 
@@ -36,9 +38,11 @@ Aprire il progetto con Unity **6000.6.6f1**, quindi aprire
 La scena originale `SampleScene` non viene modificata.
 
 La mappa iniziale misura 128 x 128 celle sul piano XY; ogni cella occupa
-1 unita Unity. Terra, erba, fango e roccia sono generati con tile provvisori.
-La roccia e non percorribile; la fascia di arrivo resta libera.
-Gli alberi coprono il 40% delle celle non rocciose fuori dalle aree riservate; sono
+1 unita Unity. Terra, erba, fango, roccia e montagna sono generati con tile provvisori.
+Roccia e montagna sono non percorribili; la fascia di arrivo resta libera.
+La **Montagna** ha una texture piu scura della roccia e occupa le zone piu alte
+del rumore: la soglia e `rockThreshold + (1 - rockThreshold) * 0.25`.
+Gli alberi coprono il 40% delle celle non rocciose e non montane fuori dalle aree riservate; sono
 disegnati sopra il terreno e restano percorribili; il seed rende riproducibile
 la loro posizione.
 Accanto alla strada viene creato un deposito di **4 x 4 celle**; nella mappa
@@ -47,10 +51,11 @@ Subito sotto c'e una dispensa automatica di **2 x 4 celle**. Entrambe le aree
 restano percorribili e libere da rocce e alberi; mappe troppo piccole possono
 non avere spazio per crearle. Nel deposito ci sono **6 pale, 2 accette e 2
 picconi**; nella dispensa **1000 Razioni**, in quattro stack da **250**.
-Gli item hanno categorie **Tool**, **Weapon** e **Food**. Per ora i Tool sono
+Gli item hanno categorie **Tool**, **Weapon**, **Food**, **Resource** e **Equipment**. Per ora i Tool sono
 Pala (**Scava trincea**), Piccone (**Rompi roccia**) e Accetta (**Taglia albero**);
-Food contiene Razioni. Le associazioni azione-utensile sono definite, ma non
-vengono ancora consumati dagli ordini.
+Food contiene Razioni; Resource contiene Legna e Pietra da costruzione;
+Equipment contiene **Borraccia piena (acqua)** e **Borraccia vuota**, non impilabili.
+Gli utensili vengono ritirati per i lavori ma non consumati al completamento.
 Il terreno viene generato all'avvio, non salvato come migliaia di tile nella scena.
 
 Sul bordo inferiore viene generata una **strada larga 4 tile e lunga 6 tile**
@@ -165,9 +170,9 @@ Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
 Il pannello del soldato compare in basso a sinistra e offre quattro tab:
 **Info** (identita, istruzioni, lavoro/guardia e carico massimo), **Stato**
 (fame, sete, bisogni fisiologici, termico, stress, paura e stanchezza),
-**Skill** e **Inventario**. Il tab Inventario mostra la Pala quando il soldato
-lo raccoglie per un job di scavo; gli altri trasferimenti non sono ancora
-implementati. Il pannello laterale destro mantiene orologio,
+**Skill** e **Inventario**. Il tab Inventario mostra gli utensili, le risorse
+trasportate e la borraccia personale, piena o vuota, aggiornandosi dopo bevuta
+e rifornimento. Il pannello laterale destro mantiene orologio,
 comandi, zone e informazioni sulle strutture.
 Selezionare un altro soldato con clic sinistro o il terreno per deselezionare.
 Zoom e panning restano disponibili; i clic sul pannello non selezionano soldati
@@ -220,15 +225,37 @@ un controllo di pausa dedicato non e ancora disponibile.
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione
 frazionaria e non scende mai sotto zero. La fame torna a 100 quando il cuoco
-consegna una razione durante il giro delle 13. Non sono ancora presenti acqua,
-servizi igienici o interruzioni automatiche dei lavori.
-La rigenerazione ripristina le tre riserve a 100 e ricrea gli stessi rate.
+consegna una razione durante il giro delle 13. La sete torna a 100 bevendo dalla
+borraccia sotto il 20%. Non sono ancora presenti servizi igienici o interruzioni
+automatiche dei lavori. La rigenerazione ripristina le tre riserve a 100,
+ricrea gli stessi rate e assegna una nuova borraccia piena a ogni personaggio.
 
 `SoldierNeeds` espone le durate `HungerDepletionSeconds`,
 `ThirstDepletionSeconds`, `PhysicalNeedsDepletionSeconds` e i rispettivi
 `ConsumptionPerSecond`; `AdvanceTime(gameSeconds)` applica il consumo.
 `SoldierView` avanza i bisogni durante Play e il pannello si aggiorna tramite
 l'evento `Changed`, anche quando il soldato e fermo.
+
+### Borracce e acqua
+
+Ogni soldato generato, **incluso il cuoco**, parte con **1 Borraccia piena
+(acqua)** nell'inventario. Quando la riserva di sete scende **strettamente sotto
+20/100**, beve automaticamente: la sete torna esattamente a **100/100**,
+la borraccia piena viene consumata e al suo posto resta **1 Borraccia vuota**.
+A 20 esatti non beve. La borraccia vuota non disseta: senza una borraccia piena,
+la sete continua a diminuire normalmente, senza creare o duplicare item.
+
+La bevuta e immediata e non interrompe marcia, Guardia o lavoro. Durante la
+consegna effettiva del rancio, il cuoco **sostituisce la borraccia vuota con
+una piena**; una borraccia gia piena non viene duplicata. Anche il cuoco viene
+rifornito quando consuma la propria razione in cucina. Soldati non ancora
+serviti non ricevono acqua a distanza, e un giro gia concluso non rifornisce
+di nuovo una borraccia svuotata successivamente nello stesso giorno.
+
+Riempire la borraccia non ripristina direttamente la sete: occorre berla.
+Se al rifornimento la sete e gia sotto soglia, il soldato beve subito.
+Per ora il rifornimento non richiede scorte d'acqua separate, viaggi o tempi
+aggiuntivi; fonti d'acqua e riempimento autonomo fuori dal rancio non sono implementati.
 
 ### Skill ed esperienza
 
@@ -397,10 +424,12 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   Se non la possiede, raggiunge il deposito e ne prende una se disponibile;
   senza Pale lo scavo resta in attesa. L'attrezzo raccolto resta nel suo
   inventario e appare nel tab **Inventario**.
-- **M** o **Mina** designa le rocce lungo una linea. Un lavoratore con Piccone
+- **M** o **Mina** designa rocce e montagne lungo una linea. Un lavoratore con Piccone
   raggiunge una cella adiacente; se non lo possiede lo ritira dal deposito.
-  Dopo **10 secondi di lavoro**, la roccia diventa Gravel e lascia **Pietra da
-  costruzione** sulla stessa cella. Il viaggio al deposito e al lavoro non conta.
+  Dopo **10 secondi di lavoro**, la roccia diventa terra e lascia **Pietra da
+  costruzione** sulla stessa cella. La montagna diventa invece una **Galleria**
+  percorribile e lascia la stessa Pietra da costruzione.
+  Il viaggio al deposito e al lavoro non conta.
 - Lavoro e posizione finale sono esclusivi. Un soldato non riceve due lavori,
   ne un ordine manuale durante lo scavo. Gli attraversamenti restano consentiti.
 - Il tempo avanza soltanto dopo l'arrivo. Durata per cella:
@@ -431,6 +460,55 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 completato. I test verificano durata e XP, accessi adiacenti, prenotazioni,
 coda automatica, cancellazione, ritentativi, input T/X e trascinamento,
 pulsanti runtime, rigenerazione e compatibilita del pannello compatto.
+
+### Montagne, gallerie e rifugi scavati
+
+La montagna e un terreno solido distinto dalla roccia normale, con texture
+scura generata a runtime. Usare **Mina [M]** partendo da un bordo raggiungibile
+e proseguire verso l'interno per scavare corridoi o allargare una camera.
+Si possono designare anche celle profonde: restano in attesa finche il fronte
+diventa raggiungibile, senza bloccare gli altri lavori in coda.
+
+Ogni cella montana minata diventa **Galleria**: pavimento scuro e bordi rocciosi
+sui lati ancora chiusi. Quando si scava una cella adiacente, il bordo comune
+si apre automaticamente. I soldati entrano a piedi, senza scale, attraverso
+il varco scavato; la montagna non minata resta invalicabile.
+
+Le gallerie sono riconosciute come **interni sotto copertura naturale**, senza
+dover costruire un rettangolo: la copertura non implica che siano rifugi chiusi.
+La visuale lascia visibile lo scavo;
+il tetto naturale non nasconde il pavimento. Non si possono scavare trincee o
+sovrapporre progetti di edifici rettangolari alle gallerie. La pietra rilasciata
+si raccoglie normalmente o viene ritirata per le costruzioni.
+Freddo, isolamento, stufe, stabilita e danni alla montagna non sono implementati.
+Rigenerare la mappa ricrea la montagna e azzera le gallerie scavate.
+
+#### Porte e rifugi chiusi
+
+Premere **Porta** nel pannello Costruzioni e cliccare una cella di galleria
+in un passaggio largo un tile, tra due pareti opposte di roccia o montagna.
+Le altre due celle adiacenti devono essere percorribili sullo stesso livello,
+e almeno una deve proseguire nella galleria. Prima raccogliere la pietra o gli
+altri item rimasti sulla cella della porta e terminare eventuali job presenti.
+
+Il Genio costruisce una **porta di legno**: costo **1 Legna**, ritirata da terra
+o dal deposito, e durata `6 / (1 + Forza / 100)` secondi, esclusi i viaggi.
+La risorsa si consuma solo al completamento, che assegna **25 XP Forza**.
+Senza legna raggiungibile il job resta in attesa. **Annulla [X]** rimuove solo
+il progetto non completato; la legna gia ritirata resta nell'inventario.
+Le porte completate restano attraversabili dai soldati, come quelle degli edifici;
+non e ancora prevista la demolizione o un comando di apertura manuale.
+
+Il sistema distingue **gallerie aperte** e **rifugi chiusi**: una regione di
+galleria diventa chiusa solo se ogni collegamento con l'esterno e separato da
+una porta completata. Una porta solo designata non basta; con piu ingressi
+bisogna chiuderli tutti. Scavare una nuova uscita riapre il rifugio. Una porta
+interna puo anche separare due ambienti. Il pannello mostra i conteggi di rifugi
+chiusi e regioni di galleria aperte. Freddo e isolamento restano futuri.
+Rigenerare elimina porte, progetti e conteggi dei rifugi.
+
+API: `IsIndoors(cell)` indica la copertura naturale o di un edificio completo;
+`IsClosedShelter(cell)` distingue gli interni chiusi dalle gallerie aperte.
 
 ### Scale e accesso alle trincee
 
@@ -537,8 +615,10 @@ Le razioni trasportate sono gia sottratte alle razioni pronte della cucina.
 - La consegna richiede la vicinanza effettiva e un passaggio valido tra le
   celle: non si serve attraverso pareti di trincea senza scala.
 - Ogni destinatario riceve **una sola razione al giorno**, anche con fame sopra
-  35, e torna a **100 fame**. Sete, bisogni fisiologici e stress non vengono
-  ripristinati. La fame riprende poi a diminuire al ritmo abituale.
+  35, e torna a **100 fame**; l'eventuale borraccia vuota viene sostituita con
+  una piena. La sete si ripristina solo bevendo dalla borraccia; bisogni
+  fisiologici e stress non vengono ripristinati. La fame riprende poi a diminuire
+  al ritmo abituale.
 - I soldati non interrompono ordini o lavoro per mangiare. Se si spostano,
   il cuoco termina il percorso gia iniziato e cerca nuovamente dove raggiungerli.
 - Se mancano razioni, distribuisce quelle disponibili, torna a cucinare e
@@ -652,7 +732,8 @@ Durata per tile: `6 / (1 + Forza / 100)` secondi, esclusi i viaggi; premio 25 XP
 Le pareti finite bloccano il movimento, la porta finita resta attraversabile.
 Il completamento aspetta che celle occupate e percorsi gia assegnati siano liberi.
 La stanza e **completa solo quando tutto il perimetro, porta inclusa, e costruito**.
-Il pannello indica stanze complete/totali e risorse rimaste nel deposito.
+Il pannello indica stanze complete/totali, rifugi in galleria, gallerie aperte
+e risorse rimaste nel deposito.
 Quando la stanza e completa viene generato automaticamente un **tetto visibile**
 su tutto il rettangolo, senza costi o lavori aggiuntivi. Passare con il mouse
 su pareti, porta o interno nasconde soltanto il tetto di quella costruzione,
@@ -692,7 +773,10 @@ Rigenerare la mappa elimina progetti e costruzioni.
   Accetta e drop di **Legna** sulla cella. Non si puo scavare una trincea in una
   cella che contiene un albero.
 - [x] **Estrazione della roccia**: il job Mina richiede un Piccone, trasforma
-  Rock in Gravel dopo 10 secondi di lavoro e lascia Pietra da costruzione a terra.
+  Rock in terra dopo 10 secondi di lavoro e lascia Pietra da costruzione a terra.
+- [x] **Montagna e gallerie**: terreno piu scuro, non percorribile finche non
+  viene minato; lo scavo produce Pietra da costruzione e apre gallerie e camere
+  percorribili, riconosciute come interni sotto la montagna.
 - [x] **Raccolta risorse**: cliccare un item a terra e assegnare un job che lo
   porta al deposito. Legna e Pietra da costruzione sono registrate nello stockpile.
 - [x] Usare legna e pietra come materiali per le costruzioni.

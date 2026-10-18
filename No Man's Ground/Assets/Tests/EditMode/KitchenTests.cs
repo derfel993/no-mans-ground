@@ -250,6 +250,84 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void AllSpawnedSoldiersIncludingCookUseTheirOwnSingleCanteenAndRegenerationRestoresIt()
+        {
+            Assert.AreEqual(SoldierProfession.Cook, kitchen.Cook.Data.Profession);
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.EmptyCanteen));
+                soldier.Data.Needs.AdvanceTime(soldier.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
+                Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.EmptyCanteen));
+            }
+            map.Regenerate();
+            roster.Spawn(map.Data);
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.EmptyCanteen));
+                Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
+            }
+        }
+
+        [Test]
+        public void MealDeliveryRefillsEmptyCanteensIncludingCooksWithoutDuplicatingFullOnes()
+        {
+            ReachKitchen();
+            SoldierView alreadyFull = roster.Soldiers[0];
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != alreadyFull)
+                    soldier.Data.Needs.AdvanceTime(soldier.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
+            Assert.AreEqual(1, kitchen.Cook.Data.Inventory.Count(ItemType.EmptyCanteen));
+            StageAllProvisionsInKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            CompleteMealRound();
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                Assert.AreEqual(100f, soldier.Data.Needs.Hunger);
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.EmptyCanteen));
+                soldier.Data.Needs.AdvanceTime(soldier.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
+            }
+            kitchen.Tick(1f);
+            Assert.Zero(kitchen.PendingMeals);
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.EmptyCanteen));
+            }
+        }
+
+        [Test]
+        public void EmptyCanteenIsRefilledOnlyWhenCookActuallyDeliversTheMeal()
+        {
+            ReachKitchen();
+            SoldierView recipient = roster.Soldiers[0];
+            recipient.Data.Needs.AdvanceTime(recipient.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
+            recipient.enabled = false;
+            StageAllProvisionsInKitchen();
+            kitchen.Stock.AdvanceTime(270f);
+            map.Clock.AdvanceTime(400d);
+            kitchen.Tick(0.1f);
+            for (int iteration = 0; iteration < 60; iteration++)
+            {
+                kitchen.Cook.AdvanceMovement(1000f);
+                kitchen.Tick(1f);
+            }
+            Assert.AreEqual(1, kitchen.PendingMeals);
+            Assert.Zero(recipient.Data.Inventory.Count(ItemType.FullCanteen));
+            Assert.AreEqual(1, recipient.Data.Inventory.Count(ItemType.EmptyCanteen));
+            recipient.enabled = true;
+            CompleteMealRound();
+            Assert.AreEqual(1, recipient.Data.Inventory.Count(ItemType.FullCanteen));
+            Assert.Zero(recipient.Data.Inventory.Count(ItemType.EmptyCanteen));
+        }
+
+        [Test]
         public void LunchStartsAtThirteenFeedsEveryoneOnceAndRepeatsNextDay()
         {
             foreach (SoldierView soldier in roster.Soldiers)
