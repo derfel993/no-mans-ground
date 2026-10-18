@@ -63,6 +63,198 @@ namespace NoMansGround.Tests
             EditorSceneManager.CloseScene(scene, true);
         }
 
+        [TestCase(ItemType.Wood)]
+        [TestCase(ItemType.BuildingStone)]
+        public void RoomRequiresFinishedPerimeterAndDoorAndOnlyDoorAllowsEntry(ItemType material)
+        {
+            var data = new MapData(10, 10);
+            Assert.IsTrue(data.TryPlanBuilding(new Vector2Int(5, 5), new Vector2Int(2, 2), material, out BuildingRoom room));
+            Assert.IsFalse(data.TrySetBuildingDoor(new Vector2Int(2, 2)));
+            Assert.IsFalse(data.TrySetBuildingDoor(new Vector2Int(3, 3)));
+            Assert.IsFalse(data.CompleteBuildingTile(new Vector2Int(3, 2)));
+            Assert.IsFalse(data.IsIndoors(new Vector2Int(3, 3)));
+            var door = new Vector2Int(3, 2);
+            Assert.IsTrue(data.TrySetBuildingDoor(door));
+            foreach (Vector2Int cell in TrenchWorkOrders.RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one))
+                if (cell != door)
+                    Assert.IsTrue(data.CompleteBuildingTile(cell));
+            Assert.IsFalse(room.IsComplete);
+            Assert.IsFalse(data.IsIndoors(new Vector2Int(3, 3)));
+            Assert.IsTrue(data.CompleteBuildingTile(door));
+            Assert.IsTrue(room.IsComplete);
+            Assert.IsTrue(data.IsIndoors(new Vector2Int(3, 3)));
+            Assert.IsFalse(data.IsIndoors(door));
+            Assert.IsTrue(data.CanStep(new Vector2Int(3, 1), door));
+            Assert.IsTrue(data.CanStep(door, new Vector2Int(3, 3)));
+            Assert.IsFalse(data.CanStep(new Vector2Int(2, 1), new Vector2Int(2, 2)));
+            GridPath path = GridPathfinder.FindNearest(data, new[] { new Vector2Int(1, 3) }, new Vector2Int(3, 3));
+            Assert.IsNotNull(path);
+            CollectionAssert.Contains(path.Cells, door);
+            Assert.IsFalse(data.CanStep(new Vector2Int(2, 1), door));
+        }
+
+        [Test]
+        public void BuildingPlansRejectSmallBlockedOccupiedAndOverlappingAreas()
+        {
+            var data = new MapData(10, 10);
+            Assert.IsFalse(data.TryPlanBuilding(Vector2Int.zero, Vector2Int.one, ItemType.Wood, out _));
+            Assert.IsFalse(data.TryPlanBuilding(Vector2Int.zero, new Vector2Int(3, 3), ItemType.Shovel, out _));
+            Assert.IsFalse(data.TryPlanBuilding(new Vector2Int(-1, 0), new Vector2Int(3, 3), ItemType.Wood, out _));
+            data.SetTree(Vector2Int.one, true);
+            Assert.IsFalse(data.TryPlanBuilding(Vector2Int.zero, new Vector2Int(3, 3), ItemType.Wood, out _));
+            Assert.Zero(data.Buildings.Count);
+            data.SetTree(Vector2Int.one, false);
+            Assert.IsTrue(data.TryPlanBuilding(Vector2Int.zero, new Vector2Int(3, 3), ItemType.Wood, out _));
+            Assert.IsFalse(data.TryPlanBuilding(Vector2Int.one, new Vector2Int(5, 5), ItemType.BuildingStone, out _));
+            Assert.IsFalse(data.TryDesignateZone(MapZoneKind.Dump, Vector2Int.one, new Vector2Int(2, 2), out _));
+            Assert.AreEqual(1, data.Buildings.Count);
+        }
+
+        [TestCase(ItemType.Wood)]
+        [TestCase(ItemType.BuildingStone)]
+        public void EngineersFetchAndConsumeOneMaterialPerTileAndFinishRoom(ItemType material)
+        {
+            PrepareBuildingArea();
+            map.Data.StorageStockpile.Add(material, 8);
+            ItemType other = material == ItemType.Wood ? ItemType.BuildingStone : ItemType.Wood;
+            map.Data.StorageStockpile.Add(other, 3);
+            Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), material));
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsFalse(trenches.Designate(new Vector2Int(51, 11)));
+            Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
+            Assert.AreEqual(8, trenches.Jobs.Count);
+            for (int iteration = 0; iteration < 200 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.Buildings[0].IsComplete);
+            Assert.IsTrue(map.Data.IsIndoors(new Vector2Int(51, 11)));
+            Assert.Zero(map.Data.StorageStockpile.Count(material));
+            Assert.AreEqual(3, map.Data.StorageStockpile.Count(other));
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.Zero(soldier.Data.Inventory.Count(material));
+            Tilemap buildings = view.transform.Find("Buildings").GetComponent<Tilemap>();
+            Assert.AreEqual(material == ItemType.Wood ? "WoodDoor" : "StoneDoor",
+                buildings.GetTile(new Vector3Int(51, 10, 0)).name);
+            map.Regenerate();
+            Assert.Zero(map.Data.Buildings.Count);
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsFalse(buildings.HasTile(new Vector3Int(51, 10, 0)));
+        }
+
+        [Test]
+        public void ConstructionWaitsForMaterialsAndCancelledPickupKeepsResources()
+        {
+            PrepareBuildingArea();
+            Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), ItemType.Wood));
+            Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
+            trenches.Tick(1f);
+            foreach (TrenchJob job in trenches.Jobs)
+            {
+                Assert.IsNull(job.Worker);
+                Assert.Zero(job.Progress);
+            }
+            map.Data.StorageStockpile.Add(ItemType.Wood, 1);
+            trenches.Tick(1f);
+            SoldierView picker = null;
+            foreach (TrenchJob job in trenches.Jobs)
+                if (job.PickingTool == ItemType.Wood)
+                    picker = job.Worker;
+            Assert.IsNotNull(picker);
+            picker.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.AreEqual(1, picker.Data.Inventory.Count(ItemType.Wood));
+            Assert.IsTrue(trenches.Cancel(new Vector2Int(51, 10)));
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.Zero(map.Data.Buildings.Count);
+            Assert.AreEqual(1, picker.Data.Inventory.Count(ItemType.Wood));
+        }
+
+        [TestCase(ItemType.Wood)]
+        [TestCase(ItemType.BuildingStone)]
+        public void EngineersBuildUsingGroundMaterialsWithoutDepositingThem(ItemType material)
+        {
+            PrepareBuildingArea();
+            Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), material));
+            for (int x = 45; x < 53; x++)
+                map.Data.AddGroundItem(new Vector2Int(x, 10), material);
+            view.RefreshGroundItems(map.Data);
+            Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
+            trenches.Tick(0.01f);
+            var reserved = new HashSet<Vector2Int>();
+            foreach (TrenchJob job in trenches.Jobs)
+                if (job.GroundPickupCell.HasValue)
+                    Assert.IsTrue(reserved.Add(job.GroundPickupCell.Value));
+            Assert.Greater(reserved.Count, 0);
+            Assert.AreEqual(8, map.Data.GroundItemCount);
+            for (int iteration = 0; iteration < 200 && trenches.Jobs.Count > 0; iteration++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.Buildings[0].IsComplete);
+            Assert.Zero(map.Data.GroundItemCount);
+            Assert.Zero(map.Data.StorageStockpile.Count(material));
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.Zero(soldier.Data.Inventory.Count(material));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void GroundMaterialPickupHandlesCancellationAndMissingResourceWithoutDuplication(bool cancel)
+        {
+            PrepareBuildingArea();
+            var source = new Vector2Int(45, 10);
+            map.Data.AddGroundItem(source, ItemType.Wood);
+            Assert.IsTrue(trenches.DesignateBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12), ItemType.Wood));
+            Assert.IsTrue(trenches.DesignateDoor(new Vector2Int(51, 10)));
+            trenches.Tick(0.01f);
+            TrenchJob pickup = null;
+            int pickups = 0;
+            foreach (TrenchJob job in trenches.Jobs)
+                if (job.GroundPickupCell == source)
+                {
+                    pickup = job;
+                    pickups++;
+                }
+            Assert.AreEqual(1, pickups);
+            SoldierView worker = pickup.Worker;
+            if (cancel)
+                Assert.IsTrue(trenches.Cancel(new Vector2Int(51, 10)));
+            else
+            {
+                Assert.IsTrue(map.Data.TryTakeGroundItem(source, out _));
+                map.Data.AddGroundItem(source, ItemType.BuildingStone);
+            }
+            worker.AdvanceMovement(1000f);
+            trenches.Tick(0.01f);
+            Assert.IsTrue(map.Data.TryGetGroundItem(source, out ItemType remaining));
+            Assert.AreEqual(cancel ? ItemType.Wood : ItemType.BuildingStone, remaining);
+            Assert.IsFalse(worker.HasWorkAssignment);
+            Assert.IsFalse(pickup.GroundPickupCell.HasValue);
+            Assert.Zero(worker.Data.Inventory.Count(ItemType.Wood));
+            Assert.Zero(worker.Data.Inventory.Count(ItemType.BuildingStone));
+            Assert.Zero(map.Data.StorageStockpile.Count(ItemType.Wood));
+        }
+
+        private void PrepareBuildingArea()
+        {
+            for (int y = 9; y <= 13; y++)
+                for (int x = 49; x <= 53; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    map.Data[x, y] = TerrainKind.Dirt;
+                    map.Data.SetTree(cell, false);
+                    map.Data.SetWalkable(cell, true);
+                }
+            view.Render(map.Data);
+        }
+
         [TestCase(0, 0, 7, 0)]
         [TestCase(7, 7, 0, 0)]
         [TestCase(2, 8, 5, 1)]

@@ -7,8 +7,8 @@ using UnityEngine.InputSystem;
 
 namespace NoMansGround.Soldiers
 {
-    public enum DiggingMode { None, Dig, Cancel, Ladder, Cut, Mine, Collect }
-    public enum TrenchJobKind { Dig, Ladder, CutTree, MineRock, CollectItem }
+    public enum DiggingMode { None, Dig, Cancel, Ladder, Cut, Mine, Collect, BuildWood, BuildStone, Door }
+    public enum TrenchJobKind { Dig, Ladder, CutTree, MineRock, CollectItem, BuildWall, BuildDoor }
 
     public sealed class TrenchJob
     {
@@ -18,7 +18,9 @@ namespace NoMansGround.Soldiers
         public float Progress { get; internal set; }
         public string Status { get; internal set; } = "In attesa";
         public ItemType? PickingTool { get; internal set; }
+        public Vector2Int? GroundPickupCell { get; internal set; }
         public ItemType? CollectedItem { get; internal set; }
+        public ItemType? Material { get; internal set; }
         internal SpriteRenderer Marker;
 
         internal TrenchJob(Vector2Int cell, TrenchJobKind kind = TrenchJobKind.Dig)
@@ -111,6 +113,9 @@ namespace NoMansGround.Soldiers
                 : mode == DiggingMode.Cut ? "TAGLIA: trascina sugli alberi.\nEsc o destro: esci."
                 : mode == DiggingMode.Mine ? "MINA: trascina sulle rocce.\nEsc o destro: esci."
                 : mode == DiggingMode.Collect ? "RACCOGLI: clicca una risorsa.\nEsc o destro: esci."
+                : mode == DiggingMode.BuildWood ? "LEGNO: trascina un rettangolo."
+                : mode == DiggingMode.BuildStone ? "PIETRA: trascina un rettangolo."
+                : mode == DiggingMode.Door ? "PORTA: scegli un lato del perimetro."
                 : mode == DiggingMode.Cancel ? "ANNULLA: trascina sugli scavi.\nEsc o destro: esci."
                 : "T: scava | A: taglia | M: mina | C: raccogli | L: scala\nX: annulla | Esc: esci");
         }
@@ -170,19 +175,35 @@ namespace NoMansGround.Soldiers
                     DesignateCollection(cell);
                 return;
             }
+            if (Mode == DiggingMode.Door)
+            {
+                if (valid) ShowPreview(new[] { cell });
+                else ClearPreview();
+                if (valid && mouse.leftButton.wasPressedThisFrame)
+                    DesignateDoor(cell);
+                return;
+            }
             if (mouse.leftButton.wasPressedThisFrame && valid)
             {
                 dragging = true;
                 dragStart = cell;
             }
             if (dragging && valid)
-                ShowPreview(RasterLine(dragStart, cell));
+                ShowPreview(Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone
+                    ? RectanglePerimeter(dragStart, cell) : RasterLine(dragStart, cell));
             if (dragging && mouse.leftButton.wasReleasedThisFrame)
             {
                 dragging = false;
                 ClearPreview();
                 if (!valid)
                     return;
+                if (Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone)
+                {
+                    if (DesignateBuilding(dragStart, cell,
+                        Mode == DiggingMode.BuildWood ? ItemType.Wood : ItemType.BuildingStone))
+                        SetMode(DiggingMode.Door);
+                    return;
+                }
                 int changed = 0;
                 foreach (Vector2Int target in RasterLine(dragStart, cell))
                     if (Mode == DiggingMode.Dig ? Designate(target)
@@ -229,11 +250,69 @@ namespace NoMansGround.Soldiers
             }
         }
 
+        public static IReadOnlyList<Vector2Int> RectanglePerimeter(Vector2Int from, Vector2Int to)
+        {
+            var cells = new List<Vector2Int>();
+            int minX = Mathf.Min(from.x, to.x);
+            int maxX = Mathf.Max(from.x, to.x);
+            int minY = Mathf.Min(from.y, to.y);
+            int maxY = Mathf.Max(from.y, to.y);
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                    if (x == minX || x == maxX || y == minY || y == maxY)
+                        cells.Add(new Vector2Int(x, y));
+            return cells;
+        }
+
+        public bool DesignateBuilding(Vector2Int from, Vector2Int to, ItemType material)
+        {
+            foreach (TrenchJob job in jobs)
+                if (job.Cell.x >= Mathf.Min(from.x, to.x) && job.Cell.x <= Mathf.Max(from.x, to.x)
+                    && job.Cell.y >= Mathf.Min(from.y, to.y) && job.Cell.y <= Mathf.Max(from.y, to.y))
+                {
+                    Notify("Area con lavori gia presenti.");
+                    return false;
+                }
+            if (!isActiveAndEnabled || map.Data == null
+                || !map.Data.TryPlanBuilding(from, to, material, out _))
+            {
+                Notify("Area non valida: minimo 3x3, terreno libero e senza sovrapposizioni.");
+                return false;
+            }
+            mapView.RenderBuildings(map.Data);
+            Notify("Perimetro designato. Scegli la porta su un lato.");
+            return true;
+        }
+
+        public bool DesignateDoor(Vector2Int cell)
+        {
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.TrySetBuildingDoor(cell))
+            {
+                Notify("Porta non valida: scegli un lato, non un angolo, di una stanza senza porta.");
+                return false;
+            }
+            BuildingRoom room = map.Data.GetBuilding(cell);
+            var perimeter = RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one);
+            foreach (Vector2Int target in perimeter)
+            {
+                if (room.IsBuilt(target) || jobs.Exists(existing => existing.Cell == target))
+                    continue;
+                var job = new TrenchJob(target, target == cell ? TrenchJobKind.BuildDoor : TrenchJobKind.BuildWall);
+                job.Material = room.Material;
+                job.Marker = CreateMarker(target, new Color(0.4f, 0.8f, 0.9f, 0.6f), "Building designation");
+                jobs.Add(job);
+            }
+            retryTimer = 0f;
+            mapView.RenderBuildings(map.Data);
+            Notify($"Costruzione in coda: {perimeter.Count} tile di {ItemCatalog.Get(room.Material).DisplayName}.");
+            return true;
+        }
+
         public bool Designate(Vector2Int cell)
         {
             if (!isActiveAndEnabled || map.Data == null || !map.Data.IsWalkable(cell)
                 || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.HasTree(cell)
-                || map.Data.TryGetZone(cell, out _)
+                || map.Data.TryGetZone(cell, out _) || map.Data.GetBuilding(cell) != null
                 || map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell)
                 || jobs.Exists(job => job.Cell == cell))
             {
@@ -303,6 +382,19 @@ namespace NoMansGround.Soldiers
 
         public bool Cancel(Vector2Int cell)
         {
+            BuildingRoom room = map.Data?.GetBuilding(cell);
+            if (room != null && !room.IsComplete)
+            {
+                foreach (TrenchJob job in jobs.FindAll(existing => room.Bounds.Contains(existing.Cell)))
+                {
+                    Release(job);
+                    jobs.Remove(job);
+                }
+                map.Data.CancelBuilding(room);
+                mapView.RenderBuildings(map.Data);
+                Notify("Lavori stanza annullati; parti costruite conservate.");
+                return true;
+            }
             int index = jobs.FindIndex(job => job.Cell == cell);
             if (index < 0)
             {
@@ -350,6 +442,7 @@ namespace NoMansGround.Soldiers
                     worker.SetWorkAssignment(false);
                     job.Worker = null;
                     job.PickingTool = null;
+                    job.GroundPickupCell = null;
                     job.Status = "In attesa";
                     changed = true;
                     continue;
@@ -412,11 +505,23 @@ namespace NoMansGround.Soldiers
                 if (job.PickingTool.HasValue)
                 {
                     ItemType tool = job.PickingTool.Value;
-                    if (!map.Data.StorageStockpile.TryTake(tool, 1))
+                    bool taken;
+                    if (job.GroundPickupCell.HasValue)
+                    {
+                        Vector2Int source = job.GroundPickupCell.Value;
+                        taken = worker.Cell == source && map.Data.TryGetGroundItem(source, out ItemType item)
+                            && item == tool && map.Data.TryTakeGroundItem(source, out _);
+                        if (taken)
+                            mapView.RefreshGroundItems(map.Data);
+                    }
+                    else
+                        taken = map.Data.StorageStockpile.TryTake(tool, 1);
+                    if (!taken)
                     {
                         worker.SetWorkAssignment(false);
                         job.Worker = null;
                         job.PickingTool = null;
+                        job.GroundPickupCell = null;
                         job.Status = $"Nessun {ItemCatalog.Get(tool).DisplayName.ToLowerInvariant()} disponibile";
                         changed = true;
                         continue;
@@ -425,6 +530,7 @@ namespace NoMansGround.Soldiers
                     worker.SetWorkAssignment(false);
                     job.Worker = null;
                     job.PickingTool = null;
+                    job.GroundPickupCell = null;
                     job.Status = $"{ItemCatalog.Get(tool).DisplayName} raccolta";
                     Notify($"{ItemCatalog.Get(tool).DisplayName} raccolta; assegnazione del lavoro.");
                     retryTimer = 0f;
@@ -434,6 +540,7 @@ namespace NoMansGround.Soldiers
                 if (Mathf.Abs(worker.Cell.x - job.Cell.x) + Mathf.Abs(worker.Cell.y - job.Cell.y) != 1)
                     throw new InvalidOperationException("A trench worker must stand next to the designated cell.");
                 job.Status = job.Kind == TrenchJobKind.Dig ? "Scavo"
+                    : job.Material.HasValue ? "Costruzione"
                     : job.Kind == TrenchJobKind.CutTree ? "Taglio albero"
                     : job.Kind == TrenchJobKind.MineRock ? "Mina roccia" : "Installazione scala";
                 float multiplier = 1f + worker.Data.GetSkill(SoldierSkill.Strength).Value / 100f;
@@ -447,7 +554,32 @@ namespace NoMansGround.Soldiers
                 changed = true;
                 if (job.Progress < 1f)
                     continue;
-                if (job.Kind == TrenchJobKind.Dig || job.Kind == TrenchJobKind.CutTree)
+                if (job.Material.HasValue)
+                {
+                    if (job.Kind == TrenchJobKind.BuildWall && !CanExcavate(job.Cell))
+                    {
+                        job.Status = "Attesa: cella o percorso occupato";
+                        continue;
+                    }
+                    if (!worker.Data.Inventory.TryTake(job.Material.Value, 1))
+                    {
+                        worker.SetWorkAssignment(false);
+                        job.Worker = null;
+                        retryTimer = 0f;
+                        continue;
+                    }
+                    if (!map.Data.CompleteBuildingTile(job.Cell))
+                    {
+                        worker.Data.Inventory.Add(job.Material.Value, 1);
+                        Release(job);
+                        jobs.RemoveAt(i);
+                        continue;
+                    }
+                    mapView.RenderBuildings(map.Data);
+                    Notify(map.Data.GetBuilding(job.Cell).IsComplete
+                        ? "Costruzione completata." : "Parte della costruzione completata.");
+                }
+                else if (job.Kind == TrenchJobKind.Dig || job.Kind == TrenchJobKind.CutTree)
                 {
                     if (!CanExcavate(job.Cell))
                     {
@@ -498,7 +630,7 @@ namespace NoMansGround.Soldiers
 
             ItemType? requiredTool = job.Kind == TrenchJobKind.Dig ? ItemType.Shovel
                 : job.Kind == TrenchJobKind.CutTree ? ItemType.Axe
-                : job.Kind == TrenchJobKind.MineRock ? ItemType.Pickaxe : null;
+                : job.Kind == TrenchJobKind.MineRock ? ItemType.Pickaxe : job.Material;
             if (requiredTool.HasValue)
             {
                 available.RemoveAll(soldier => soldier.Data.Inventory.Count(requiredTool.Value) == 0);
@@ -514,7 +646,8 @@ namespace NoMansGround.Soldiers
             {
                 Vector2Int workCell = job.Cell + offset;
                 if (!map.Data.IsWalkable(workCell)
-                    || jobs.Exists(other => other.Kind == TrenchJobKind.Dig && other.Cell == workCell))
+                    || jobs.Exists(other => (other.Kind == TrenchJobKind.Dig
+                        || other.Kind == TrenchJobKind.BuildWall) && other.Cell == workCell))
                     continue;
                 GridPath candidate = GridPathfinder.FindNearest(map.Data, starts, workCell);
                 if (candidate == null || (best != null && candidate.Cost >= best.Cost))
@@ -538,6 +671,7 @@ namespace NoMansGround.Soldiers
             if (best.Cells.Count > 1)
                 job.Worker.BeginMove(mapView, best.Cells);
             job.Status = job.Worker.IsMoving ? "In arrivo"
+                : job.Material.HasValue ? "Costruzione"
                 : job.Kind == TrenchJobKind.Dig ? "Scavo"
                 : job.Kind == TrenchJobKind.CutTree ? "Taglio albero"
                 : job.Kind == TrenchJobKind.MineRock ? "Mina roccia" : "Installazione scala";
@@ -629,65 +763,84 @@ namespace NoMansGround.Soldiers
         {
             int reservedTools = 0;
             foreach (TrenchJob other in jobs)
-                if (other.PickingTool == tool)
+                if (other.PickingTool == tool && !other.GroundPickupCell.HasValue)
                     reservedTools++;
-            if (map.Data.StorageStockpile.Count(tool) <= reservedTools)
+            var pickupCells = new List<Vector2Int>();
+            if (map.Data.StorageStockpile.Count(tool) > reservedTools)
+                pickupCells.AddRange(StorageCells());
+            if (job.Material.HasValue && map.Data.GroundItemCount > 0)
+                for (int y = 0; y < map.Data.Height; y++)
+                    for (int x = 0; x < map.Data.Width; x++)
+                    {
+                        var cell = new Vector2Int(x, y);
+                        if (map.Data.TryGetGroundItem(cell, out ItemType item) && item == tool
+                            && !jobs.Exists(other => other.GroundPickupCell == cell
+                                || (other.Kind == TrenchJobKind.CollectItem && other.Cell == cell)))
+                            pickupCells.Add(cell);
+                    }
+            if (pickupCells.Count == 0)
             {
-                string noTool = tool == ItemType.Axe ? "Nessuna accetta disponibile" : "Nessuna pala disponibile";
+                string noTool = tool == ItemType.Axe ? "Nessuna accetta disponibile"
+                    : tool == ItemType.Wood || tool == ItemType.BuildingStone
+                        ? $"Materiale esaurito: {ItemCatalog.Get(tool).DisplayName}" : "Nessuna pala disponibile";
                 bool changed = job.Status != noTool;
                 job.Status = noTool;
                 if (changed)
-                    Notify($"{noTool} nel deposito; il lavoro resta in attesa.");
+                    Notify(job.Material.HasValue ? $"{noTool}; il lavoro resta in attesa."
+                        : $"{noTool} nel deposito; il lavoro resta in attesa.");
                 return changed;
             }
 
             GridPath best = null;
             SoldierView bestWorker = null;
+            Vector2Int? groundPickup = null;
             foreach (SoldierView worker in roster.Soldiers)
             {
                 if (worker == null || !worker.CanTakeEngineeringWork
                     || worker.Data.Inventory.Count(tool) > 0)
                     continue;
-                for (int y = map.Data.StorageOrigin.y; y < map.Data.StorageOrigin.y + map.Data.StorageHeight; y++)
-                    for (int x = map.Data.StorageOrigin.x; x < map.Data.StorageOrigin.x + map.Data.StorageWidth; x++)
-                    {
-                        var pickupCell = new Vector2Int(x, y);
-                        if (!map.Data.IsWalkable(pickupCell))
-                            continue;
-                        bool reserved = false;
-                        foreach (SoldierView other in roster.Soldiers)
-                            if (other != null && other != worker
-                                && (other.Cell == pickupCell || other.Destination == pickupCell))
-                                reserved = true;
-                        if (reserved)
-                            continue;
-                        GridPath candidate = GridPathfinder.FindNearest(map.Data,
-                            new[] { worker.Cell }, pickupCell);
-                        if (candidate == null || (best != null && candidate.Cost >= best.Cost))
-                            continue;
-                        best = candidate;
-                        bestWorker = worker;
-                    }
+                foreach (Vector2Int pickupCell in pickupCells)
+                {
+                    if (!map.Data.IsWalkable(pickupCell))
+                        continue;
+                    bool reserved = false;
+                    foreach (SoldierView other in roster.Soldiers)
+                        if (other != null && other != worker
+                            && (other.Cell == pickupCell || other.Destination == pickupCell))
+                            reserved = true;
+                    if (reserved)
+                        continue;
+                    GridPath candidate = GridPathfinder.FindNearest(map.Data,
+                        new[] { worker.Cell }, pickupCell);
+                    if (candidate == null || (best != null && candidate.Cost >= best.Cost))
+                        continue;
+                    best = candidate;
+                    bestWorker = worker;
+                    groundPickup = map.Data.IsStorageCell(pickupCell) ? (Vector2Int?)null : pickupCell;
+                }
             }
             if (best == null)
             {
-                const string blocked = "Accesso al deposito bloccato o occupato";
+                string blocked = job.Material.HasValue ? "Accesso al materiale bloccato o occupato"
+                    : "Accesso al deposito bloccato o occupato";
                 bool changed = job.Status != blocked;
                 job.Status = blocked;
                 if (changed)
-                    Notify("Accesso al deposito bloccato o occupato.");
+                    Notify(blocked);
                 return changed;
             }
 
             job.Worker = bestWorker;
             job.PickingTool = tool;
+            job.GroundPickupCell = groundPickup;
             bestWorker.SetWorkAssignment(true, job.Progress, job.Kind);
             if (best.Cells.Count > 1)
                 bestWorker.BeginMove(mapView, best.Cells);
             string itemName = ItemCatalog.Get(tool).DisplayName.ToLowerInvariant();
             job.Status = bestWorker.IsMoving ? $"In marcia per {itemName}" : $"Ritiro {itemName}";
-            Notify(bestWorker.IsMoving ? $"Un lavoratore sta andando al deposito per prendere {itemName}."
-                : $"Ritiro {itemName} dal deposito.");
+            string sourceName = groundPickup.HasValue ? "da terra" : "dal deposito";
+            Notify(bestWorker.IsMoving ? $"Un lavoratore sta andando a prendere {itemName} {sourceName}."
+                : $"Ritiro {itemName} {sourceName}.");
             return true;
         }
 
@@ -721,6 +874,7 @@ namespace NoMansGround.Soldiers
                 job.Worker.SetWorkAssignment(false);
             job.Worker = null;
             job.PickingTool = null;
+            job.GroundPickupCell = null;
             if (job.Marker != null)
             {
                 job.Marker.gameObject.SetActive(false);
@@ -761,6 +915,7 @@ namespace NoMansGround.Soldiers
             for (int i = 0; i < cells.Count; i++)
             {
                 Color color = Mode == DiggingMode.Dig || Mode == DiggingMode.Ladder
+                    || Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone || Mode == DiggingMode.Door
                     ? new Color(0.3f, 0.8f, 1f, 0.6f)
                     : Mode == DiggingMode.Cut ? new Color(0.48f, 0.78f, 0.35f, 0.72f)
                     : new Color(1f, 0.2f, 0.2f, 0.6f);

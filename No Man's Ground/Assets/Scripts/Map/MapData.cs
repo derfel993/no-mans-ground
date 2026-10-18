@@ -1,8 +1,45 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NoMansGround.Map
 {
+    public sealed class BuildingRoom
+    {
+        private readonly HashSet<Vector2Int> completed = new HashSet<Vector2Int>();
+        public RectInt Bounds { get; }
+        public ItemType Material { get; }
+        public Vector2Int? Door { get; private set; }
+        public bool IsComplete => Door.HasValue && completed.Count == 2 * Bounds.width + 2 * Bounds.height - 4;
+        public int CompletedTiles => completed.Count;
+
+        internal BuildingRoom(RectInt bounds, ItemType material)
+        {
+            Bounds = bounds;
+            Material = material;
+        }
+
+        public bool IsPerimeter(Vector2Int cell)
+        {
+            return Bounds.Contains(cell) && (cell.x == Bounds.xMin || cell.x == Bounds.xMax - 1
+                || cell.y == Bounds.yMin || cell.y == Bounds.yMax - 1);
+        }
+
+        public bool IsBuilt(Vector2Int cell) => completed.Contains(cell);
+
+        internal bool SetDoor(Vector2Int cell)
+        {
+            if (!IsPerimeter(cell) || Door.HasValue || completed.Contains(cell)
+                || ((cell.x == Bounds.xMin || cell.x == Bounds.xMax - 1)
+                    && (cell.y == Bounds.yMin || cell.y == Bounds.yMax - 1)))
+                return false;
+            Door = cell;
+            return true;
+        }
+
+        internal bool Complete(Vector2Int cell) => IsPerimeter(cell) && completed.Add(cell);
+    }
+
     public enum MapZoneKind
     {
         Dump,
@@ -31,6 +68,68 @@ namespace NoMansGround.Map
         private readonly bool[] pantryCells;
         private readonly ItemType?[] groundItems;
         private readonly MapZoneKind?[] zones;
+        private readonly List<BuildingRoom> buildings = new List<BuildingRoom>();
+        public IReadOnlyList<BuildingRoom> Buildings => buildings.AsReadOnly();
+
+        public BuildingRoom GetBuilding(Vector2Int cell)
+        {
+            foreach (BuildingRoom room in buildings)
+                if (room.Bounds.Contains(cell))
+                    return room;
+            return null;
+        }
+
+        public bool IsIndoors(Vector2Int cell)
+        {
+            BuildingRoom room = GetBuilding(cell);
+            return room != null && room.IsComplete && !room.IsPerimeter(cell);
+        }
+
+        public bool TryPlanBuilding(Vector2Int from, Vector2Int to, ItemType material, out BuildingRoom room)
+        {
+            room = null;
+            if (material != ItemType.Wood && material != ItemType.BuildingStone)
+                return false;
+            int minX = Math.Min(from.x, to.x);
+            int minY = Math.Min(from.y, to.y);
+            int maxX = Math.Max(from.x, to.x);
+            int maxY = Math.Max(from.y, to.y);
+            if (!Contains(new Vector2Int(minX, minY)) || !Contains(new Vector2Int(maxX, maxY))
+                || maxX - minX < 2 || maxY - minY < 2)
+                return false;
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!IsWalkable(cell) || IsTrench(cell) || HasTree(cell) || TryGetGroundItem(cell, out _)
+                        || IsStorageCell(cell) || IsPantryCell(cell) || TryGetZone(cell, out _)
+                        || GetBuilding(cell) != null || this[x, y] == TerrainKind.Road)
+                        return false;
+                }
+            room = new BuildingRoom(new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1), material);
+            buildings.Add(room);
+            return true;
+        }
+
+        public bool TrySetBuildingDoor(Vector2Int cell)
+        {
+            BuildingRoom room = GetBuilding(cell);
+            return room != null && !room.IsComplete && (room.Door == cell || room.SetDoor(cell));
+        }
+
+        public void CancelBuilding(BuildingRoom room)
+        {
+            if (room.CompletedTiles == 0)
+                buildings.Remove(room);
+        }
+
+        public bool CompleteBuildingTile(Vector2Int cell)
+        {
+            BuildingRoom room = GetBuilding(cell);
+            if (room == null || !room.Door.HasValue || !room.Complete(cell))
+                return false;
+            return true;
+        }
 
         public int Width { get; }
         public int Height { get; }
@@ -206,7 +305,7 @@ namespace NoMansGround.Map
                 {
                     var cell = new Vector2Int(x, y);
                     int index = y * Width + x;
-                    if (!IsWalkable(cell) || IsTrench(cell) || storageCells[index] || pantryCells[index]
+                    if (!IsWalkable(cell) || IsTrench(cell) || GetBuilding(cell) != null || storageCells[index] || pantryCells[index]
                         || (zones[index].HasValue && zones[index] != kind))
                         return false;
                 }
@@ -247,8 +346,11 @@ namespace NoMansGround.Map
 
         public bool IsWalkable(Vector2Int cell)
         {
-            return Contains(cell) && cells[cell.y * Width + cell.x] != TerrainKind.Rock
-                && !blocked[cell.y * Width + cell.x];
+            if (!Contains(cell) || cells[cell.y * Width + cell.x] == TerrainKind.Rock
+                || blocked[cell.y * Width + cell.x])
+                return false;
+            BuildingRoom room = GetBuilding(cell);
+            return room == null || !room.IsBuilt(cell) || room.Door == cell;
         }
 
         public void SetWalkable(Vector2Int cell, bool walkable)

@@ -13,6 +13,33 @@ namespace NoMansGround.Tests
     public sealed class TrenchSceneTests
     {
         [UnityTest]
+        public IEnumerator ConstructionButtonsToggleModesAndFollowWorkSystemAvailability()
+        {
+            EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+            yield return new EnterPlayMode();
+            yield return null;
+            var trenches = Object.FindAnyObjectByType<TrenchWorkOrders>();
+            var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            panel.SetZoneMode(MapZoneKind.Dump);
+            FindButton(canvas, "Legno").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWood, trenches.Mode);
+            FindButton(canvas, "Pietra").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildStone, trenches.Mode);
+            FindButton(canvas, "Porta").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Door, trenches.Mode);
+            FindButton(canvas, "Porta").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            trenches.enabled = false;
+            foreach (string label in new[] { "Legno", "Pietra", "Porta" })
+                Assert.IsFalse(FindButton(canvas, label).interactable);
+            trenches.enabled = true;
+            foreach (string label in new[] { "Legno", "Pietra", "Porta" })
+                Assert.IsTrue(FindButton(canvas, label).interactable);
+            yield return new ExitPlayMode();
+        }
+
+        [UnityTest]
         public IEnumerator SceneButtonsProgressCancellationAndRegenerationStayConsistent()
         {
             EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
@@ -24,7 +51,15 @@ namespace NoMansGround.Tests
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(19, buttons.Length);
+            Assert.AreEqual(22, buttons.Length);
+            FindButton(canvas, "Legno").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWood, trenches.Mode);
+            FindButton(canvas, "Pietra").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildStone, trenches.Mode);
+            FindButton(canvas, "Porta").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.Door, trenches.Mode);
+            FindButton(canvas, "Porta").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.None, trenches.Mode);
             FindButton(canvas, "2x").onClick.Invoke();
             Assert.AreEqual(2, Time.timeScale);
             Assert.AreEqual(2, map.SimulationSpeed);

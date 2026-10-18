@@ -597,6 +597,50 @@ materiali e rifornimento dalle retrovie non sono ancora implementati. Le zone
 forniscono le destinazioni, non assegnano ancora questi lavori ai soldati.
 Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 
+## Step 8: costruzioni rettangolari
+
+Nel pannello **COSTRUZIONI**, scegliere **Legno** o **Pietra**, quindi trascinare
+un rettangolo sul terreno libero (minimo **3 x 3 tile**, compreso il perimetro).
+Viene designato soltanto il bordo; l'interno resta percorribile. Alberi, rocce,
+trincee, strada, item a terra, depositi, zone e altre stanze devono restare fuori
+dall'area scelta. I soldati presenti non vengono spostati automaticamente.
+
+Al rilascio si attiva **Porta**: cliccare un tile del bordo, non un angolo.
+La porta usa lo stesso materiale delle pareti. Prima della scelta della porta
+non partono lavori. Il pulsante Porta permette anche di completare la scelta
+dopo essere usciti dalla modalita con Esc o destro.
+
+Il **Genio in Lavoro** costruisce pareti e porta tramite la coda dei lavori:
+ogni tile costa provvisoriamente **1 Legna** oppure **1 Pietra da costruzione**.
+Il soldato ritira fisicamente il materiale dal deposito **oppure direttamente
+da terra**, scegliendo la fonte raggiungibile piu vicina. Legna e pietra lasciate
+dal taglio/mina non devono essere portate prima al deposito: il costruttore le
+raccoglie automaticamente per il cantiere. Ogni risorsa a terra viene prenotata
+per un solo costruttore; quelle con un ordine Raccogli restano affidate a
+quell'ordine. Non vengono aggiunte scorte gratuite. Senza materiale raggiungibile
+i job aspettano e riprovano.
+Durata per tile: `6 / (1 + Forza / 100)` secondi, esclusi i viaggi; premio 25 XP Forza.
+
+Le pareti finite bloccano il movimento, la porta finita resta attraversabile.
+Il completamento aspetta che celle occupate e percorsi gia assegnati siano liberi.
+La stanza e **completa solo quando tutto il perimetro, porta inclusa, e costruito**.
+Il pannello indica stanze complete/totali e risorse rimaste nel deposito.
+L'interno viene riconosciuto nei dati, ma non viene ancora generato un tetto.
+
+**Annulla [X]** sul perimetro ferma i lavori della stanza; le parti gia costruite
+restano e i materiali trasportati rimangono nell'inventario. Se non e stato
+costruito nulla il progetto viene rimosso. Per riprendere una stanza parziale,
+scegliere Porta e cliccare la porta gia designata. Non e prevista demolizione.
+Rigenerare la mappa elimina progetti e costruzioni.
+
+### TODO costruzioni
+
+- [ ] Quando verra implementato il **freddo**, l'interno delle costruzioni
+  dovra proteggere dalle basse temperature rispetto all'esterno.
+- [ ] Implementare **stufe all'interno delle costruzioni** per aumentare il caldo.
+- [ ] Assegnare una **durabilita specifica per materiale** a pareti e porte,
+  per resistere ai bombardamenti; danni e distruzione non sono ancora implementati.
+
 ## Step successivi (non implementati)
 
 ### TODO zone e logistica
@@ -617,8 +661,9 @@ Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
   Rock in Gravel dopo 10 secondi di lavoro e lascia Pietra da costruzione a terra.
 - [x] **Raccolta risorse**: cliccare un item a terra e assegnare un job che lo
   porta al deposito. Legna e Pietra da costruzione sono registrate nello stockpile.
-- [ ] Usare legna e pietra come materiali per le costruzioni e automatizzare la raccolta.
-- [ ] **Rifugi con costruzione a celle, in stile RimWorld**: designare pareti
+- [x] Usare legna e pietra come materiali per le costruzioni.
+- [x] Automatizzare il ritiro delle risorse a terra necessarie ai cantieri.
+- [x] **Rifugi rettangolari con costruzione a celle, in stile RimWorld**: designare pareti
   e porte, richiedere materiali e assegnare i lavori di costruzione ai soldati.
 - [ ] **Tetti automatici**: quando le pareti e le porte costruite chiudono
   un perimetro, riconoscere lo spazio interno e generare automaticamente

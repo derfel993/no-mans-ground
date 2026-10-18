@@ -8,6 +8,36 @@ La versione delle voci successive viene concordata con l'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.3.0 - 2026-10-18
+===============================================================================
+
+Costruzioni
+- Aggiunta la designazione di edifici rettangolari in Legno o Pietra da
+  costruzione, con anteprima del perimetro e dimensione minima di 3x3 tile.
+- La porta viene scelta su un lato del perimetro, esclusi gli angoli, e usa
+  lo stesso materiale delle pareti; la sua scelta avvia i lavori del Genio.
+- Ogni tile richiede un'unita di materiale; i costruttori la ritirano
+  fisicamente dal deposito oppure direttamente da terra, scegliendo la fonte
+  raggiungibile piu vicina senza richiedere un ordine manuale di raccolta.
+- Le risorse a terra vengono prenotate per evitare ritiri concorrenti;
+  senza materiali raggiungibili i lavori restano in attesa e riprovano.
+- Le pareti completate bloccano il movimento, mentre la porta consente
+  l'ingresso dei soldati. La stanza risulta completa soltanto quando tutto
+  il perimetro, porta inclusa, e costruito.
+- Il completamento delle pareti rispetta celle occupate e percorsi assegnati;
+  i lavori assegnano esperienza in Forza e mostrano il progresso del soldato.
+- Aggiunti i comandi Legno, Pietra e Porta, i contatori delle stanze e delle
+  scorte e la grafica provvisoria distinta per materiali, pareti e porte.
+- Annullare ferma i lavori conservando le parti costruite e i materiali
+  trasportati; una stanza parziale puo essere ripresa dalla porta designata.
+  La rigenerazione della mappa elimina progetti e costruzioni.
+
+Verifiche
+- Aggiunti test per chiusura del perimetro, accesso dalla porta, costruzione
+  con entrambi i materiali, ritiro dal deposito o da terra, prenotazioni,
+  annullamento, risorse mancanti, rigenerazione e comandi dell'interfaccia.
+
+===============================================================================
 0.2.1 - 2026-10-17
 ===============================================================================
 

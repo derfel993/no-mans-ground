@@ -9,6 +9,66 @@ namespace NoMansGround.Map
     public sealed class MapTilemapView : MonoBehaviour
     {
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
+        private Tilemap buildingTilemap;
+        private readonly Tile[] buildingTiles = new Tile[4];
+
+        public void RenderBuildings(MapData map)
+        {
+            if (buildingTilemap == null)
+            {
+                var layer = new GameObject("Buildings", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                buildingTilemap = layer.GetComponent<Tilemap>();
+                layer.GetComponent<TilemapRenderer>().sortingOrder = 2;
+            }
+            buildingTilemap.ClearAllTiles();
+            foreach (BuildingRoom room in map.Buildings)
+                for (int y = room.Bounds.yMin; y < room.Bounds.yMax; y++)
+                    for (int x = room.Bounds.xMin; x < room.Bounds.xMax; x++)
+                    {
+                        var cell = new Vector2Int(x, y);
+                        if (!room.IsPerimeter(cell))
+                            continue;
+                        bool door = room.Door == cell;
+                        int index = (room.Material == ItemType.Wood ? 0 : 2) + (door ? 1 : 0);
+                        if (buildingTiles[index] == null)
+                            buildingTiles[index] = CreateBuildingTile(room.Material, door);
+                        var position = new Vector3Int(x, y, 0);
+                        buildingTilemap.SetTile(position, buildingTiles[index]);
+                        buildingTilemap.SetColor(position, room.IsBuilt(cell)
+                            ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
+                    }
+        }
+
+        private Tile CreateBuildingTile(ItemType material, bool door)
+        {
+            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            var pixels = new Color32[256];
+            bool wood = material == ItemType.Wood;
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < 16; x++)
+                {
+                    bool seam = wood ? x % 4 == 0 : y % 4 == 0 || (x + (y / 4 % 2) * 4) % 8 == 0;
+                    Color32 color = wood
+                        ? (seam ? new Color32(72, 46, 27, 255) : new Color32(168, 116, 65, 255))
+                        : (seam ? new Color32(65, 69, 65, 255) : new Color32(165, 172, 160, 255));
+                    if (door && x >= 3 && x <= 12)
+                        color = x == 3 || x == 12 || y == 0 || y == 15
+                            ? new Color32(40, 43, 38, 255) : new Color32(88, 135, 112, 255);
+                    if (door && x == 10 && y == 8)
+                        color = new Color32(245, 215, 105, 255);
+                    pixels[y * 16 + x] = color;
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.name = (wood ? "Wood" : "Stone") + (door ? "Door" : "Wall");
+            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.flags = TileFlags.None;
+            tile.colliderType = Tile.ColliderType.None;
+            return tile;
+        }
         private GameObject treeLayer;
         private Tilemap treeTilemap;
         private Tile runtimeTreeTile;
@@ -187,6 +247,7 @@ namespace NoMansGround.Map
             RenderZones(map);
             RenderStorageArea(map);
             RenderTrees(map);
+            RenderBuildings(map);
         }
 
         private void RenderStorageArea(MapData map)
@@ -504,6 +565,13 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            foreach (Tile tile in buildingTiles)
+                if (tile != null)
+                {
+                    DestroyGeneratedObject(tile.sprite.texture);
+                    DestroyGeneratedObject(tile.sprite);
+                    DestroyGeneratedObject(tile);
+                }
             if (stockpileMap != null)
             {
                 stockpileMap.StorageStockpile.Changed -= RefreshStorageItems;

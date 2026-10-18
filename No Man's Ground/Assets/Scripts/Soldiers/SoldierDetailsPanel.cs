@@ -36,6 +36,8 @@ namespace NoMansGround.Soldiers
         private Text collectButton;
         private Text cancelButton;
         private Text ladderButton;
+        private Text buildingStatus;
+        private Text[] buildingButtons;
         private Text mealStatus;
         private Text facilityStatus;
         private Text dutyCounts;
@@ -460,7 +462,7 @@ namespace NoMansGround.Soldiers
             Vector2Int target = Selected.Destination;
             activity.text = (Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
-                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
+                    ? $"{(Selected.Data.Profession == SoldierProfession.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.BuildWall || Selected.WorkKind == TrenchJobKind.BuildDoor ? "Costruzione" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
             carryCapacity.text = $"Carico massimo: {Selected.Data.MaxCarryWeightKg:0.0} kg";
@@ -511,7 +513,8 @@ namespace NoMansGround.Soldiers
             inventoryStatus.text = string.Empty;
             if (Selected == null)
                 return;
-            foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations })
+            foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
+                ItemType.Wood, ItemType.BuildingStone })
             {
                 int count = Selected.Data.Inventory.Count(type);
                 if (count > 0)
@@ -528,6 +531,21 @@ namespace NoMansGround.Soldiers
 
         private void RefreshDigging()
         {
+            if (activeZone.HasValue && trenchOrders != null && trenchOrders.Mode != DiggingMode.None)
+            {
+                activeZone = null;
+                zoneDragging = false;
+                ClearZonePreview();
+                UpdateZoneControls();
+            }
+            if (buildingStatus != null && gameMap != null && gameMap.Data != null)
+            {
+                int complete = 0;
+                foreach (BuildingRoom room in gameMap.Data.Buildings)
+                    if (room.IsComplete) complete++;
+                buildingStatus.text = $"Stanze: {complete}/{gameMap.Data.Buildings.Count}\n"
+                    + $"Legna: {gameMap.Data.StorageStockpile.Count(ItemType.Wood)} | Pietra: {gameMap.Data.StorageStockpile.Count(ItemType.BuildingStone)}";
+            }
             if (diggingStatus == null || trenchOrders == null)
                 return;
             int blocked = 0;
@@ -552,6 +570,9 @@ namespace NoMansGround.Soldiers
             collectButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             cancelButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             ladderButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
+            if (buildingButtons != null)
+                foreach (Text button in buildingButtons)
+                    button.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
         }
 
         private void BuildInterface()
@@ -618,6 +639,14 @@ namespace NoMansGround.Soldiers
                 collectButton = CreateButton(content, "Raccogli [C]", DiggingMode.Collect);
                 cancelButton = CreateButton(content, "Annulla scavi [X]", DiggingMode.Cancel);
                 ladderButton = CreateButton(content, "Installa scala [L]", DiggingMode.Ladder);
+                CreateText(content, "COSTRUZIONI", 12, 20f);
+                buildingButtons = new[]
+                {
+                    CreateButton(content, "Legno", DiggingMode.BuildWood),
+                    CreateButton(content, "Pietra", DiggingMode.BuildStone),
+                    CreateButton(content, "Porta", DiggingMode.Door)
+                };
+                buildingStatus = CreateText(content, "", 9, 32f);
                 diggingStatus = CreateText(content, "", 10, 66f);
                 RefreshDigging();
             }
