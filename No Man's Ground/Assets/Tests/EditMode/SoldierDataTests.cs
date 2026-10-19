@@ -370,6 +370,21 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void InventoryTracksItemWeightAndRejectsItemsAboveCarryCapacity()
+        {
+            var needs = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
+            var soldier = new SoldierData(0, "Giovanni", "Rossi", needs, new[] { 1, 1, 1, 1, 1 });
+            Assert.AreEqual(1.5f, ItemCatalog.Get(ItemType.FullCanteen).WeightKg);
+            Assert.AreEqual(1.5f, soldier.CarryWeightKg);
+            Assert.IsTrue(soldier.CanCarry(ItemType.Wood, 18));
+            Assert.IsFalse(soldier.CanCarry(ItemType.Wood, 19));
+            Assert.IsTrue(soldier.TryAddToInventory(ItemType.Wood, 18));
+            Assert.AreEqual(19.5f, soldier.CarryWeightKg);
+            Assert.IsFalse(soldier.TryAddToInventory(ItemType.Wood, 1));
+            Assert.AreEqual(18, soldier.Inventory.Count(ItemType.Wood));
+        }
+
+        [Test]
         public void SkillInputValidationAndIndependentProgressArePreserved()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => new SkillProgress(0));

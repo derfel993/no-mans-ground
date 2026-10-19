@@ -128,7 +128,7 @@ namespace NoMansGround.Tests
             Assert.AreSame(selected, panel.FindAtScreenPosition(Camera.main.WorldToScreenPoint(selected.transform.position)));
             Assert.IsNull(panel.FindAtScreenPosition(Vector2.zero));
             AssertTextExists(selected.Data.FullName);
-            AssertTextExists($"Carico massimo: {selected.Data.MaxCarryWeightKg:0.0} kg");
+            AssertTextExists($"Carico: {selected.Data.CarryWeightKg:0.0} / {selected.Data.MaxCarryWeightKg:0.0} kg");
             foreach (string tab in new[] { "Info", "Stato", "Skill", "Inventario" })
                 Assert.IsNotNull(FindButton(canvas, tab));
             RectTransform soldierPanel = canvas.transform.Find("Soldier Details Panel").GetComponent<RectTransform>();
@@ -150,7 +150,7 @@ namespace NoMansGround.Tests
             float initialCarryWeight = selected.Data.MaxCarryWeightKg;
             strength.AddExperience(strength.ExperienceToNextLevel);
             Assert.Greater(selected.Data.MaxCarryWeightKg, initialCarryWeight);
-            AssertTextExists($"Carico massimo: {selected.Data.MaxCarryWeightKg:0.0} kg");
+            AssertTextExists($"Carico: {selected.Data.CarryWeightKg:0.0} / {selected.Data.MaxCarryWeightKg:0.0} kg");
             SkillProgress aim = selected.Data.GetSkill(SoldierSkill.Aim);
             int previousLevel = aim.Level;
             aim.AddExperience(aim.ExperienceToNextLevel + 7);

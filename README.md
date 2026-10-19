@@ -917,9 +917,15 @@ Rigenerare la mappa elimina progetti e costruzioni.
 - [ ] **Paura**: definire cause, variazione e gestione del valore; parte da zero.
 - [x] **Stanchezza da attivita**: parte da zero, +1 per tile raggiunto e +5 per job completato.
 - [ ] **Riposo e recupero della stanchezza**: aggiungere sonno ed effetti sull'attivita.
-- [ ] **Inventario**: calcolare il peso corrente e applicare il limite di carico;
-  estendere raccolta e assegnazione agli altri utensili, cibo e armi.
-- [ ] **Peso dei tool e oggetti**: definire il peso unitario e conteggiarlo nel carico.
+- [x] **Peso degli item e carico**: ogni item ha un peso unitario; il pannello
+  mostra il carico corrente rispetto al massimo, determinato dalla Forza. Scavi,
+  materiali, utensili, risorse e viveri/rancio in transito non vengono ritirati
+  se superano il limite.
+- [ ] **Inventario**: estendere raccolta e assegnazione a cibo e armi.
+
+Pesi unitari attuali: Pala 1,8 kg; Accetta 1,2 kg; Piccone 2,4 kg; Razioni
+0,5 kg; Legna 1 kg; Pietra da costruzione 2,5 kg; Borraccia piena 1,5 kg,
+vuota 0,5 kg; Martello da Costruzione 1,5 kg.
 
 Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
 dei bisogni, evoluzione degli altri stati, copertura e combattimento.

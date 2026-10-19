@@ -127,6 +127,7 @@ namespace NoMansGround.Tests
             kitchen.Tick(1f);
             Assert.AreEqual(990, kitchen.Stock.Provisions);
             Assert.AreEqual(10, kitchen.CarriedProvisions);
+            Assert.AreEqual(6.5f, kitchen.Cook.Data.CarryWeightKg);
             Assert.IsTrue(kitchen.Cook.IsMoving);
             Assert.Zero(kitchen.Stock.Progress);
             kitchen.Tick(100f);
@@ -136,6 +137,7 @@ namespace NoMansGround.Tests
             Assert.AreEqual(990, kitchen.Stock.Provisions);
             Assert.Zero(kitchen.CarriedProvisions);
             Assert.AreEqual(10, kitchen.Stock.KitchenProvisions);
+            Assert.AreEqual(1.5f, kitchen.Cook.Data.CarryWeightKg);
             Assert.Zero(kitchen.Stock.Progress);
             float beforeCookingFatigue = kitchen.Cook.Data.Needs.Fatigue;
             kitchen.Tick(29f);
@@ -166,6 +168,19 @@ namespace NoMansGround.Tests
             kitchen.Tick(1f);
             Assert.AreEqual(2, kitchen.Stock.ReadyRations);
             Assert.AreEqual(980, kitchen.Stock.Provisions);
+        }
+
+        [Test]
+        public void CookCannotWithdrawProvisionsWhenTheyWouldExceedCarryCapacity()
+        {
+            kitchen.Cook.Data.Inventory.Add(ItemType.BuildingStone, 10);
+            kitchen.Tick(1f);
+            kitchen.Cook.AdvanceMovement(100f);
+            kitchen.Tick(1f);
+
+            Assert.AreEqual(1000, kitchen.Stock.Provisions);
+            Assert.Zero(kitchen.CarriedProvisions);
+            Assert.AreEqual("Carico insufficiente per i viveri.", kitchen.Status);
         }
 
         [Test]

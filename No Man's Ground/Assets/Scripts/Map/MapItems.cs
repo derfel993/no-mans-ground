@@ -40,15 +40,17 @@ namespace NoMansGround.Map
         public ItemCategory Category { get; }
         public ItemAction? Action { get; }
         public int StackSize { get; }
+        public float WeightKg { get; }
 
         internal ItemDefinition(ItemType type, string displayName, ItemCategory category,
-            ItemAction? action, int stackSize)
+            ItemAction? action, int stackSize, float weightKg)
         {
             Type = type;
             DisplayName = displayName;
             Category = category;
             Action = action;
             StackSize = stackSize;
+            WeightKg = weightKg;
         }
     }
 
@@ -58,19 +60,19 @@ namespace NoMansGround.Map
         {
             switch (type)
             {
-                case ItemType.Shovel: return new ItemDefinition(type, "Pala", ItemCategory.Tool, ItemAction.DigTrench, 1);
-                case ItemType.Axe: return new ItemDefinition(type, "Accetta", ItemCategory.Tool, ItemAction.CutTree, 1);
-                case ItemType.Pickaxe: return new ItemDefinition(type, "Piccone", ItemCategory.Tool, ItemAction.BreakRock, 1);
-                case ItemType.Rations: return new ItemDefinition(type, "Razioni", ItemCategory.Food, null, 250);
-                case ItemType.Wood: return new ItemDefinition(type, "Legna", ItemCategory.Resource, null, 250);
+                case ItemType.Shovel: return new ItemDefinition(type, "Pala", ItemCategory.Tool, ItemAction.DigTrench, 1, 1.8f);
+                case ItemType.Axe: return new ItemDefinition(type, "Accetta", ItemCategory.Tool, ItemAction.CutTree, 1, 1.2f);
+                case ItemType.Pickaxe: return new ItemDefinition(type, "Piccone", ItemCategory.Tool, ItemAction.BreakRock, 1, 2.4f);
+                case ItemType.Rations: return new ItemDefinition(type, "Razioni", ItemCategory.Food, null, 250, 0.5f);
+                case ItemType.Wood: return new ItemDefinition(type, "Legna", ItemCategory.Resource, null, 250, 1f);
                 case ItemType.BuildingStone:
-                    return new ItemDefinition(type, "Pietra da costruzione", ItemCategory.Resource, null, 250);
+                    return new ItemDefinition(type, "Pietra da costruzione", ItemCategory.Resource, null, 250, 2.5f);
                 case ItemType.FullCanteen:
-                    return new ItemDefinition(type, "Borraccia piena (acqua)", ItemCategory.Equipment, null, 1);
+                    return new ItemDefinition(type, "Borraccia piena (acqua)", ItemCategory.Equipment, null, 1, 1.5f);
                 case ItemType.EmptyCanteen:
-                    return new ItemDefinition(type, "Borraccia vuota", ItemCategory.Equipment, null, 1);
+                    return new ItemDefinition(type, "Borraccia vuota", ItemCategory.Equipment, null, 1, 0.5f);
                 case ItemType.ConstructionHammer:
-                    return new ItemDefinition(type, "Martello da Costruzione", ItemCategory.Tool, ItemAction.Build, 1);
+                    return new ItemDefinition(type, "Martello da Costruzione", ItemCategory.Tool, ItemAction.Build, 1, 1.5f);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
@@ -104,6 +106,17 @@ namespace NoMansGround.Map
                 int total = 0;
                 foreach (int count in counts)
                     total = checked(total + count);
+                return total;
+            }
+        }
+
+        public float TotalWeightKg
+        {
+            get
+            {
+                float total = 0f;
+                for (int i = 0; i < counts.Length; i++)
+                    total += counts[i] * ItemCatalog.Get((ItemType)i).WeightKg;
                 return total;
             }
         }

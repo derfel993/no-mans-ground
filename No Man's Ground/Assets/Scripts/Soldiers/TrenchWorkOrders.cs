@@ -539,7 +539,7 @@ namespace NoMansGround.Soldiers
                 {
                     if (!job.CollectedItem.HasValue)
                     {
-                        if (!map.Data.TryTakeGroundItem(job.Cell, out ItemType item)
+                        if (!map.Data.TryGetGroundItem(job.Cell, out ItemType item)
                             || ItemCatalog.Get(item).Category != ItemCategory.Resource)
                         {
                             Release(job);
@@ -548,7 +548,31 @@ namespace NoMansGround.Soldiers
                             changed = true;
                             continue;
                         }
-                        worker.Data.Inventory.Add(item, 1);
+                        if (!worker.Data.CanCarry(item, 1))
+                        {
+                            worker.SetWorkAssignment(false);
+                            job.Worker = null;
+                            job.Status = "Carico insufficiente";
+                            changed = true;
+                            continue;
+                        }
+                        if (!map.Data.TryTakeGroundItem(job.Cell, out _))
+                        {
+                            Release(job);
+                            jobs.RemoveAt(i);
+                            Notify("La risorsa da raccogliere non e piu presente.");
+                            changed = true;
+                            continue;
+                        }
+                        if (!worker.Data.TryAddToInventory(item, 1))
+                        {
+                            map.Data.AddGroundItem(job.Cell, item);
+                            worker.SetWorkAssignment(false);
+                            job.Worker = null;
+                            job.Status = "Carico insufficiente";
+                            changed = true;
+                            continue;
+                        }
                         job.CollectedItem = item;
                         mapView.RefreshGroundItems(map.Data);
                         Notify($"{ItemCatalog.Get(item).DisplayName} raccolta; in consegna al deposito.");
@@ -592,6 +616,16 @@ namespace NoMansGround.Soldiers
                 if (job.PickingTool.HasValue)
                 {
                     ItemType tool = job.PickingTool.Value;
+                    if (!worker.Data.CanCarry(tool, 1))
+                    {
+                        worker.SetWorkAssignment(false);
+                        job.Worker = null;
+                        job.PickingTool = null;
+                        job.GroundPickupCell = null;
+                        job.Status = "Carico insufficiente";
+                        changed = true;
+                        continue;
+                    }
                     bool taken;
                     if (job.GroundPickupCell.HasValue)
                     {
@@ -613,7 +647,7 @@ namespace NoMansGround.Soldiers
                         changed = true;
                         continue;
                     }
-                    worker.Data.Inventory.Add(tool, 1);
+                    worker.Data.TryAddToInventory(tool, 1);
                     worker.SetWorkAssignment(false);
                     job.Worker = null;
                     job.PickingTool = null;
@@ -779,7 +813,8 @@ namespace NoMansGround.Soldiers
 
         private bool AssignCollection(TrenchJob job, List<SoldierView> available)
         {
-            if (!job.CollectedItem.HasValue && !map.Data.TryGetGroundItem(job.Cell, out _))
+            bool hasGroundItem = map.Data.TryGetGroundItem(job.Cell, out ItemType groundItem);
+            if (!job.CollectedItem.HasValue && !hasGroundItem)
             {
                 const string unavailable = "Risorsa non disponibile";
                 bool changed = job.Status != unavailable;
@@ -789,10 +824,14 @@ namespace NoMansGround.Soldiers
 
             GridPath best = null;
             SoldierView bestWorker = null;
+            bool canCarryItem = false;
             foreach (SoldierView worker in available)
             {
                 if (job.CollectedItem.HasValue && worker.Data.Inventory.Count(job.CollectedItem.Value) == 0)
                     continue;
+                if (!job.CollectedItem.HasValue && !worker.Data.CanCarry(groundItem, 1))
+                    continue;
+                canCarryItem = true;
                 IEnumerable<Vector2Int> destinations = job.CollectedItem.HasValue
                     ? StorageCells() : new[] { job.Cell };
                 foreach (Vector2Int destination in destinations)
@@ -814,7 +853,8 @@ namespace NoMansGround.Soldiers
             }
             if (best == null)
             {
-                const string blocked = "Accesso alla risorsa o al deposito bloccato";
+                string blocked = canCarryItem ? "Accesso alla risorsa o al deposito bloccato"
+                    : "Carico insufficiente";
                 bool changed = job.Status != blocked;
                 job.Status = blocked;
                 return changed;
@@ -900,7 +940,7 @@ namespace NoMansGround.Soldiers
             foreach (SoldierView worker in candidates ?? roster.Soldiers)
             {
                 if (worker == null || !worker.CanTakeEngineeringWork || !SoldierTasks.Allows(worker.Data.Task, job.Kind)
-                    || worker.Data.Inventory.Count(tool) > 0)
+                    || worker.Data.Inventory.Count(tool) > 0 || !worker.Data.CanCarry(tool, 1))
                     continue;
                 foreach (Vector2Int pickupCell in pickupCells)
                 {
@@ -924,8 +964,15 @@ namespace NoMansGround.Soldiers
             }
             if (best == null)
             {
-                string blocked = job.Material.HasValue ? "Accesso al materiale bloccato o occupato"
-                    : "Accesso al deposito bloccato o occupato";
+                bool hasEligibleWorker = false;
+                foreach (SoldierView worker in candidates ?? roster.Soldiers)
+                    if (worker != null && worker.CanTakeEngineeringWork
+                        && SoldierTasks.Allows(worker.Data.Task, job.Kind)
+                        && worker.Data.Inventory.Count(tool) == 0 && worker.Data.CanCarry(tool, 1))
+                        hasEligibleWorker = true;
+                string blocked = hasEligibleWorker
+                    ? job.Material.HasValue ? "Accesso al materiale bloccato o occupato" : "Accesso al deposito bloccato o occupato"
+                    : "Carico insufficiente";
                 bool changed = job.Status != blocked;
                 job.Status = blocked;
                 if (changed)
@@ -988,13 +1035,26 @@ namespace NoMansGround.Soldiers
                         map.Data.StorageStockpile.Add(item, returned);
                 }
                 if (required.HasValue && soldier.Data.Inventory.Count(required.Value) == 0
+                    && !soldier.Data.CanCarry(required.Value, 1))
+                {
+                    soldier.SetTaskStatus("Carico insufficiente per il nuovo utensile");
+                    continue;
+                }
+                if (required.HasValue && soldier.Data.Inventory.Count(required.Value) == 0
                     && !map.Data.StorageStockpile.TryTake(required.Value, 1))
                 {
                     soldier.SetTaskStatus($"In attesa: {ItemCatalog.Get(required.Value).DisplayName}");
                     continue;
                 }
                 if (required.HasValue && soldier.Data.Inventory.Count(required.Value) == 0)
-                    soldier.Data.Inventory.Add(required.Value, 1);
+                {
+                    if (!soldier.Data.TryAddToInventory(required.Value, 1))
+                    {
+                        map.Data.StorageStockpile.Add(required.Value, 1);
+                        soldier.SetTaskStatus("Carico insufficiente per il nuovo utensile");
+                        continue;
+                    }
+                }
                 equipmentWorkers.Remove(soldier);
                 soldier.CompleteTaskEquipment();
                 retryTimer = 0f;

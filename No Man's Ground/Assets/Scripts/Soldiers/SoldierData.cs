@@ -209,6 +209,7 @@ namespace NoMansGround.Soldiers
         public const float MinimumCarryWeightKg = 20f;
         public const float MaximumCarryWeightKg = 35f;
         private readonly SkillProgress[] skills;
+        private float additionalCarryWeightKg;
 
         public int Id { get; }
         public string FirstName { get; }
@@ -216,12 +217,40 @@ namespace NoMansGround.Soldiers
         public string FullName => FirstName + " " + LastName;
         public SoldierNeeds Needs { get; }
         public ItemStockpile Inventory { get; } = new ItemStockpile();
+        public float CarryWeightKg => Inventory.TotalWeightKg + additionalCarryWeightKg;
         public IReadOnlyList<SkillProgress> Skills { get; }
+        public event Action CarryWeightChanged;
         public SoldierProfession Profession { get; }
         public SoldierTask Task { get; internal set; } = SoldierTask.Hauler;
         public float MaxCarryWeightKg => MinimumCarryWeightKg
             + (MaximumCarryWeightKg - MinimumCarryWeightKg)
             * (GetSkill(SoldierSkill.Strength).Value - 5f) / 95f;
+
+        public bool CanCarry(ItemType item, int count = 1)
+        {
+            if (count <= 0)
+                throw new ArgumentOutOfRangeException(nameof(count));
+            float addedWeight = ItemCatalog.Get(item).WeightKg * count;
+            return CarryWeightKg + addedWeight <= MaxCarryWeightKg + 0.0001f;
+        }
+
+        public bool TryAddToInventory(ItemType item, int count = 1)
+        {
+            if (!CanCarry(item, count))
+                return false;
+            Inventory.Add(item, count);
+            return true;
+        }
+
+        internal void SetAdditionalCarryWeightKg(float weightKg)
+        {
+            if (float.IsNaN(weightKg) || float.IsInfinity(weightKg) || weightKg < 0f)
+                throw new ArgumentOutOfRangeException(nameof(weightKg));
+            if (Math.Abs(additionalCarryWeightKg - weightKg) < 0.0001f)
+                return;
+            additionalCarryWeightKg = weightKg;
+            CarryWeightChanged?.Invoke();
+        }
 
         public SoldierData(int id, string firstName, string lastName, SoldierNeeds needs,
             IReadOnlyList<int> skillLevels, SoldierProfession profession = SoldierProfession.Soldier)
@@ -267,8 +296,16 @@ namespace NoMansGround.Soldiers
         public void ReceiveRation()
         {
             int emptyCanteens = Inventory.Count(ItemType.EmptyCanteen);
-            if (emptyCanteens > 0 && Inventory.TryTake(ItemType.EmptyCanteen, emptyCanteens))
-                Inventory.Add(ItemType.FullCanteen, emptyCanteens);
+            for (int i = 0; i < emptyCanteens; i++)
+            {
+                if (!Inventory.TryTake(ItemType.EmptyCanteen, 1))
+                    break;
+                if (!TryAddToInventory(ItemType.FullCanteen, 1))
+                {
+                    Inventory.Add(ItemType.EmptyCanteen, 1);
+                    break;
+                }
+            }
             Needs.EatRation();
         }
 

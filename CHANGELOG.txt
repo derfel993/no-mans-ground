@@ -8,6 +8,26 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.4 - 2026-10-19
+===============================================================================
+
+Peso degli item e capacita di carico
+- Assegnato un peso unitario agli item e calcolato il carico effettivo di ogni
+  soldato in base all'inventario e agli oggetti temporaneamente trasportati.
+- Il limite resta proporzionale alla Forza, da 20 a 35 kg; la scheda mostra
+  carico corrente e capacita massima.
+- Raccolta di risorse, ritiro utensili, cambio dotazione e trasporto di viveri
+  o razioni vengono impediti se superano la capacita; la sorgente conserva
+  l'item quando il ritiro e rifiutato.
+- Pesi unitari definiti per pale, accette, picconi, razioni, legna, pietra,
+  borracce e martello da costruzione.
+
+Test e documentazione
+- Aggiornati README e test EditMode per carico, raccolta e trasporto in cucina.
+- Verifiche statiche senza errori e controllo diff pulito; i test EditMode
+  non sono stati eseguiti in questa sessione.
+
+===============================================================================
 0.4.3 - 2026-10-18
 ===============================================================================
 

@@ -904,6 +904,27 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void CollectionWaitsWhenNoWorkerCanCarryTheResource()
+        {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Hauler);
+            foreach (SoldierView soldier in roster.Soldiers)
+                soldier.Data.Inventory.Add(ItemType.BuildingStone, 20);
+            var cell = new Vector2Int(50, 10);
+            map.Data.AddGroundItem(cell, ItemType.Wood);
+            view.Render(map.Data);
+
+            Assert.IsTrue(trenches.DesignateCollection(cell));
+            trenches.Tick(0.01f);
+
+            Assert.IsNull(trenches.Jobs[0].Worker);
+            Assert.AreEqual("Carico insufficiente", trenches.Jobs[0].Status);
+            Assert.IsTrue(map.Data.TryGetGroundItem(cell, out ItemType item));
+            Assert.AreEqual(ItemType.Wood, item);
+            foreach (SoldierView soldier in roster.Soldiers)
+                Assert.Zero(soldier.Data.Inventory.Count(ItemType.Wood));
+        }
+
+        [Test]
         public void QueuedJobsReserveDistinctWorkersAndAdjacentEndpointsAndContinueAutomatically()
         {
             for (int x = 50; x < 62; x++)

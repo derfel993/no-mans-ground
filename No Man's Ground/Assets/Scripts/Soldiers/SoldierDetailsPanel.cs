@@ -236,6 +236,7 @@ namespace NoMansGround.Soldiers
             {
                 selectedData.Needs.Changed -= RefreshNeeds;
                 selectedData.Inventory.Changed -= RefreshInventory;
+                selectedData.CarryWeightChanged -= RefreshCarryWeight;
                 foreach (SkillProgress skill in selectedData.Skills)
                     skill.Changed -= Refresh;
             }
@@ -248,6 +249,7 @@ namespace NoMansGround.Soldiers
             {
                 selectedData.Needs.Changed += RefreshNeeds;
                 selectedData.Inventory.Changed += RefreshInventory;
+                selectedData.CarryWeightChanged += RefreshCarryWeight;
                 Selected.MovementChanged += Refresh;
                 Selected.SetSelected(true);
                 foreach (SkillProgress skill in Selected.Data.Skills)
@@ -480,7 +482,7 @@ namespace NoMansGround.Soldiers
                     ? $"{(Selected.Data.Task == SoldierTask.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.BuildWall || Selected.WorkKind == TrenchJobKind.BuildDoor ? "Costruzione" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
                     : Selected.Duty == SoldierDuty.Guard ? "In guardia" : "Disponibile")
                 + $"\nVelocita: {Selected.MovementSpeed:0.00} unita/s";
-            carryCapacity.text = $"Carico massimo: {Selected.Data.MaxCarryWeightKg:0.0} kg";
+            RefreshCarryWeight();
             RefreshInventory();
             RefreshNeeds();
             for (int i = 0; i < skills.Length; i++)
@@ -521,6 +523,7 @@ namespace NoMansGround.Soldiers
 
         private void RefreshInventory()
         {
+            RefreshCarryWeight();
             if (inventoryStatus == null)
                 return;
             inventoryStatus.text = string.Empty;
@@ -535,6 +538,12 @@ namespace NoMansGround.Soldiers
                     inventoryStatus.text += $"{ItemCatalog.Get(type).DisplayName} x{count}\n";
             }
             inventoryStatus.text = inventoryStatus.text.TrimEnd();
+        }
+
+        private void RefreshCarryWeight()
+        {
+            if (carryCapacity != null && Selected != null)
+                carryCapacity.text = $"Carico: {Selected.Data.CarryWeightKg:0.0} / {Selected.Data.MaxCarryWeightKg:0.0} kg";
         }
 
         private void RefreshOrderStatus()

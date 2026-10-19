@@ -169,6 +169,7 @@ namespace NoMansGround.Soldiers
             mealRecipients.Clear();
             CarriedRations = 0;
             CarriedProvisions = 0;
+            UpdateCookCarryWeight();
             mealDay = lastMealDay = 0;
             Cook = null;
             foreach (SoldierView soldier in roster.Soldiers)
@@ -331,6 +332,7 @@ namespace NoMansGround.Soldiers
                     }
                     Stock.ReturnRations(CarriedRations);
                     CarriedRations = 0;
+                    UpdateCookCarryWeight();
                     Cook.SetWorkAssignment(false);
                     SetStatus("Carico restituito. Cambio compito del cuoco.");
                     return;
@@ -382,6 +384,7 @@ namespace NoMansGround.Soldiers
                 }
                 Stock.StoreKitchenProvisions(CarriedProvisions);
                 CarriedProvisions = 0;
+                UpdateCookCarryWeight();
                 retryTimer = 0f;
                 Cook.SetWorkAssignment(!Cook.RequestedTask.HasValue, Stock.Progress);
                 SetStatus("Viveri consegnati alla cucina.");
@@ -396,7 +399,14 @@ namespace NoMansGround.Soldiers
                         "Cuoco in marcia verso il deposito.", "Accesso deposito bloccato o occupato.");
                     return;
                 }
+                if (!Cook.Data.CanCarry(ItemType.Rations, RationStock.ProvisionsPerRation))
+                {
+                    Cook.SetWorkAssignment(false);
+                    SetStatus("Carico insufficiente per i viveri.");
+                    return;
+                }
                 CarriedProvisions = Stock.TakeProvisions(RationStock.ProvisionsPerRation);
+                UpdateCookCarryWeight();
                 retryTimer = 0f;
                 Cook.SetWorkAssignment(true, Stock.Progress);
                 Changed?.Invoke();
@@ -419,6 +429,7 @@ namespace NoMansGround.Soldiers
             CarriedRations = 0;
             Stock.StoreKitchenProvisions(CarriedProvisions);
             CarriedProvisions = 0;
+            UpdateCookCarryWeight();
             Cook = null;
             foreach (SoldierView soldier in roster.Soldiers)
                 if (soldier != null && soldier.isActiveAndEnabled && soldier.Data.Task == SoldierTask.Cook
@@ -461,6 +472,7 @@ namespace NoMansGround.Soldiers
             {
                 Stock.ReturnRations(CarriedRations);
                 CarriedRations = 0;
+                UpdateCookCarryWeight();
                 mealRecipients.Clear();
                 mealDay = 0;
                 retryTimer = 0f;
@@ -483,10 +495,16 @@ namespace NoMansGround.Soldiers
             mealRecipients.RemoveAll(soldier => soldier == null);
             if (IsAtKitchen() && Stock.ReadyRations > 0)
             {
-                CarriedRations += Stock.TakeRations(Mathf.Max(0, mealRecipients.Count - CarriedRations));
+                int requested = Mathf.Max(0, mealRecipients.Count - CarriedRations);
+                int carryable = 0;
+                while (carryable < requested && Cook.Data.CanCarry(ItemType.Rations, carryable + 1))
+                    carryable++;
+                CarriedRations += Stock.TakeRations(carryable);
+                UpdateCookCarryWeight();
                 if (CarriedRations > 0 && mealRecipients.Remove(Cook))
                 {
                     CarriedRations--;
+                    UpdateCookCarryWeight();
                     Cook.Data.ReceiveRation();
                 }
                 Changed?.Invoke();
@@ -495,15 +513,16 @@ namespace NoMansGround.Soldiers
             {
                 Stock.ReturnRations(CarriedRations);
                 CarriedRations = 0;
+                UpdateCookCarryWeight();
                 return false;
             }
             if (CarriedRations == 0)
             {
                 if (Stock.ReadyRations == 0)
                     return false;
-                // Ready meals must be collected at the kitchen, not remotely.
                 Cook.SetWorkAssignment(false);
-                return false;
+                SetStatus("Carico insufficiente per il rancio.");
+                return true;
             }
             Cook.SetWorkAssignment(true);
             for (int i = mealRecipients.Count - 1; i >= 0 && CarriedRations > 0; i--)
@@ -517,6 +536,7 @@ namespace NoMansGround.Soldiers
                 soldier.Data.ReceiveRation();
                 Cook.Data.Needs.AddFatigue(5f);
                 CarriedRations--;
+                UpdateCookCarryWeight();
                 mealRecipients.RemoveAt(i);
                 Changed?.Invoke();
             }
@@ -553,6 +573,13 @@ namespace NoMansGround.Soldiers
                 Cook.BeginMove(mapView, best.Cells);
             SetStatus("Distribuzione rancio.");
             return true;
+        }
+
+        private void UpdateCookCarryWeight()
+        {
+            if (Cook != null)
+                Cook.Data.SetAdditionalCarryWeightKg((CarriedProvisions + CarriedRations)
+                    * ItemCatalog.Get(ItemType.Rations).WeightKg);
         }
 
         private GridPath FindServingPath(Vector2Int target)
