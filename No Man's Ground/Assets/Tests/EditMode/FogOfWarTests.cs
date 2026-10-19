@@ -69,6 +69,24 @@ namespace NoMansGround.Tests
             Assert.IsTrue(map.Fog.IsExplored(new Vector2Int(20, 10)));
         }
 
+        [Test]
+        public void BuildingAndWallCanBeDesignatedOnRememberedTerrain()
+        {
+            var map = new MapData(40, 32);
+            map.Fog.Enable();
+            map.Fog.Update(map, new[] { new FogObserver(new Vector2Int(8, 8), Vector2.up, 360f) }, 10);
+            map.Fog.Update(map, new[] { new FogObserver(new Vector2Int(30, 25), Vector2.up, 360f) }, 2);
+            Assert.IsTrue(map.Fog.IsExplored(new Vector2Int(7, 7)));
+            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(7, 7)));
+            Assert.IsTrue(map.TryPlanBuilding(new Vector2Int(5, 5), new Vector2Int(9, 9),
+                ItemType.Wood, out _));
+
+            var wallCell = new Vector2Int(10, 8);
+            Assert.IsTrue(map.Fog.IsExplored(wallCell));
+            Assert.IsFalse(map.Fog.IsVisible(wallCell));
+            Assert.IsTrue(map.TryPlanWall(wallCell, ItemType.BuildingStone, out _));
+        }
+
         [TestCase(TerrainKind.Rock)]
         [TestCase(TerrainKind.Mountain)]
         public void SolidTerrainIsVisibleButHidesCellsBehindItAndDiagonalCorners(TerrainKind terrain)
@@ -98,9 +116,36 @@ namespace NoMansGround.Tests
             Assert.IsTrue(map.CompleteBuildingTile(new Vector2Int(5, 3)));
             map.Fog.Update(map, new[] { new Vector2Int(5, 2) }, 6);
             Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(5, 3)));
-            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(5, 4)));
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(5, 4)));
+            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(5, 6)));
             map.Fog.Update(map, new[] { new Vector2Int(5, 4) }, 6);
             Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(5, 5)));
+        }
+
+        [Test]
+        public void BuiltWallTilesRevealTwoTilesInEveryDirection()
+        {
+            var map = new MapData(20, 20);
+            Assert.IsTrue(map.TryPlanBuilding(new Vector2Int(8, 8), new Vector2Int(10, 10),
+                ItemType.Wood, out BuildingRoom building));
+            Assert.IsTrue(map.TrySetBuildingDoor(new Vector2Int(9, 8)));
+            map.Fog.Enable();
+            map.Fog.Update(map, new FogObserver[0], 8);
+            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(9, 6)));
+
+            Assert.IsTrue(map.CompleteBuildingTile(new Vector2Int(8, 9)));
+            Assert.IsTrue(map.CompleteBuildingTile(new Vector2Int(9, 8)));
+            Assert.IsTrue(map.CompleteBuildingTile(new Vector2Int(10, 9)));
+            Assert.IsTrue(map.CompleteBuildingTile(new Vector2Int(9, 10)));
+            Assert.IsFalse(building.IsComplete);
+
+            map.Fog.Update(map, new FogObserver[0], 8);
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(9, 6)));
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(9, 12)));
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(6, 9)));
+            Assert.IsTrue(map.Fog.IsVisible(new Vector2Int(12, 9)));
+            Assert.IsFalse(map.Fog.IsVisible(new Vector2Int(9, 5)));
+            Assert.IsTrue(map.Fog.IsExplored(new Vector2Int(9, 6)));
         }
 
         [Test]

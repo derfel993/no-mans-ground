@@ -102,16 +102,21 @@ Un clic destro sul terreno resta invece un normale ordine di movimento.
 
 Rocce, montagne, celle bloccate, pareti e porte completate interrompono la
 visuale; il primo ostacolo resta visibile ma le celle dietro sono nascoste.
+Ogni tile di parete o porta completato rivela inoltre le celle entro 2 tile
+in tutte le direzioni, anche durante la costruzione parziale dell'edificio.
+Oltre questo raggio la parete continua a bloccare la visuale.
 Non si vede diagonalmente attraverso gli angoli chiusi. Alberi e trincee non
 bloccano la visuale. Una porta designata ma non ancora costruita non la blocca.
 Entrando su una porta o in una galleria il soldato scopre lo spazio dall'interno.
 
 I comandi di movimento, scavo, minatura, costruzione e zona richiedono celle
 gia esplorate. Per scoprire nuove aree, spostare una guardia verso il bordo
-della zona nota; avanzando amplia la visuale. Taglia e Raccogli accettano solo
-alberi o risorse attualmente visibili. I lavori gia designati non vengono
-annullati quando escono dalla visuale. Non si possono ispezionare strutture,
-usare ostacoli debug o designare risorse nascoste attraverso la nebbia.
+della zona nota; avanzando amplia la visuale. Taglia e Raccogli possono essere
+designati anche su alberi e risorse remembered: il terreno ricordato resta
+attenuato e il lavoro viene annullato se il bersaglio non esiste piu al momento
+dell'esecuzione. Le celle mai esplorate restano inaccessibili. I lavori gia
+designati non vengono annullati quando escono dalla visuale. Non si possono
+ispezionare strutture o usare ostacoli debug attraverso la nebbia.
 
 La visuale viene aggiornata ogni **0,1 secondi reali**, anche durante la pausa;
 nessun movimento o lavoro avanza per questo motivo. Rigenerare elimina tutta
@@ -148,6 +153,9 @@ prima di Play e salvarla; il sistema riutilizza quello presente.
 | Esc / destro in modalita Scava o Annulla | Esce dalla modalita, senza impartire movimento |
 | Maiusc + clic destro sul terreno | Aggiunge/rimuove un ostacolo debug, a soldati fermi e senza scavi in coda |
 | Rotella sul pannello dei soldati | Nessuno zoom sulla mappa |
+
+Se un soldato occupa una cella di deposito o dispensa, il clic su quella cella
+seleziona il soldato; gli altri tile della struttura restano ispezionabili.
 
 In Editor, dare il focus alla finestra Game per usare i comandi.
 La camera resta entro la mappa anche cambiando proporzioni della finestra.
@@ -778,9 +786,12 @@ All'avvio normale indica Lavoro: 9 e Guardia: 0.
 Se si richiede Guardia durante un job, il soldato resta in Lavoro fino al
 completamento del job assegnato, incluso l'eventuale viaggio. La scheda indica
 **Lavoro -> Guardia a fine job**; fino ad allora il contatore lo considera
-ancora in Lavoro. Non ricevera il job successivo. Premere Lavoro prima della
-fine annulla la richiesta. Se il job viene annullato o rilasciato, la richiesta
-viene applicata al rilascio; un percorso gia iniziato termina senza teletrasporti.
+ancora in Lavoro. Non ricevera il job successivo. Quando entra effettivamente
+in Guardia, raggiunge la cella accessibile piu vicina del deposito e vi ripone
+fisicamente l'utensile del proprio compito; durante il rientro non puo ricevere
+altri ordini. Premere Lavoro prima della fine annulla la richiesta. Se il job
+viene annullato o rilasciato, la richiesta viene applicata al rilascio; un
+percorso gia iniziato termina senza teletrasporti.
 Tornando in Lavoro durante una marcia di Guardia, termina il percorso prima di
 poter prendere job. In Guardia il destro sostituisce anche percorsi gia in corso.
 
@@ -821,33 +832,45 @@ materiali e rifornimento dalle retrovie non sono ancora implementati. Le zone
 forniscono le destinazioni, non assegnano ancora questi lavori ai soldati.
 Rigenerare la mappa elimina le zone e ripristina lo stato iniziale.
 
-## Step 8: costruzioni rettangolari
+## Step 8: costruzioni tramite muri
 
-Nel pannello **COSTRUZIONI**, scegliere **Legno** o **Pietra**, quindi trascinare
-un rettangolo sul terreno libero (minimo **3 x 3 tile**, compreso il perimetro).
-Viene designato soltanto il bordo; l'interno resta percorribile. Alberi, rocce,
-trincee, strada, item a terra, depositi, zone e altre stanze devono restare fuori
-dall'area scelta. I soldati presenti non vengono spostati automaticamente.
+Nel pannello **COSTRUZIONI**, scegliere **Muro Legno** o **Muro Pietra** e
+trascinare dal primo all'ultimo tile. Si possono designare linee ortogonali o
+diagonali, anche in piu passaggi; gli estremi possono condividere un angolo.
+Un clic singolo designa un muro di un tile. Le linee devono usare tutte lo stesso
+materiale e attraversare terreno libero, senza alberi, rocce, trincee, strada,
+depositi, zone o costruzioni sovrapposte. Il terreno deve essere esplorato, ma
+non deve essere attualmente visibile. Gli item gia presenti sul tile del muro
+vengono prima portati al deposito da un Hauler.
 
-Al rilascio si attiva **Porta**: cliccare un tile del bordo, non un angolo.
-La porta usa lo stesso materiale delle pareti. Prima della scelta della porta
-non partono lavori. Il pulsante Porta permette anche di completare la scelta
-dopo essere usciti dalla modalita con Esc o destro.
+Quando le linee chiudono un perimetro rettangolare di almeno **3 x 3 tile**, il
+sistema lo riconosce automaticamente come edificio. I soldati all'interno o sul
+perimetro vengono evacuati; completano prima l'eventuale job corrente. I
+costruttori lavorano da celle esterne. I muri autonomi che non fanno parte di un
+perimetro restano senza tetto.
+
+Dopo aver costruito tutti i lati, scegliere **Porta** e cliccare un tile di muro
+gia costruito, non un angolo. Il costruttore sostituisce quel tile con una porta
+dello stesso materiale usando un martello e un'unita aggiuntiva di materiale.
+Il tetto compare quando la porta e completata; fino ad allora il perimetro non
+e considerato un rifugio chiuso. Esc o destro escono dalla modalita Porta.
+
+Se sul tile di una parete designata c'e un oggetto, il job di costruzione resta
+in attesa: un Hauler lo raccoglie e lo porta al deposito, poi il Costruttore
+puo iniziare. Il materiale della parete viene ritirato dal deposito o da un'altra
+cella a terra raggiungibile.
 
 Il **Costruttore in Lavoro** costruisce pareti e porta tramite la coda dei lavori:
 richiede un **Martello da Costruzione**, ritirato dal deposito prima dei materiali
 se non e gia nell'inventario. Senza martelli disponibili i job aspettano e
 riprovano. Il martello non viene consumato e resta al lavoratore dopo il job.
-Se il materiale richiesto si trova gia sulla cella di un muro designato,
-viene usato per primo, evitando di renderlo irraggiungibile sotto il muro finito.
 ogni tile costa provvisoriamente **1 Legna** oppure **1 Pietra da costruzione**.
-Il soldato ritira fisicamente il materiale dal deposito **oppure direttamente
-da terra**, scegliendo la fonte raggiungibile piu vicina. Legna e pietra lasciate
-dal taglio/mina non devono essere portate prima al deposito: il costruttore le
-raccoglie automaticamente per il cantiere. Ogni risorsa a terra viene prenotata
-per un solo costruttore; quelle con un ordine Raccogli restano affidate a
-quell'ordine. Non vengono aggiunte scorte gratuite. Senza materiale raggiungibile
-i job aspettano e riprovano.
+Il Costruttore ritira fisicamente il materiale dal deposito oppure da un'altra
+cella a terra raggiungibile, scegliendo la fonte piu vicina. Gli item sul tile
+del muro sono invece rimossi prima dalla fase di sgombero. Ogni risorsa a terra
+viene prenotata per un solo costruttore; quelle con un ordine Raccogli restano
+affidate a quell'ordine. Non vengono aggiunte scorte gratuite. Senza materiale
+raggiungibile i job aspettano e riprovano.
 Durata per tile: `6 / (1 + Forza / 100)` secondi, esclusi i viaggi; premio 25 XP Forza.
 
 Le pareti finite bloccano il movimento, la porta finita resta attraversabile.
@@ -863,10 +886,23 @@ ricompare. Il passaggio del mouse sull'interfaccia non scopre gli edifici
 sottostanti. Nascondere il tetto non modifica lo stato interno della stanza
 ne la percorribilita. La rigenerazione elimina anche i tetti.
 
-**Annulla [X]** sul perimetro ferma i lavori della stanza; le parti gia costruite
-restano e i materiali trasportati rimangono nell'inventario. Se non e stato
-costruito nulla il progetto viene rimosso. Per riprendere una stanza parziale,
-scegliere Porta e cliccare la porta gia designata. Non e prevista demolizione.
+### Stanze specializzate
+
+Dopo aver completato un edificio, usare il menu **Tipo** nella sezione **STANZE**
+del pannello destro, premere **Disegna stanza** e trascinare un rettangolo
+nell'interno. Sono disponibili **Comando**, **Stazione Telegrafo**, **Cucina**,
+**Armeria**, **Ricovero** e **Ospedale**. Il rettangolo deve rimanere interamente
+all'interno dello stesso edificio completato e non sovrapporsi ad altre aree;
+ridisegnare esattamente la stessa area permette di cambiarne il tipo. **Esc** o
+destro escono dalla modalita. Ogni area mostra il nome della specializzazione
+in alto a sinistra, anche con il tetto visibile, oltre al colore distintivo.
+Per ora la specializzazione e solo descrittiva:
+non modifica ancora cucina, soldati, inventario o altre meccaniche.
+
+**Annulla [X]** su un muro ferma il job selezionato; annullare sul perimetro di
+un edificio ferma i job ancora in coda, conservando le parti gia costruite e i
+materiali trasportati. Per completare un perimetro parziale, selezionare **Porta**
+e cliccare un muro gia costruito. Non e prevista demolizione.
 Rigenerare la mappa elimina progetti e costruzioni.
 
 ### TODO costruzioni

@@ -84,29 +84,43 @@ namespace NoMansGround.Map
                 return;
             Array.Clear(visible, 0, visible.Length);
             foreach (FogObserver observer in observers)
+                RevealFromObserver(map, observer, radius);
+
+            foreach (BuildingRoom building in map.Buildings)
             {
-                Vector2Int origin = observer.Cell;
-                if (!Contains(origin))
-                    continue;
-                float minimumDot = Mathf.Cos(observer.FieldOfView * 0.5f * Mathf.Deg2Rad);
-                for (int y = Math.Max(0, origin.y - radius); y <= Math.Min(height - 1, origin.y + radius); y++)
-                    for (int x = Math.Max(0, origin.x - radius); x <= Math.Min(width - 1, origin.x + radius); x++)
+                for (int y = building.Bounds.yMin; y < building.Bounds.yMax; y++)
+                    for (int x = building.Bounds.xMin; x < building.Bounds.xMax; x++)
                     {
-                        int dx = x - origin.x;
-                        int dy = y - origin.y;
-                        var cell = new Vector2Int(x, y);
-                        if (dx * dx + dy * dy > radius * radius)
-                            continue;
-                        if ((dx != 0 || dy != 0) && Vector2.Dot(observer.Direction,
-                            new Vector2(dx, dy).normalized) + 0.000001f < minimumDot)
-                            continue;
-                        if (!HasSight(map, origin, cell))
-                            continue;
-                        int index = y * width + x;
-                        visible[index] = true;
-                        explored[index] = true;
+                        var wall = new Vector2Int(x, y);
+                        if (building.IsPerimeter(wall) && building.IsBuilt(wall))
+                            RevealFromObserver(map, new FogObserver(wall, Vector2.up, 360f), 2);
                     }
             }
+        }
+
+        private void RevealFromObserver(MapData map, FogObserver observer, int radius)
+        {
+            Vector2Int origin = observer.Cell;
+            if (!Contains(origin))
+                return;
+            float minimumDot = Mathf.Cos(observer.FieldOfView * 0.5f * Mathf.Deg2Rad);
+            for (int y = Math.Max(0, origin.y - radius); y <= Math.Min(height - 1, origin.y + radius); y++)
+                for (int x = Math.Max(0, origin.x - radius); x <= Math.Min(width - 1, origin.x + radius); x++)
+                {
+                    int dx = x - origin.x;
+                    int dy = y - origin.y;
+                    var cell = new Vector2Int(x, y);
+                    if (dx * dx + dy * dy > radius * radius)
+                        continue;
+                    if ((dx != 0 || dy != 0) && Vector2.Dot(observer.Direction,
+                        new Vector2(dx, dy).normalized) + 0.000001f < minimumDot)
+                        continue;
+                    if (!HasSight(map, origin, cell))
+                        continue;
+                    int index = y * width + x;
+                    visible[index] = true;
+                    explored[index] = true;
+                }
         }
 
         private bool Contains(Vector2Int cell)

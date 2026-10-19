@@ -49,7 +49,7 @@ namespace NoMansGround.Editor
             cameraObject.transform.position = new Vector3(64f, 64f, -10f);
             var camera = cameraObject.GetComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 24f;
+            camera.orthographicSize = 18f;
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 100f;
             camera.clearFlags = CameraClearFlags.SolidColor;

@@ -136,6 +136,105 @@ namespace NoMansGround.Tests
             yield return new ExitPlayMode();
         }
 
+        [UnityTest]
+        public IEnumerator ClickingSoldierOnPantryCellSelectsSoldierInsteadOfPantry()
+        {
+            EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath);
+            yield return new EnterPlayMode();
+            yield return null;
+            var map = Object.FindAnyObjectByType<MapPrototype>();
+            var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            var kitchen = Object.FindAnyObjectByType<KitchenSystem>();
+            var movement = Object.FindAnyObjectByType<SoldierMovementOrders>();
+            var view = Object.FindAnyObjectByType<MapTilemapView>();
+            TaskTestSetup.AssignCook(roster);
+            kitchen.Rebuild();
+            Camera camera = Camera.main;
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                SoldierView soldier = roster.Soldiers[0];
+                soldier.RequestDuty(SoldierDuty.Guard);
+                movement.Selected = soldier;
+                var destination = new Vector2Int(-1, -1);
+                for (int y = map.Data.PantryOrigin.y; y < map.Data.PantryOrigin.y + map.Data.PantryHeight
+                    && destination.x < 0; y++)
+                    for (int x = map.Data.PantryOrigin.x; x < map.Data.PantryOrigin.x + map.Data.PantryWidth; x++)
+                    {
+                        var candidate = new Vector2Int(x, y);
+                        bool occupied = false;
+                        foreach (SoldierView other in roster.Soldiers)
+                            if (other != soldier && (other.Cell == candidate || other.Destination == candidate))
+                                occupied = true;
+                        if (map.Data.IsWalkable(candidate) && !occupied)
+                        {
+                            destination = candidate;
+                            break;
+                        }
+                    }
+                Assert.GreaterOrEqual(destination.x, 0);
+                Assert.IsTrue(movement.IssueMove(destination));
+                for (int step = 0; step < 50 && soldier.IsMoving; step++)
+                    soldier.AdvanceMovement(1000f);
+                Assert.AreEqual(destination, soldier.Cell);
+                roster.GetComponent<SoldierFogOfWar>().Refresh();
+                panel.Select(null);
+
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                Vector2 pointer = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(destination.x, destination.y, 0)));
+                Set(mouse.position, pointer);
+                Press(mouse.leftButton);
+                UpdateSelection(panel);
+
+                Assert.AreSame(soldier, panel.Selected);
+                Assert.IsTrue(soldier.IsSelected);
+                Release(mouse.leftButton);
+
+                panel.Select(null);
+                movement.Selected = soldier;
+                var storageCell = new Vector2Int(-1, -1);
+                for (int y = map.Data.StorageOrigin.y; y < map.Data.StorageOrigin.y + map.Data.StorageHeight
+                    && storageCell.x < 0; y++)
+                    for (int x = map.Data.StorageOrigin.x; x < map.Data.StorageOrigin.x + map.Data.StorageWidth; x++)
+                    {
+                        var candidate = new Vector2Int(x, y);
+                        bool occupied = false;
+                        foreach (SoldierView other in roster.Soldiers)
+                            if (other != soldier && (other.Cell == candidate || other.Destination == candidate))
+                                occupied = true;
+                        if (map.Data.IsWalkable(candidate) && !occupied)
+                        {
+                            storageCell = candidate;
+                            break;
+                        }
+                    }
+                Assert.GreaterOrEqual(storageCell.x, 0);
+                Assert.IsTrue(movement.IssueMove(storageCell));
+                for (int step = 0; step < 50 && soldier.IsMoving; step++)
+                    soldier.AdvanceMovement(1000f);
+                Assert.AreEqual(storageCell, soldier.Cell);
+                roster.GetComponent<SoldierFogOfWar>().Refresh();
+                Vector2 storagePointer = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(storageCell.x, storageCell.y, 0)));
+                Set(mouse.position, storagePointer);
+                Press(mouse.leftButton);
+                UpdateSelection(panel);
+                Assert.AreSame(soldier, panel.Selected);
+                Assert.IsTrue(soldier.IsSelected);
+                Release(mouse.leftButton);
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                Object.DestroyImmediate(viewport);
+            }
+            yield return new ExitPlayMode();
+        }
+
         [Test]
         public void LeftClickSelectsSoldierAndEmptyTerrainClearsSelection()
         {
@@ -232,6 +331,109 @@ namespace NoMansGround.Tests
                 Assert.AreEqual(zoneTint, view.Tilemap.GetColor(tilePosition));
                 view.RenderZones(map.Data);
                 Assert.AreEqual(zoneTint, view.Tilemap.GetColor(tilePosition));
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
+        public void ClickingSoldierExitsRoomDesignationModeAndUpdatesSelection()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                SoldierDetailsPanel panel = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out SoldierDetailsPanel selection)) panel = selection;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                panel.Select(null);
+                typeof(SoldierDetailsPanel).GetMethod("SetRoomDesignationMode",
+                    BindingFlags.Instance | BindingFlags.NonPublic).Invoke(panel, new object[] { true });
+
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                SoldierView soldier = roster.Soldiers[1];
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(soldier.transform.position));
+                Press(mouse.leftButton);
+                UpdateSelection(panel);
+
+                Assert.AreSame(soldier, panel.Selected);
+                Assert.IsTrue(soldier.IsSelected);
+                var identityField = typeof(SoldierDetailsPanel).GetField("identity",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.AreEqual(soldier.Data.FullName, ((UnityEngine.UI.Text)identityField.GetValue(panel)).text);
+                var guardButtonField = typeof(SoldierDetailsPanel).GetField("guardButton",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.IsTrue(((UnityEngine.UI.Button)guardButtonField.GetValue(panel)).interactable);
+                var activeField = typeof(SoldierDetailsPanel).GetField("roomDesignationActive",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.IsFalse((bool)activeField.GetValue(panel));
+                Release(mouse.leftButton);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
+        public void ClickingSoldierDuringActiveWorkModeCancelsModeAndUpdatesPanel()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                SoldierDetailsPanel panel = null;
+                TrenchWorkOrders trenches = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out SoldierDetailsPanel selection)) panel = selection;
+                    if (root.TryGetComponent(out TrenchWorkOrders workOrders)) trenches = workOrders;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                panel.Select(roster.Soldiers[0]);
+                trenches.SetMode(DiggingMode.Dig);
+
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                SoldierView nextSoldier = roster.Soldiers[1];
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(nextSoldier.transform.position));
+                Press(mouse.leftButton);
+                typeof(TrenchWorkOrders).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(trenches, null);
+                UpdateSelection(panel);
+
+                Assert.AreEqual(DiggingMode.None, trenches.Mode);
+                Assert.AreSame(nextSoldier, panel.Selected);
+                Assert.IsTrue(nextSoldier.IsSelected);
+                Release(mouse.leftButton);
             }
             finally
             {
@@ -529,6 +731,197 @@ namespace NoMansGround.Tests
                 Press(keyboard.lKey);
                 UpdateTrenches(trenches);
                 Assert.AreEqual(DiggingMode.None, trenches.Mode);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
+        public void SingleClickInBuildModeDesignatesStandaloneWall()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                map.Data.Fog.Disable();
+
+                var cell = new Vector2Int(-1, -1);
+                for (int y = 22; y < 28 && cell.x < 0; y++)
+                    for (int x = 72; x < 77; x++)
+                    {
+                        var candidate = new Vector2Int(x, y);
+                        if (!map.Data.Fog.IsExplored(candidate) || !map.Data.IsWalkable(candidate)
+                            || map.Data.IsTrench(candidate) || map.Data.IsTunnel(candidate)
+                            || map.Data.HasTree(candidate) || map.Data.TryGetGroundItem(candidate, out _)
+                            || map.Data.IsStorageCell(candidate) || map.Data.IsPantryCell(candidate)
+                            || map.Data.TryGetZone(candidate, out _) || map.Data.GetBuilding(candidate) != null
+                            || map.Data[candidate.x, candidate.y] == TerrainKind.Road)
+                            continue;
+                        cell = candidate;
+                        break;
+                    }
+                Assert.GreaterOrEqual(cell.x, 0, "The test map must have an empty, explored wall cell.");
+
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                trenches.SetMode(DiggingMode.BuildWallWood);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(cell.x, cell.y, 0))));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.Zero(trenches.Jobs.Count);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+
+                Assert.AreEqual(DiggingMode.BuildWallWood, trenches.Mode);
+                Assert.AreEqual(1, trenches.Jobs.Count);
+                Assert.AreEqual(TrenchJobKind.BuildWall, trenches.Jobs[0].Kind);
+                Assert.IsTrue(map.Data.GetBuilding(cell).IsStandaloneWall);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
+        public void WallModeDragDesignatesRasterizedLine()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                map.Data.Fog.Disable();
+                var start = new Vector2Int(72, 22);
+                var end = new Vector2Int(76, 26);
+                foreach (Vector2Int cell in TrenchWorkOrders.RasterLine(start, end))
+                {
+                    map.Data[cell.x, cell.y] = TerrainKind.Dirt;
+                    map.Data.SetTree(cell, false);
+                    map.Data.SetWalkable(cell, true);
+                    map.Data.TryTakeGroundItem(cell, out _);
+                }
+                view.Render(map.Data);
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                trenches.SetMode(DiggingMode.BuildWallWood);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(start.x, start.y, 0))));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(end.x, end.y, 0))));
+                UpdateTrenches(trenches);
+                Assert.Zero(trenches.Jobs.Count);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+
+                Assert.AreEqual(5, trenches.Jobs.Count);
+                foreach (Vector2Int cell in TrenchWorkOrders.RasterLine(start, end))
+                    Assert.IsTrue(map.Data.GetBuilding(cell).IsStandaloneWall);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
+        public void WallLineInputCanContinueFromVisibleIntoRememberedTiles()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            try
+            {
+                MapPrototype map = null;
+                SoldierRoster roster = null;
+                Camera camera = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out SoldierRoster soldiers)) roster = soldiers;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                roster.Spawn(map.Data);
+                var trenches = roster.GetComponent<TrenchWorkOrders>();
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 24f, 0f));
+                var start = new Vector2Int(70, 20);
+                var end = new Vector2Int(76, 20);
+                for (int x = start.x; x <= end.x; x++)
+                {
+                    var cell = new Vector2Int(x, start.y);
+                    Assert.IsFalse(map.Data.IsStorageCell(cell));
+                    Assert.IsFalse(map.Data.IsPantryCell(cell));
+                    map.Data.TryTakeGroundItem(cell, out _);
+                    map.Data.SetTree(cell, false);
+                    map.Data[cell.x, cell.y] = TerrainKind.Dirt;
+                    map.Data.SetWalkable(cell, true);
+                }
+                map.Data.Fog.Enable();
+                map.Data.Fog.Update(map.Data, new[] { start }, 10);
+                map.Data.Fog.Update(map.Data, new[] { start }, 2);
+                Assert.IsTrue(map.Data.Fog.IsVisible(start));
+                Assert.IsTrue(map.Data.Fog.IsExplored(end));
+                Assert.IsFalse(map.Data.Fog.IsVisible(end));
+                view.Render(map.Data);
+
+                trenches.SetMode(DiggingMode.BuildWallWood);
+                Mouse mouse = InputSystem.AddDevice<Mouse>();
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(start.x, start.y, 0))));
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Set(mouse.position, (Vector2)camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(end.x, end.y, 0))));
+                UpdateTrenches(trenches);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+
+                Assert.AreEqual(7, trenches.Jobs.Count);
+                for (int x = start.x; x <= end.x; x++)
+                    Assert.IsTrue(map.Data.GetBuilding(new Vector2Int(x, start.y)).IsStandaloneWall);
             }
             finally
             {

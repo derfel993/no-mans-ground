@@ -9,14 +9,21 @@ namespace NoMansGround.Map
         private readonly HashSet<Vector2Int> completed = new HashSet<Vector2Int>();
         public RectInt Bounds { get; }
         public ItemType Material { get; }
+        public bool IsStandaloneWall { get; }
+        public bool IsWallAssembly { get; }
         public Vector2Int? Door { get; private set; }
-        public bool IsComplete => Door.HasValue && completed.Count == 2 * Bounds.width + 2 * Bounds.height - 4;
+        public bool DoorBuilt { get; private set; }
+        public bool IsComplete => IsStandaloneWall ? completed.Count == 1
+            : Door.HasValue && DoorBuilt && completed.Count == 2 * Bounds.width + 2 * Bounds.height - 4;
         public int CompletedTiles => completed.Count;
 
-        internal BuildingRoom(RectInt bounds, ItemType material)
+        internal BuildingRoom(RectInt bounds, ItemType material, bool isStandaloneWall = false,
+            bool isWallAssembly = false)
         {
             Bounds = bounds;
             Material = material;
+            IsStandaloneWall = isStandaloneWall;
+            IsWallAssembly = isWallAssembly;
         }
 
         public bool IsPerimeter(Vector2Int cell)
@@ -29,7 +36,7 @@ namespace NoMansGround.Map
 
         internal bool SetDoor(Vector2Int cell)
         {
-            if (!IsPerimeter(cell) || Door.HasValue || completed.Contains(cell)
+            if (IsStandaloneWall || !IsPerimeter(cell) || Door.HasValue
                 || ((cell.x == Bounds.xMin || cell.x == Bounds.xMax - 1)
                     && (cell.y == Bounds.yMin || cell.y == Bounds.yMax - 1)))
                 return false;
@@ -38,6 +45,23 @@ namespace NoMansGround.Map
         }
 
         internal bool Complete(Vector2Int cell) => IsPerimeter(cell) && completed.Add(cell);
+
+        internal bool CompleteDoor(Vector2Int cell)
+        {
+            if (Door != cell || DoorBuilt || !IsPerimeter(cell))
+                return false;
+            completed.Add(cell);
+            DoorBuilt = true;
+            return true;
+        }
+
+        internal void AbsorbWall(Vector2Int cell, bool isBuilt)
+        {
+            if (!IsPerimeter(cell))
+                throw new ArgumentOutOfRangeException(nameof(cell));
+            if (isBuilt)
+                completed.Add(cell);
+        }
     }
 
     public sealed class TunnelDoor
@@ -56,6 +80,30 @@ namespace NoMansGround.Map
         Dump,
         MaterialsDepot,
         Cemetery
+    }
+
+    public enum RoomSpecialization
+    {
+        Command,
+        TelegraphStation,
+        Kitchen,
+        Armory,
+        Shelter,
+        Hospital
+    }
+
+    public sealed class SpecializedRoom
+    {
+        public RectInt Bounds { get; }
+        public RoomSpecialization Specialization { get; internal set; }
+        public BuildingRoom Building { get; }
+
+        internal SpecializedRoom(RectInt bounds, RoomSpecialization specialization, BuildingRoom building)
+        {
+            Bounds = bounds;
+            Specialization = specialization;
+            Building = building;
+        }
     }
 
     public enum TerrainKind
@@ -82,12 +130,14 @@ namespace NoMansGround.Map
         private readonly ItemType?[] groundItems;
         private readonly MapZoneKind?[] zones;
         private readonly List<BuildingRoom> buildings = new List<BuildingRoom>();
+        private readonly List<SpecializedRoom> specializedRooms = new List<SpecializedRoom>();
         private readonly List<TunnelDoor> tunnelDoors = new List<TunnelDoor>();
         private readonly byte[] tunnelShelterStates;
         private bool sheltersDirty = true;
         private int closedTunnelShelterCount;
         private int openTunnelCount;
         public IReadOnlyList<BuildingRoom> Buildings => buildings.AsReadOnly();
+        public IReadOnlyList<SpecializedRoom> SpecializedRooms => specializedRooms.AsReadOnly();
         public IReadOnlyList<TunnelDoor> TunnelDoors => tunnelDoors.AsReadOnly();
         public int ClosedTunnelShelterCount { get { UpdateTunnelShelters(); return closedTunnelShelterCount; } }
         public int OpenTunnelCount { get { UpdateTunnelShelters(); return openTunnelCount; } }
@@ -259,6 +309,20 @@ namespace NoMansGround.Map
             return true;
         }
 
+        public bool TryPlanWall(Vector2Int cell, ItemType material, out BuildingRoom wall)
+        {
+            wall = null;
+            if ((material != ItemType.Wood && material != ItemType.BuildingStone)
+                || !Contains(cell) || !Fog.IsExplored(cell) || !IsWalkable(cell) || IsTrench(cell)
+                || IsTunnel(cell) || HasTree(cell)
+                || IsStorageCell(cell) || IsPantryCell(cell) || TryGetZone(cell, out _)
+                || GetBuilding(cell) != null || this[cell.x, cell.y] == TerrainKind.Road)
+                return false;
+            wall = new BuildingRoom(new RectInt(cell.x, cell.y, 1, 1), material, true);
+            buildings.Add(wall);
+            return true;
+        }
+
         public bool TrySetBuildingDoor(Vector2Int cell)
         {
             BuildingRoom room = GetBuilding(cell);
@@ -274,9 +338,126 @@ namespace NoMansGround.Map
         public bool CompleteBuildingTile(Vector2Int cell)
         {
             BuildingRoom room = GetBuilding(cell);
-            if (room == null || !room.Door.HasValue || !room.Complete(cell))
+            if (room == null || !room.IsPerimeter(cell)
+                || (!room.IsStandaloneWall && !room.IsWallAssembly && !room.Door.HasValue))
+                return false;
+            bool completed = room.Door == cell ? room.CompleteDoor(cell) : room.Complete(cell);
+            if (!completed)
                 return false;
             sheltersDirty = true;
+            return true;
+        }
+
+        public bool TryMergeWallRectangle(Vector2Int cell, out BuildingRoom room,
+            out IReadOnlyList<BuildingRoom> mergedWalls)
+        {
+            room = null;
+            mergedWalls = Array.Empty<BuildingRoom>();
+            BuildingRoom start = GetBuilding(cell);
+            if (start == null || !start.IsStandaloneWall)
+                return false;
+
+            var walls = new List<BuildingRoom>();
+            var wallCells = new HashSet<Vector2Int>();
+            var pending = new Queue<Vector2Int>();
+            pending.Enqueue(cell);
+            wallCells.Add(cell);
+            Vector2Int[] neighbours = { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up };
+            while (pending.Count > 0)
+            {
+                Vector2Int current = pending.Dequeue();
+                BuildingRoom wall = GetBuilding(current);
+                if (wall == null || !wall.IsStandaloneWall || wall.Material != start.Material)
+                    return false;
+                walls.Add(wall);
+                foreach (Vector2Int offset in neighbours)
+                {
+                    Vector2Int adjacent = current + offset;
+                    BuildingRoom next = GetBuilding(adjacent);
+                    if (next == null || !next.IsStandaloneWall || next.Material != start.Material
+                        || !wallCells.Add(adjacent))
+                        continue;
+                    pending.Enqueue(adjacent);
+                }
+            }
+
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            int maxX = int.MinValue;
+            int maxY = int.MinValue;
+            foreach (Vector2Int wallCell in wallCells)
+            {
+                minX = Math.Min(minX, wallCell.x);
+                minY = Math.Min(minY, wallCell.y);
+                maxX = Math.Max(maxX, wallCell.x);
+                maxY = Math.Max(maxY, wallCell.y);
+            }
+            int width = maxX - minX + 1;
+            int height = maxY - minY + 1;
+            int perimeterCount = 2 * width + 2 * height - 4;
+            if (width < 3 || height < 3 || wallCells.Count != perimeterCount)
+                return false;
+
+            for (int y = minY; y <= maxY; y++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    bool perimeter = x == minX || x == maxX || y == minY || y == maxY;
+                    if (perimeter != wallCells.Contains(new Vector2Int(x, y)))
+                        return false;
+                }
+
+            room = new BuildingRoom(new RectInt(minX, minY, width, height), start.Material,
+                isWallAssembly: true);
+            foreach (BuildingRoom wall in walls)
+            {
+                Vector2Int wallCell = wall.Bounds.min;
+                room.AbsorbWall(wallCell, wall.IsComplete);
+                buildings.Remove(wall);
+            }
+            buildings.Add(room);
+            mergedWalls = walls.AsReadOnly();
+            sheltersDirty = true;
+            return true;
+        }
+
+        public bool TryDesignateSpecializedRoom(RoomSpecialization specialization, Vector2Int from,
+            Vector2Int to, out SpecializedRoom designated)
+        {
+            designated = null;
+            if (!Enum.IsDefined(typeof(RoomSpecialization), specialization))
+                return false;
+            int minX = Math.Min(from.x, to.x);
+            int minY = Math.Min(from.y, to.y);
+            int maxX = Math.Max(from.x, to.x);
+            int maxY = Math.Max(from.y, to.y);
+            var bounds = new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
+            BuildingRoom building = null;
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
+                for (int x = bounds.xMin; x < bounds.xMax; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    BuildingRoom candidate = GetBuilding(cell);
+                    if (candidate == null || !candidate.IsComplete || !IsIndoors(cell) || candidate.IsPerimeter(cell)
+                        || !Fog.IsExplored(cell) || (building != null && building != candidate))
+                        return false;
+                    building = candidate;
+                }
+
+            foreach (SpecializedRoom existing in specializedRooms)
+            {
+                if (!existing.Bounds.Overlaps(bounds))
+                    continue;
+                if (existing.Bounds.Equals(bounds) && existing.Building == building)
+                {
+                    existing.Specialization = specialization;
+                    designated = existing;
+                    return true;
+                }
+                return false;
+            }
+
+            designated = new SpecializedRoom(bounds, specialization, building);
+            specializedRooms.Add(designated);
             return true;
         }
 
@@ -504,7 +685,7 @@ namespace NoMansGround.Map
                 || blocked[cell.y * Width + cell.x])
                 return false;
             BuildingRoom room = GetBuilding(cell);
-            return room == null || !room.IsBuilt(cell) || room.Door == cell;
+            return room == null || !room.IsBuilt(cell) || (room.Door == cell && room.DoorBuilt);
         }
 
         public void SetWalkable(Vector2Int cell, bool walkable)

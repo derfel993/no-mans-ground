@@ -45,11 +45,14 @@ namespace NoMansGround.Soldiers
         private Text taskStatus;
         private Dropdown taskDropdown;
         private Text zoneStatus;
+        private Text roomDesignationButton;
+        private Text roomStatus;
         private Button guardButton;
         private Button workButton;
         private Button[] zoneButtons;
         private Button[] speedButtons;
         private Button[] soldierTabButtons;
+        private Dropdown roomSpecializationDropdown;
         private GameObject[] soldierTabPages;
         private bool facilitySelected;
         private bool depotSelected;
@@ -68,6 +71,10 @@ namespace NoMansGround.Soldiers
         private MapZoneKind? activeZone;
         private bool zoneDragging;
         private Vector2Int zoneDragStart;
+        private bool roomDesignationActive;
+        private bool roomDragging;
+        private Vector2Int roomDragStart;
+        private RoomSpecialization selectedRoomSpecialization;
 
         public SoldierView Selected { get; private set; }
 
@@ -164,6 +171,8 @@ namespace NoMansGround.Soldiers
                 canvasObject.SetActive(false);
             activeZone = null;
             zoneDragging = false;
+            roomDesignationActive = false;
+            roomDragging = false;
             ClearZonePreview();
         }
 
@@ -186,6 +195,11 @@ namespace NoMansGround.Soldiers
             FitContent();
             if (trenchOrders != null && trenchOrders.BlocksWorldCommands)
                 return;
+            if (roomDesignationActive)
+            {
+                HandleRoomDesignationInput();
+                return;
+            }
             if (activeZone.HasValue)
             {
                 HandleZoneInput();
@@ -198,10 +212,32 @@ namespace NoMansGround.Soldiers
             if (!mapCamera.pixelRect.Contains(pointer)
                 || (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
                 return;
+            SoldierView soldierOnCell = FindAtMapCell(pointer);
+            if (soldierOnCell != null)
+            {
+                Select(soldierOnCell);
+                return;
+            }
             if (kitchen != null && kitchen.TrySelectAt(mapCamera, pointer, out bool depot))
                 SelectFacility(depot);
             else
                 Select(FindAtScreenPosition(pointer));
+        }
+
+        private SoldierView FindAtMapCell(Vector2 pointer)
+        {
+            if (gameMap == null || gameMap.Data == null || mapView == null)
+                return null;
+            Vector3 world = mapCamera.ScreenToWorldPoint(new Vector3(pointer.x, pointer.y,
+                mapView.transform.position.z - mapCamera.transform.position.z));
+            Vector3Int mapCell = mapView.Tilemap.WorldToCell(world);
+            var cell = new Vector2Int(mapCell.x, mapCell.y);
+            if (!gameMap.Data.Contains(cell) || !gameMap.Data.Fog.IsVisible(cell))
+                return null;
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != null && soldier.gameObject.activeInHierarchy && soldier.Cell == cell)
+                    return soldier;
+            return null;
         }
 
         public SoldierView FindAtScreenPosition(Vector2 pointer)
@@ -269,12 +305,30 @@ namespace NoMansGround.Soldiers
 
         public void SetZoneMode(MapZoneKind? kind)
         {
+            if (kind.HasValue && roomDesignationActive)
+                SetRoomDesignationMode(false);
             activeZone = activeZone == kind ? null : kind;
             zoneDragging = false;
             ClearZonePreview();
             if (activeZone.HasValue && trenchOrders != null)
                 trenchOrders.SetMode(DiggingMode.None);
             UpdateZoneControls();
+        }
+
+        private void SetRoomDesignationMode(bool active)
+        {
+            roomDesignationActive = active;
+            roomDragging = false;
+            ClearZonePreview();
+            if (active)
+            {
+                activeZone = null;
+                zoneDragging = false;
+                if (trenchOrders != null)
+                    trenchOrders.SetMode(DiggingMode.None);
+            }
+            UpdateZoneControls();
+            UpdateRoomDesignationControls();
         }
 
         private void HandleZoneInput()
@@ -289,7 +343,7 @@ namespace NoMansGround.Soldiers
             Mouse mouse = Mouse.current;
             if (mouse == null)
                 return;
-            bool valid = TryGetZonePointerCell(mouse.position.ReadValue(), out Vector2Int cell);
+            bool valid = TryGetMapPointerCell(mouse.position.ReadValue(), out Vector2Int cell);
             if (mouse.leftButton.wasPressedThisFrame && valid)
             {
                 zoneDragging = true;
@@ -317,7 +371,7 @@ namespace NoMansGround.Soldiers
                 zoneStatus.text = "Area non valida: fuori mappa, bloccata o sovrapposta.";
         }
 
-        private bool TryGetZonePointerCell(Vector2 pointer, out Vector2Int cell)
+        private bool TryGetMapPointerCell(Vector2 pointer, out Vector2Int cell)
         {
             cell = default;
             if (gameMap == null || gameMap.Data == null || mapView == null
@@ -333,18 +387,27 @@ namespace NoMansGround.Soldiers
 
         private void ShowZonePreview(Vector2Int from, Vector2Int to)
         {
+            ShowRectanglePreview(from, to, MapTilemapView.ZoneColor(activeZone.Value));
+        }
+
+        private void ShowRoomPreview(Vector2Int from, Vector2Int to)
+        {
+            ShowRectanglePreview(from, to, MapTilemapView.SpecializationColor(selectedRoomSpecialization));
+        }
+
+        private void ShowRectanglePreview(Vector2Int from, Vector2Int to, Color color)
+        {
             int minX = Mathf.Min(from.x, to.x);
             int maxX = Mathf.Max(from.x, to.x);
             int minY = Mathf.Min(from.y, to.y);
             int maxY = Mathf.Max(from.y, to.y);
             int index = 0;
-            Color color = MapTilemapView.ZoneColor(activeZone.Value);
             for (int y = minY; y <= maxY; y++)
                 for (int x = minX; x <= maxX; x++)
                 {
                     if (index == zonePreview.Count)
                     {
-                        var previewObject = new GameObject("Zone preview", typeof(SpriteRenderer));
+                        var previewObject = new GameObject("Area preview", typeof(SpriteRenderer));
                         previewObject.transform.SetParent(transform, false);
                         zonePreview.Add(previewObject.GetComponent<SpriteRenderer>());
                     }
@@ -380,6 +443,94 @@ namespace NoMansGround.Soldiers
                 zoneStatus.text = $"{ZoneName(activeZone.Value)}: trascina un rettangolo. Esc/destro: esci.";
             else if (zoneStatus != null)
                 zoneStatus.text = DescribeZones();
+        }
+
+        private void HandleRoomDesignationInput()
+        {
+            Keyboard keyboard = Keyboard.current;
+            Mouse mouse = Mouse.current;
+            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+                || (mouse != null && mouse.rightButton.wasPressedThisFrame))
+            {
+                SetRoomDesignationMode(false);
+                return;
+            }
+            if (mouse == null)
+                return;
+            Vector2 pointer = mouse.position.ReadValue();
+            bool valid = TryGetMapPointerCell(pointer, out Vector2Int cell);
+            if (mouse.leftButton.wasPressedThisFrame && valid)
+            {
+                SoldierView clickedSoldier = FindAtScreenPosition(pointer);
+                if (clickedSoldier != null)
+                {
+                    SetRoomDesignationMode(false);
+                    Select(clickedSoldier);
+                    return;
+                }
+                roomDragging = true;
+                roomDragStart = cell;
+            }
+            if (roomDragging && valid)
+                ShowRoomPreview(roomDragStart, cell);
+            if (!roomDragging || !mouse.leftButton.wasReleasedThisFrame)
+                return;
+
+            roomDragging = false;
+            ClearZonePreview();
+            if (!valid || gameMap == null || gameMap.Data == null)
+            {
+                roomStatus.text = "Disegno annullato: rilascio fuori dalla mappa.";
+                return;
+            }
+            if (gameMap.Data.TryDesignateSpecializedRoom(selectedRoomSpecialization,
+                roomDragStart, cell, out SpecializedRoom room))
+            {
+                mapView.RenderSpecializedRooms(gameMap.Data);
+                RefreshDigging();
+                roomStatus.text = $"{RoomSpecializationName(room.Specialization)}: area {room.Bounds.width} x {room.Bounds.height}.";
+            }
+            else
+                roomStatus.text = "Area non valida: serve un rettangolo interno a un edificio completato, senza sovrapposizioni.";
+        }
+
+        private void UpdateRoomDesignationControls()
+        {
+            if (roomDesignationButton == null)
+                return;
+            roomDesignationButton.text = roomDesignationActive ? "DISEGNA STANZA - attivo" : "Disegna stanza";
+            roomDesignationButton.GetComponentInParent<Button>().GetComponent<Image>().color = roomDesignationActive
+                ? new Color(0.48f, 0.58f, 0.34f) : new Color(0.26f, 0.32f, 0.22f);
+            if (roomStatus == null)
+                return;
+            roomStatus.text = roomDesignationActive
+                ? $"{RoomSpecializationName(selectedRoomSpecialization)}: trascina nell'interno. Esc/destro: esci."
+                : DescribeSpecializedRooms();
+        }
+
+        private string DescribeSpecializedRooms()
+        {
+            if (gameMap == null || gameMap.Data == null || gameMap.Data.SpecializedRooms.Count == 0)
+                return "Nessuna stanza specializzata.";
+            var counts = new int[System.Enum.GetValues(typeof(RoomSpecialization)).Length];
+            foreach (SpecializedRoom room in gameMap.Data.SpecializedRooms)
+                counts[(int)room.Specialization]++;
+            return $"Comando {counts[0]} | Telegrafo {counts[1]} | Cucina {counts[2]}\n"
+                + $"Armeria {counts[3]} | Ricovero {counts[4]} | Ospedale {counts[5]}";
+        }
+
+        private static string RoomSpecializationName(RoomSpecialization specialization)
+        {
+            switch (specialization)
+            {
+                case RoomSpecialization.Command: return "Comando";
+                case RoomSpecialization.TelegraphStation: return "Stazione Telegrafo";
+                case RoomSpecialization.Kitchen: return "Cucina";
+                case RoomSpecialization.Armory: return "Armeria";
+                case RoomSpecialization.Shelter: return "Ricovero";
+                case RoomSpecialization.Hospital: return "Ospedale";
+                default: return "Stanza";
+            }
         }
 
         private static string ZoneName(MapZoneKind kind)
@@ -476,7 +627,8 @@ namespace NoMansGround.Soldiers
             workButton.interactable = Selected.Duty != SoldierDuty.Work || Selected.GuardRequested;
 
             Vector2Int target = Selected.Destination;
-            activity.text = (Selected.IsChangingTaskEquipment ? Selected.TaskStatus
+            activity.text = (Selected.IsChangingTaskEquipment || Selected.IsReturningTaskTool
+                || Selected.IsEvacuatingBuilding ? Selected.TaskStatus
                 : Selected.IsMoving ? $"In marcia: ({target.x}, {target.y})"
                 : Selected.HasWorkAssignment
                     ? $"{(Selected.Data.Task == SoldierTask.Cook ? "Rancio" : Selected.WorkKind == TrenchJobKind.BuildWall || Selected.WorkKind == TrenchJobKind.BuildDoor ? "Costruzione" : Selected.WorkKind == TrenchJobKind.Ladder ? "Scala" : Selected.WorkKind == TrenchJobKind.CutTree ? "Taglio albero" : Selected.WorkKind == TrenchJobKind.MineRock ? "Mina roccia" : Selected.WorkKind == TrenchJobKind.CollectItem ? "Raccolta" : "Scavo")}: {Selected.DiggingProgress:P0}"
@@ -554,19 +706,23 @@ namespace NoMansGround.Soldiers
 
         private void RefreshDigging()
         {
-            if (activeZone.HasValue && trenchOrders != null && trenchOrders.Mode != DiggingMode.None)
+            if ((activeZone.HasValue || roomDesignationActive)
+                && trenchOrders != null && trenchOrders.Mode != DiggingMode.None)
             {
                 activeZone = null;
+                roomDesignationActive = false;
                 zoneDragging = false;
+                roomDragging = false;
                 ClearZonePreview();
                 UpdateZoneControls();
+                UpdateRoomDesignationControls();
             }
             if (buildingStatus != null && gameMap != null && gameMap.Data != null)
             {
                 int complete = 0;
                 foreach (BuildingRoom room in gameMap.Data.Buildings)
                     if (room.IsComplete) complete++;
-                buildingStatus.text = $"Stanze: {complete}/{gameMap.Data.Buildings.Count}\n"
+                buildingStatus.text = $"Costruzioni: {complete}/{gameMap.Data.Buildings.Count} | Aree: {gameMap.Data.SpecializedRooms.Count}\n"
                     + $"Rifugi galleria: {gameMap.Data.ClosedTunnelShelterCount}\nGallerie aperte: {gameMap.Data.OpenTunnelCount}\n"
                     + $"Legna: {gameMap.Data.StorageStockpile.Count(ItemType.Wood)} | Pietra: {gameMap.Data.StorageStockpile.Count(ItemType.BuildingStone)}";
             }
@@ -582,12 +738,18 @@ namespace NoMansGround.Soldiers
             }
             diggingStatus.text = $"Lavori: {trenchOrders.Jobs.Count} | Attivi: {active}\nBloccati: {blocked}\n"
                 + trenchOrders.Status;
-            diggingButton.text = trenchOrders.Mode == DiggingMode.Dig ? "SCAVA [T] - attivo" : "Scava [T]";
-            cutButton.text = trenchOrders.Mode == DiggingMode.Cut ? "TAGLIA [A] - attivo" : "Taglia [A]";
-            mineButton.text = trenchOrders.Mode == DiggingMode.Mine ? "MINA [M] - attivo" : "Mina [M]";
-            collectButton.text = trenchOrders.Mode == DiggingMode.Collect ? "RACCOGLI [C] - attivo" : "Raccogli [C]";
-            cancelButton.text = trenchOrders.Mode == DiggingMode.Cancel ? "ANNULLA [X] - attivo" : "Annulla scavi [X]";
-            ladderButton.text = trenchOrders.Mode == DiggingMode.Ladder ? "SCALA [L] - attivo" : "Installa scala [L]";
+                diggingButton.text = trenchOrders.Mode == DiggingMode.Dig ? "SCAVA [T] - attivo" : "Scava [T]";
+                cutButton.text = trenchOrders.Mode == DiggingMode.Cut ? "TAGLIA [A] - attivo" : "Taglia [A]";
+                mineButton.text = trenchOrders.Mode == DiggingMode.Mine ? "MINA [M] - attivo" : "Mina [M]";
+                collectButton.text = trenchOrders.Mode == DiggingMode.Collect ? "RACCOGLI [C] - attivo" : "Raccogli [C]";
+                cancelButton.text = trenchOrders.Mode == DiggingMode.Cancel ? "ANNULLA [X] - attivo" : "Annulla scavi [X]";
+                ladderButton.text = trenchOrders.Mode == DiggingMode.Ladder ? "SCALA [L] - attivo" : "Installa scala [L]";
+            if (buildingButtons != null)
+            {
+                buildingButtons[0].text = trenchOrders.Mode == DiggingMode.BuildWallWood ? "MURO LEGNO - attivo" : "Muro Legno";
+                buildingButtons[1].text = trenchOrders.Mode == DiggingMode.BuildWallStone ? "MURO PIETRA - attivo" : "Muro Pietra";
+                buildingButtons[2].text = trenchOrders.Mode == DiggingMode.Door ? "PORTA - attivo" : "Porta";
+            }
             diggingButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             cutButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
             mineButton.GetComponentInParent<Button>().interactable = trenchOrders.isActiveAndEnabled;
@@ -666,13 +828,21 @@ namespace NoMansGround.Soldiers
                 CreateText(content, "COSTRUZIONI", 12, 20f);
                 buildingButtons = new[]
                 {
-                    CreateButton(content, "Legno", DiggingMode.BuildWood),
-                    CreateButton(content, "Pietra", DiggingMode.BuildStone),
+                    CreateButton(content, "Muro Legno", DiggingMode.BuildWallWood),
+                    CreateButton(content, "Muro Pietra", DiggingMode.BuildWallStone),
                     CreateButton(content, "Porta", DiggingMode.Door)
                 };
                 buildingStatus = CreateText(content, "", 9, 56f);
                 diggingStatus = CreateText(content, "", 10, 66f);
                 RefreshDigging();
+            }
+            if (gameMap != null)
+            {
+                CreateText(content, "STANZE", 12, 20f);
+                roomSpecializationDropdown = CreateRoomSpecializationDropdown(content);
+                roomDesignationButton = CreateRoomDesignationButton(content);
+                roomStatus = CreateText(content, "", 9, 38f);
+                UpdateRoomDesignationControls();
             }
             if (gameMap != null)
             {
@@ -823,14 +993,41 @@ namespace NoMansGround.Soldiers
 
         private Dropdown CreateTaskDropdown(Transform parent)
         {
-            var row = CreateRect("Compito", parent);
+            Dropdown dropdown = CreateOptionDropdown(parent, "Compito", "Scelta compito");
+            foreach (SoldierTask task in System.Enum.GetValues(typeof(SoldierTask)))
+                dropdown.options.Add(new Dropdown.OptionData(SoldierTasks.DisplayName(task)));
+            dropdown.onValueChanged.AddListener(value =>
+            {
+                if (Selected != null) Selected.RequestTask((SoldierTask)value);
+            });
+            dropdown.RefreshShownValue();
+            return dropdown;
+        }
+
+        private Dropdown CreateRoomSpecializationDropdown(Transform parent)
+        {
+            Dropdown dropdown = CreateOptionDropdown(parent, "Tipo", "Tipo stanza");
+            foreach (RoomSpecialization specialization in System.Enum.GetValues(typeof(RoomSpecialization)))
+                dropdown.options.Add(new Dropdown.OptionData(RoomSpecializationName(specialization)));
+            dropdown.onValueChanged.AddListener(value =>
+            {
+                selectedRoomSpecialization = (RoomSpecialization)value;
+                UpdateRoomDesignationControls();
+            });
+            dropdown.RefreshShownValue();
+            return dropdown;
+        }
+
+        private Dropdown CreateOptionDropdown(Transform parent, string titleText, string dropdownName)
+        {
+            var row = CreateRect(dropdownName, parent);
             row.gameObject.AddComponent<LayoutElement>().preferredHeight = 24f;
             var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = 6f;
             layout.childForceExpandWidth = false;
-            Text title = CreateText(row, "Compito", 10, 24f);
+            Text title = CreateText(row, titleText, 10, 24f);
             title.GetComponent<LayoutElement>().preferredWidth = 48f;
-            var rect = CreateRect("Scelta compito", row);
+            var rect = CreateRect(dropdownName, row);
             rect.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
             var background = rect.gameObject.AddComponent<Image>();
             background.color = new Color(0.26f, 0.32f, 0.22f);
@@ -881,15 +1078,22 @@ namespace NoMansGround.Soldiers
             scroll.content = content;
             dropdown.template = template;
             dropdown.itemText = label;
-            foreach (SoldierTask task in System.Enum.GetValues(typeof(SoldierTask)))
-                dropdown.options.Add(new Dropdown.OptionData(SoldierTasks.DisplayName(task)));
-            dropdown.onValueChanged.AddListener(value =>
-            {
-                if (Selected != null) Selected.RequestTask((SoldierTask)value);
-            });
-            dropdown.RefreshShownValue();
             template.gameObject.SetActive(false);
             return dropdown;
+        }
+
+        private Text CreateRoomDesignationButton(Transform parent)
+        {
+            var rect = CreateRect("Disegna stanza", parent);
+            rect.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = new Color(0.26f, 0.32f, 0.22f);
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() => SetRoomDesignationMode(!roomDesignationActive));
+            Text text = CreateText(rect, "Disegna stanza", 10, 0f);
+            Stretch(text.rectTransform, 2f);
+            return text;
         }
 
         private Button CreateDutyButton(Transform parent, string label, SoldierDuty duty)

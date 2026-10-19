@@ -72,19 +72,19 @@ namespace NoMansGround.Tests
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             panel.SetZoneMode(MapZoneKind.Dump);
-            FindButton(canvas, "Legno").onClick.Invoke();
-            Assert.AreEqual(DiggingMode.BuildWood, trenches.Mode);
-            FindButton(canvas, "Pietra").onClick.Invoke();
-            Assert.AreEqual(DiggingMode.BuildStone, trenches.Mode);
+            FindButton(canvas, "Muro Legno").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWallWood, trenches.Mode);
+            FindButton(canvas, "Muro Pietra").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWallStone, trenches.Mode);
             FindButton(canvas, "Porta").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Door, trenches.Mode);
             FindButton(canvas, "Porta").onClick.Invoke();
             Assert.AreEqual(DiggingMode.None, trenches.Mode);
             trenches.enabled = false;
-            foreach (string label in new[] { "Legno", "Pietra", "Porta" })
+            foreach (string label in new[] { "Muro Legno", "Muro Pietra", "Porta" })
                 Assert.IsFalse(FindButton(canvas, label).interactable);
             trenches.enabled = true;
-            foreach (string label in new[] { "Legno", "Pietra", "Porta" })
+            foreach (string label in new[] { "Muro Legno", "Muro Pietra", "Porta" })
                 Assert.IsTrue(FindButton(canvas, label).interactable);
             yield return new ExitPlayMode();
         }
@@ -103,10 +103,10 @@ namespace NoMansGround.Tests
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
             var buttons = canvas.GetComponentsInChildren<Button>();
             Assert.AreEqual(22, buttons.Length);
-            FindButton(canvas, "Legno").onClick.Invoke();
-            Assert.AreEqual(DiggingMode.BuildWood, trenches.Mode);
-            FindButton(canvas, "Pietra").onClick.Invoke();
-            Assert.AreEqual(DiggingMode.BuildStone, trenches.Mode);
+            FindButton(canvas, "Muro Legno").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWallWood, trenches.Mode);
+            FindButton(canvas, "Muro Pietra").onClick.Invoke();
+            Assert.AreEqual(DiggingMode.BuildWallStone, trenches.Mode);
             FindButton(canvas, "Porta").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Door, trenches.Mode);
             FindButton(canvas, "Porta").onClick.Invoke();

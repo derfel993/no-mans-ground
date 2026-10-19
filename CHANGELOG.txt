@@ -8,6 +8,44 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.8 - 2026-10-19
+===============================================================================
+
+Costruzioni per linee di muri
+- La costruzione usa linee di muri in legno o pietra; quattro lati dello stesso
+  materiale formano automaticamente una stanza, senza designare prima un rettangolo.
+- La porta si aggiunge su un muro gia costruito con un job dedicato. Il tetto
+  compare soltanto quando il job della porta termina.
+- Un Hauler sgombera gli item a terra dal tile di muro e li porta al deposito
+  prima che il Costruttore inizi. I soldati dentro il perimetro vengono evacuati,
+  dopo aver terminato l'eventuale job corrente.
+- Gli edifici e i muri possono essere designati su terreno remembered.
+- Gli item di costruzione singoli restano supportati come muri autonomi,
+  senza porta o tetto.
+
+Stanze e fog of war
+- Le aree specializzate mostrano il nome nell'angolo alto-sinistro, anche con
+  il tetto visibile.
+- Ogni tile di parete o porta completato rivela le celle entro due tile.
+- Taglio alberi e raccolta risorse si possono designare anche su terreno remembered;
+  i bersagli mai esplorati restano inaccessibili.
+
+Soldati e interfaccia
+- Al passaggio effettivo a Guardia, il soldato riporta l'utensile del compito
+  al deposito raggiungibile piu vicino; i job gia in corso terminano prima.
+- I clic sui soldati hanno precedenza sull'ispezione di cucina, dispensa e deposito
+  quando il soldato occupa direttamente la cella della struttura.
+- La capacita di carico pesa inventario, viveri e razioni trasportati; gli item
+  che superano il limite non vengono ritirati.
+- Ridotto lo zoom iniziale della mappa da 24 a 18.
+
+Test e documentazione
+- Aggiornati README, TODO e test EditMode per costruzioni, evacuazione, porte,
+  fog di guerra, carico e selezione sui depositi.
+- Le diagnostiche statiche e `git diff --check` sono puliti; i test EditMode
+  non sono stati eseguiti in questa sessione.
+
+===============================================================================
 0.4.4 - 2026-10-19
 ===============================================================================
 

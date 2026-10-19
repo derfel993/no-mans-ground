@@ -93,6 +93,12 @@ namespace NoMansGround.Map
         private Tilemap buildingTilemap;
         private readonly Tile[] buildingTiles = new Tile[4];
         private readonly Tile[] mountainTerrainTiles = new Tile[17];
+        private Tilemap specializedRoomTilemap;
+        private Tile specializedRoomTile;
+        private GameObject specializedRoomLabelsRoot;
+        private MapData specializedRoomLabelMap;
+        private readonly Dictionary<SpecializedRoom, TextMesh> specializedRoomLabels =
+            new Dictionary<SpecializedRoom, TextMesh>();
 
         private Tile GetMountainTerrainTile(int index)
         {
@@ -164,7 +170,7 @@ namespace NoMansGround.Map
                             buildingTiles[index] = CreateBuildingTile(room.Material, door);
                         var position = new Vector3Int(x, y, 0);
                         buildingTilemap.SetTile(position, buildingTiles[index]);
-                        buildingTilemap.SetColor(position, room.IsBuilt(cell)
+                        buildingTilemap.SetColor(position, room.IsBuilt(cell) && (!door || room.DoorBuilt)
                             ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
                     }
             foreach (TunnelDoor door in map.TunnelDoors)
@@ -175,7 +181,112 @@ namespace NoMansGround.Map
                 buildingTilemap.SetTile(position, buildingTiles[1]);
                 buildingTilemap.SetColor(position, door.IsBuilt ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
             }
+            RenderSpecializedRooms(map);
             RenderRoofs(map);
+        }
+
+        public void RenderSpecializedRooms(MapData map)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (specializedRoomTilemap == null)
+            {
+                var layer = new GameObject("Specialized Rooms", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                specializedRoomTilemap = layer.GetComponent<Tilemap>();
+                var renderer = layer.GetComponent<TilemapRenderer>();
+                renderer.sortingOrder = 1;
+                renderer.sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+            }
+            if (specializedRoomTile == null)
+            {
+                var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+                texture.SetPixel(0, 0, Color.white);
+                texture.Apply();
+                specializedRoomTile = ScriptableObject.CreateInstance<Tile>();
+                specializedRoomTile.name = "Specialized Room";
+                specializedRoomTile.sprite = Sprite.Create(texture, new Rect(0, 0, 1, 1),
+                    new Vector2(0.5f, 0.5f), 1f);
+                specializedRoomTile.flags = TileFlags.None;
+                specializedRoomTile.colliderType = Tile.ColliderType.None;
+            }
+            if (specializedRoomLabelMap != map)
+            {
+                if (specializedRoomLabelsRoot != null)
+                    DestroyGeneratedObject(specializedRoomLabelsRoot);
+                specializedRoomLabels.Clear();
+                specializedRoomLabelsRoot = new GameObject("Specialized Room Labels");
+                specializedRoomLabelsRoot.transform.SetParent(transform, false);
+                specializedRoomLabelMap = map;
+            }
+
+            specializedRoomTilemap.ClearAllTiles();
+            foreach (SpecializedRoom room in map.SpecializedRooms)
+            {
+                for (int y = room.Bounds.yMin; y < room.Bounds.yMax; y++)
+                    for (int x = room.Bounds.xMin; x < room.Bounds.xMax; x++)
+                    {
+                        var position = new Vector3Int(x, y, 0);
+                        specializedRoomTilemap.SetTile(position, specializedRoomTile);
+                        specializedRoomTilemap.SetTileFlags(position, TileFlags.None);
+                        specializedRoomTilemap.SetColor(position, SpecializationColor(room.Specialization));
+                    }
+                RenderSpecializedRoomLabel(room);
+            }
+        }
+
+        private void RenderSpecializedRoomLabel(SpecializedRoom room)
+        {
+            if (!specializedRoomLabels.TryGetValue(room, out TextMesh label) || label == null)
+            {
+                var labelObject = new GameObject("Room label - " + room.Specialization, typeof(TextMesh));
+                labelObject.transform.SetParent(specializedRoomLabelsRoot.transform, false);
+                label = labelObject.GetComponent<TextMesh>();
+                label.anchor = TextAnchor.UpperLeft;
+                label.alignment = TextAlignment.Left;
+                label.fontSize = 32;
+                label.fontStyle = FontStyle.Bold;
+                label.color = new Color(0.97f, 0.97f, 0.91f);
+                MeshRenderer renderer = label.GetComponent<MeshRenderer>();
+                renderer.sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+                renderer.sortingOrder = 21;
+                specializedRoomLabels[room] = label;
+            }
+
+            string text = RoomSpecializationLabel(room.Specialization);
+            label.text = text;
+            label.characterSize = Mathf.Min(0.12f,
+                (room.Bounds.width - 0.12f) / Mathf.Max(1f, text.Length * 0.55f));
+            Vector3 topLeft = Tilemap.CellToWorld(new Vector3Int(room.Bounds.xMin, room.Bounds.yMax, 0));
+            label.transform.position = topLeft + new Vector3(0.08f, -0.08f, 0f);
+        }
+
+        private static string RoomSpecializationLabel(RoomSpecialization specialization)
+        {
+            switch (specialization)
+            {
+                case RoomSpecialization.Command: return "COMANDO";
+                case RoomSpecialization.TelegraphStation: return "STAZIONE TELEGRAFO";
+                case RoomSpecialization.Kitchen: return "CUCINA";
+                case RoomSpecialization.Armory: return "ARMERIA";
+                case RoomSpecialization.Shelter: return "RICOVERO";
+                case RoomSpecialization.Hospital: return "OSPEDALE";
+                default: throw new ArgumentOutOfRangeException(nameof(specialization));
+            }
+        }
+
+        public static Color SpecializationColor(RoomSpecialization specialization)
+        {
+            switch (specialization)
+            {
+                case RoomSpecialization.Command: return new Color(0.25f, 0.55f, 0.78f, 0.48f);
+                case RoomSpecialization.TelegraphStation: return new Color(0.35f, 0.78f, 0.80f, 0.48f);
+                case RoomSpecialization.Kitchen: return new Color(0.88f, 0.56f, 0.22f, 0.48f);
+                case RoomSpecialization.Armory: return new Color(0.78f, 0.27f, 0.23f, 0.48f);
+                case RoomSpecialization.Shelter: return new Color(0.56f, 0.68f, 0.49f, 0.48f);
+                case RoomSpecialization.Hospital: return new Color(0.83f, 0.86f, 0.72f, 0.48f);
+                default: throw new ArgumentOutOfRangeException(nameof(specialization));
+            }
         }
 
         private void RenderRoofs(MapData map)
@@ -192,7 +303,7 @@ namespace NoMansGround.Map
             roofTilemap.ClearAllTiles();
             foreach (BuildingRoom room in map.Buildings)
             {
-                if (!room.IsComplete)
+                if (!room.IsComplete || room.IsStandaloneWall)
                     continue;
                 if (roofTile == null)
                     roofTile = CreateRoofTile();
@@ -866,6 +977,8 @@ namespace NoMansGround.Map
                     DestroyGeneratedObject(itemTile);
             if (storageItemsRoot != null)
                 DestroyGeneratedObject(storageItemsRoot);
+            if (specializedRoomLabelsRoot != null)
+                DestroyGeneratedObject(specializedRoomLabelsRoot);
             for (int i = 0; i < runtimeItemSprites.Length; i++)
             {
                 if (runtimeItemSprites[i] != null)

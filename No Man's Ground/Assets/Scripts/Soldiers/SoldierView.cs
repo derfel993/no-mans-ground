@@ -27,12 +27,15 @@ namespace NoMansGround.Soldiers
         public bool GuardRequested { get; private set; }
         public SoldierTask? RequestedTask { get; private set; }
         public bool TaskReady { get; private set; } = true;
+        public bool IsReturningTaskTool { get; internal set; }
         public bool IsChangingTaskEquipment { get; internal set; }
+        public bool IsEvacuatingBuilding { get; internal set; }
         public string TaskStatus { get; private set; } = "Pronto";
         public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
-            && !GuardRequested && TaskReady && !RequestedTask.HasValue && Data.Task != SoldierTask.Cook;
+            && !GuardRequested && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue
+            && Data.Task != SoldierTask.Cook;
         public bool CanTakeGuardMove => isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard
-            && TaskReady && !RequestedTask.HasValue;
+            && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue;
         public Vector2Int GuardPathStart => IsMoving && !transform.position.Equals(
             movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(Cell.x, Cell.y, 0)))
                 ? path[waypoint] : Cell;

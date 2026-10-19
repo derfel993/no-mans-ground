@@ -7,7 +7,10 @@ using UnityEngine.InputSystem;
 
 namespace NoMansGround.Soldiers
 {
-    public enum DiggingMode { None, Dig, Cancel, Ladder, Cut, Mine, Collect, BuildWood, BuildStone, Door }
+    public enum DiggingMode
+    {
+        None, Dig, Cancel, Ladder, Cut, Mine, Collect, BuildWood, BuildStone, BuildWallWood, BuildWallStone, Door
+    }
     public enum TrenchJobKind { Dig, Ladder, CutTree, MineRock, CollectItem, BuildWall, BuildDoor }
 
     public sealed class TrenchJob
@@ -21,6 +24,7 @@ namespace NoMansGround.Soldiers
         public Vector2Int? GroundPickupCell { get; internal set; }
         public ItemType? CollectedItem { get; internal set; }
         public ItemType? Material { get; internal set; }
+        public bool IsBuildClearance { get; internal set; }
         internal SpriteRenderer Marker;
 
         internal TrenchJob(Vector2Int cell, TrenchJobKind kind = TrenchJobKind.Dig)
@@ -46,13 +50,17 @@ namespace NoMansGround.Soldiers
         [SerializeField, Min(0.1f)] private float baseLadderSeconds = 4f;
 
         private readonly List<TrenchJob> jobs = new List<TrenchJob>();
+        private readonly HashSet<BuildingRoom> evacuationBuildings = new HashSet<BuildingRoom>();
         private readonly HashSet<SoldierView> equipmentWorkers = new HashSet<SoldierView>();
+        private readonly Dictionary<SoldierView, ItemType> dutyToolReturns = new Dictionary<SoldierView, ItemType>();
+        private readonly Dictionary<SoldierView, Action> dutyChangedHandlers = new Dictionary<SoldierView, Action>();
         private IReadOnlyList<TrenchJob> readOnlyJobs;
         private readonly List<SpriteRenderer> preview = new List<SpriteRenderer>();
         private bool dragging;
         private Vector2Int dragStart;
         private float retryTimer;
         private int consumedFrame = -1;
+        private bool suppressToolDrop;
 
         public IReadOnlyList<TrenchJob> Jobs => readOnlyJobs ?? (readOnlyJobs = jobs.AsReadOnly());
         public DiggingMode Mode { get; private set; }
@@ -86,7 +94,10 @@ namespace NoMansGround.Soldiers
             if (map != null)
                 map.Generated += HandleMapGenerated;
             if (roster != null)
-                roster.Rebuilt += ResetJobs;
+            {
+                roster.Rebuilt += HandleRosterRebuilt;
+                SubscribeDutyChanges();
+            }
             Changed?.Invoke();
         }
 
@@ -95,8 +106,103 @@ namespace NoMansGround.Soldiers
             if (map != null)
                 map.Generated -= HandleMapGenerated;
             if (roster != null)
-                roster.Rebuilt -= ResetJobs;
+                roster.Rebuilt -= HandleRosterRebuilt;
+            UnsubscribeDutyChanges();
             ResetJobs();
+        }
+
+        private void HandleRosterRebuilt()
+        {
+            UnsubscribeDutyChanges();
+            ResetJobs();
+            SubscribeDutyChanges();
+        }
+
+        private void SubscribeDutyChanges()
+        {
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                if (soldier == null || dutyChangedHandlers.ContainsKey(soldier))
+                    continue;
+                SoldierView observed = soldier;
+                Action handler = () => HandleDutyChanged(observed);
+                dutyChangedHandlers.Add(soldier, handler);
+                soldier.DutyChanged += handler;
+            }
+        }
+
+        private void UnsubscribeDutyChanges()
+        {
+            foreach (KeyValuePair<SoldierView, Action> entry in dutyChangedHandlers)
+                if (entry.Key != null)
+                    entry.Key.DutyChanged -= entry.Value;
+            dutyChangedHandlers.Clear();
+        }
+
+        private void HandleDutyChanged(SoldierView soldier)
+        {
+            if (suppressToolDrop || soldier == null || soldier.Duty != SoldierDuty.Guard || map == null
+                || map.Data == null || mapView == null)
+                return;
+            ItemType? tool = SoldierTasks.Tool(soldier.Data.Task);
+            if (!tool.HasValue || soldier.Data.Inventory.Count(tool.Value) == 0
+                || dutyToolReturns.ContainsKey(soldier))
+                return;
+            dutyToolReturns.Add(soldier, tool.Value);
+            soldier.IsReturningTaskTool = true;
+            soldier.SetTaskStatus($"Rientro al deposito con {ItemCatalog.Get(tool.Value).DisplayName.ToLowerInvariant()}");
+            retryTimer = 0f;
+        }
+
+        private bool TickDutyToolReturns()
+        {
+            if (dutyToolReturns.Count == 0)
+                return false;
+            bool changed = false;
+            var returningSoldiers = new List<SoldierView>(dutyToolReturns.Keys);
+            foreach (SoldierView soldier in returningSoldiers)
+            {
+                if (soldier == null || !soldier.isActiveAndEnabled)
+                {
+                    dutyToolReturns.Remove(soldier);
+                    continue;
+                }
+                if (soldier.HasWorkAssignment && !soldier.IsReturningTaskTool)
+                    continue;
+                if (soldier.IsMoving)
+                    continue;
+                if (!soldier.HasWorkAssignment)
+                    soldier.SetWorkAssignment(true);
+                ItemType tool = dutyToolReturns[soldier];
+                if (map.Data.IsStorageCell(soldier.Cell))
+                {
+                    dutyToolReturns.Remove(soldier);
+                    soldier.IsReturningTaskTool = false;
+                    if (soldier.Data.Inventory.TryTake(tool, 1))
+                    {
+                        map.Data.StorageStockpile.Add(tool, 1);
+                        soldier.SetTaskStatus($"{ItemCatalog.Get(tool).DisplayName} riposto nel deposito");
+                        Notify($"{ItemCatalog.Get(tool).DisplayName} riposto nel deposito.");
+                    }
+                    else
+                        soldier.SetTaskStatus("Utensile non trovato nell'inventario");
+                    soldier.SetWorkAssignment(false);
+                    changed = true;
+                    continue;
+                }
+
+                GridPath route = FindStoragePath(soldier);
+                if (route == null)
+                {
+                    soldier.SetTaskStatus("Deposito bloccato o occupato");
+                    continue;
+                }
+                if (route.Cells.Count > 1)
+                    soldier.BeginMove(mapView, route.Cells);
+                soldier.SetTaskStatus("In marcia al deposito per riporre l'utensile");
+                changed = true;
+            }
+            return changed;
         }
 
         public void SetMode(DiggingMode mode)
@@ -114,8 +220,10 @@ namespace NoMansGround.Soldiers
                 : mode == DiggingMode.Cut ? "TAGLIA: clic o rettangolo.\nEsc o destro: esci."
                 : mode == DiggingMode.Mine ? "MINA: rocce e montagne.\nEsc o destro: esci."
                 : mode == DiggingMode.Collect ? "RACCOGLI: clic o rettangolo.\nEsc o destro: esci."
-                : mode == DiggingMode.BuildWood ? "LEGNO: trascina un rettangolo."
-                : mode == DiggingMode.BuildStone ? "PIETRA: trascina un rettangolo."
+                : mode == DiggingMode.BuildWood ? "LEGNO: clic singolo per un muro o trascina un rettangolo."
+                : mode == DiggingMode.BuildStone ? "PIETRA: clic singolo per un muro o trascina un rettangolo."
+                : mode == DiggingMode.BuildWallWood ? "MURO LEGNO: trascina una linea. Esc o destro: esci."
+                : mode == DiggingMode.BuildWallStone ? "MURO PIETRA: trascina una linea. Esc o destro: esci."
                 : mode == DiggingMode.Door ? "PORTA: parete o ingresso galleria."
                 : mode == DiggingMode.Cancel ? "ANNULLA: trascina sugli scavi.\nEsc o destro: esci."
                 : "T: scava | A: taglia | M: mina | C: raccogli | L: scala\nX: annulla | Esc: esci");
@@ -152,16 +260,30 @@ namespace NoMansGround.Soldiers
             }
             if (Mode == DiggingMode.None)
                 return;
-            consumedFrame = Time.frameCount;
             Mouse mouse = Mouse.current;
             if (mouse == null)
+            {
+                consumedFrame = Time.frameCount;
                 return;
+            }
+            Vector2 pointer = mouse.position.ReadValue();
+            bool buildingMode = Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone
+                || Mode == DiggingMode.BuildWallWood || Mode == DiggingMode.BuildWallStone
+                || Mode == DiggingMode.Door;
+            if (!buildingMode && mouse.leftButton.wasPressedThisFrame && mapCamera.pixelRect.Contains(pointer)
+                && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject())
+                && IsPointerOverSoldier(pointer))
+            {
+                SetMode(DiggingMode.None);
+                return;
+            }
+            consumedFrame = Time.frameCount;
             if (mouse.rightButton.wasPressedThisFrame)
             {
                 SetMode(DiggingMode.None);
                 return;
             }
-            bool valid = TryPointerCell(mouse.position.ReadValue(), out Vector2Int cell);
+            bool valid = TryPointerCell(pointer, out Vector2Int cell);
             if (Mode == DiggingMode.Ladder)
             {
                 if (valid) ShowPreview(new[] { cell });
@@ -176,6 +298,25 @@ namespace NoMansGround.Soldiers
                 else ClearPreview();
                 if (valid && mouse.leftButton.wasPressedThisFrame)
                     DesignateDoor(cell);
+                return;
+            }
+            if (Mode == DiggingMode.BuildWallWood || Mode == DiggingMode.BuildWallStone)
+            {
+                if (mouse.leftButton.wasPressedThisFrame && valid)
+                {
+                    dragging = true;
+                    dragStart = cell;
+                }
+                if (dragging && valid) ShowPreview(RasterLine(dragStart, cell));
+                else if (!valid) ClearPreview();
+                if (dragging && mouse.leftButton.wasReleasedThisFrame)
+                {
+                    dragging = false;
+                    ClearPreview();
+                    if (valid)
+                        DesignateWallLine(dragStart, cell,
+                            Mode == DiggingMode.BuildWallWood ? ItemType.Wood : ItemType.BuildingStone);
+                }
                 return;
             }
             if (mouse.leftButton.wasPressedThisFrame && valid)
@@ -205,6 +346,12 @@ namespace NoMansGround.Soldiers
                 }
                 if (Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone)
                 {
+                    if (dragStart == cell)
+                    {
+                        DesignateWall(cell, Mode == DiggingMode.BuildWood ? ItemType.Wood : ItemType.BuildingStone);
+                        SetMode(DiggingMode.None);
+                        return;
+                    }
                     if (DesignateBuilding(dragStart, cell,
                         Mode == DiggingMode.BuildWood ? ItemType.Wood : ItemType.BuildingStone))
                         SetMode(DiggingMode.Door);
@@ -220,6 +367,22 @@ namespace NoMansGround.Soldiers
                 Notify(changed > 0 ? $"{changed} celle {action}."
                     : "Nessuna cella valida: lavoro gia presente,\nbloccato o fuori mappa.", changed == 0);
             }
+        }
+
+        private bool IsPointerOverSoldier(Vector2 pointer)
+        {
+            if (map.Data == null)
+                return false;
+            foreach (SoldierView soldier in roster.Soldiers)
+            {
+                if (soldier == null || !soldier.isActiveAndEnabled || soldier.Data == null
+                    || !map.Data.Fog.IsVisible(soldier.Cell))
+                    continue;
+                Vector3 screen = mapCamera.WorldToScreenPoint(soldier.transform.position);
+                if (screen.z > 0f && ((Vector2)screen - pointer).sqrMagnitude < 14f * 14f)
+                    return true;
+            }
+            return false;
         }
 
         private bool TryPointerCell(Vector2 pointer, out Vector2Int cell)
@@ -278,13 +441,91 @@ namespace NoMansGround.Soldiers
                     return false;
                 }
             if (!isActiveAndEnabled || map.Data == null
-                || !map.Data.TryPlanBuilding(from, to, material, out _))
+                || !map.Data.TryPlanBuilding(from, to, material, out BuildingRoom building))
             {
                 Notify("Area non valida: minimo 3x3, terreno libero e senza sovrapposizioni.");
                 return false;
             }
+            evacuationBuildings.Add(building);
             mapView.RenderBuildings(map.Data);
-            Notify("Perimetro designato. Scegli la porta su un lato.");
+            Notify("Perimetro designato. I soldati nell'area usciranno prima della costruzione; scegli la porta su un lato.");
+            return true;
+        }
+
+        public bool DesignateWall(Vector2Int cell, ItemType material)
+        {
+            return DesignateWallLine(cell, cell, material);
+        }
+
+        public bool DesignateWallLine(Vector2Int from, Vector2Int to, ItemType material)
+        {
+            if (!isActiveAndEnabled || map.Data == null)
+                return false;
+            IReadOnlyList<Vector2Int> line = RasterLine(from, to);
+            var walls = new List<BuildingRoom>();
+            foreach (Vector2Int cell in line)
+            {
+                BuildingRoom existing = map.Data.GetBuilding(cell);
+                if (existing != null && existing.IsStandaloneWall && existing.Material == material
+                    && !jobs.Exists(job => job.Cell == cell && job.Kind != TrenchJobKind.BuildWall
+                        && !job.IsBuildClearance))
+                    continue;
+                if (existing != null || jobs.Exists(job => job.Cell == cell)
+                    || !map.Data.TryPlanWall(cell, material, out BuildingRoom wall))
+                {
+                    foreach (BuildingRoom planned in walls)
+                        map.Data.CancelBuilding(planned);
+                    mapView.RenderBuildings(map.Data);
+                    Notify("Linea muro non valida: serve terreno libero, esplorato e senza sovrapposizioni.");
+                    return false;
+                }
+                walls.Add(wall);
+            }
+
+            if (walls.Count == 0)
+            {
+                Notify("Tutti i muri della linea sono gia designati.");
+                return true;
+            }
+
+            foreach (Vector2Int cell in line)
+            {
+                if (!map.Data.TryGetGroundItem(cell, out _)
+                    || jobs.Exists(job => job.Cell == cell && job.IsBuildClearance))
+                    continue;
+                var clearance = new TrenchJob(cell, TrenchJobKind.CollectItem)
+                {
+                    IsBuildClearance = true,
+                    Marker = CreateMarker(cell, new Color(0.3f, 0.8f, 1f, 0.72f), "Build clearance")
+                };
+                jobs.Add(clearance);
+            }
+
+            foreach (BuildingRoom wall in walls)
+            {
+                evacuationBuildings.Add(wall);
+                var job = new TrenchJob(wall.Bounds.min, TrenchJobKind.BuildWall);
+                job.Material = material;
+                job.Marker = CreateMarker(wall.Bounds.min, new Color(0.4f, 0.8f, 0.9f, 0.6f),
+                    "Single wall designation");
+                jobs.Add(job);
+            }
+            BuildingRoom mergedRoom = null;
+            IReadOnlyList<BuildingRoom> mergedWalls = null;
+            foreach (BuildingRoom wall in walls)
+                if (map.Data.TryMergeWallRectangle(wall.Bounds.min, out mergedRoom, out mergedWalls))
+                    break;
+            if (mergedRoom != null)
+            {
+                foreach (BuildingRoom wall in mergedWalls)
+                    evacuationBuildings.Remove(wall);
+                evacuationBuildings.Add(mergedRoom);
+            }
+            retryTimer = 0f;
+            mapView.RenderBuildings(map.Data);
+            Notify(mergedRoom != null
+                ? "Perimetro chiuso. Completa le pareti e scegli la porta su un muro costruito."
+                : $"Linea di {walls.Count} muri di {ItemCatalog.Get(material).DisplayName} in coda.");
             return true;
         }
 
@@ -313,16 +554,26 @@ namespace NoMansGround.Soldiers
                 Notify("Porta galleria in coda: 1 Legna.");
                 return true;
             }
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.TrySetBuildingDoor(cell))
+            if (!isActiveAndEnabled || map.Data == null)
             {
                 Notify("Porta non valida: scegli un lato, non un angolo, di una stanza senza porta.");
                 return false;
             }
             BuildingRoom room = map.Data.GetBuilding(cell);
+            if (room.IsWallAssembly && !room.IsBuilt(cell))
+            {
+                Notify("Per installare la porta, scegli un muro gia costruito.");
+                return false;
+            }
+            if (!map.Data.TrySetBuildingDoor(cell))
+            {
+                Notify("Porta non valida: scegli un lato, non un angolo, di una stanza senza porta.");
+                return false;
+            }
             var perimeter = RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one);
             foreach (Vector2Int target in perimeter)
             {
-                if (room.IsBuilt(target) || jobs.Exists(existing => existing.Cell == target))
+                if ((target != cell && room.IsBuilt(target)) || jobs.Exists(existing => existing.Cell == target))
                     continue;
                 var job = new TrenchJob(target, target == cell ? TrenchJobKind.BuildDoor : TrenchJobKind.BuildWall);
                 job.Material = room.Material;
@@ -331,7 +582,9 @@ namespace NoMansGround.Soldiers
             }
             retryTimer = 0f;
             mapView.RenderBuildings(map.Data);
-            Notify($"Costruzione in coda: {perimeter.Count} tile di {ItemCatalog.Get(room.Material).DisplayName}.");
+            Notify(room.IsWallAssembly
+                ? $"Porta in coda su muro costruito: {ItemCatalog.Get(room.Material).DisplayName}."
+                : $"Costruzione in coda: {perimeter.Count} tile di {ItemCatalog.Get(room.Material).DisplayName}.");
             return true;
         }
 
@@ -367,7 +620,7 @@ namespace NoMansGround.Soldiers
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (map.Data.Fog.IsVisible(cell) && map.Data.HasTree(cell) && !jobs.Exists(job => job.Cell == cell)
+                    if (map.Data.Fog.IsExplored(cell) && map.Data.HasTree(cell) && !jobs.Exists(job => job.Cell == cell)
                         && DesignateTree(cell))
                         changed++;
                 }
@@ -378,7 +631,7 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateTree(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsVisible(cell) || !map.Data.HasTree(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell) || !map.Data.HasTree(cell)
                 || jobs.Exists(job => job.Cell == cell))
             {
                 Notify("Taglio non valido: serve un albero senza job gia presente.");
@@ -426,7 +679,7 @@ namespace NoMansGround.Soldiers
                 for (int x = minX; x <= maxX; x++)
                 {
                     var cell = new Vector2Int(x, y);
-                    if (map.Data.Fog.IsVisible(cell) && map.Data.TryGetGroundItem(cell, out ItemType item)
+                    if (map.Data.Fog.IsExplored(cell) && map.Data.TryGetGroundItem(cell, out ItemType item)
                         && ItemCatalog.Get(item).Category == ItemCategory.Resource
                         && !jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell)
                         && DesignateCollection(cell))
@@ -439,7 +692,7 @@ namespace NoMansGround.Soldiers
 
         public bool DesignateCollection(Vector2Int cell)
         {
-            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsVisible(cell)
+            if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell)
                 || !map.Data.TryGetGroundItem(cell, out ItemType item)
                 || ItemCatalog.Get(item).Category != ItemCategory.Resource
                 || jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell))
@@ -470,6 +723,7 @@ namespace NoMansGround.Soldiers
                     Release(job);
                     jobs.Remove(job);
                 }
+                evacuationBuildings.Remove(room);
                 map.Data.CancelBuilding(room);
                 mapView.RenderBuildings(map.Data);
                 Notify("Lavori stanza annullati; parti costruite conservate.");
@@ -515,8 +769,9 @@ namespace NoMansGround.Soldiers
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
             if (map.Data == null || deltaTime == 0f)
                 return;
-            bool changed = false;
+            bool changed = TickDutyToolReturns();
             changed |= TickTaskEquipment();
+            changed |= UpdateBuildingEvacuations();
             for (int i = jobs.Count - 1; i >= 0; i--)
             {
                 TrenchJob job = jobs[i];
@@ -540,7 +795,7 @@ namespace NoMansGround.Soldiers
                     if (!job.CollectedItem.HasValue)
                     {
                         if (!map.Data.TryGetGroundItem(job.Cell, out ItemType item)
-                            || ItemCatalog.Get(item).Category != ItemCategory.Resource)
+                            || (!job.IsBuildClearance && ItemCatalog.Get(item).Category != ItemCategory.Resource))
                         {
                             Release(job);
                             jobs.RemoveAt(i);
@@ -726,6 +981,7 @@ namespace NoMansGround.Soldiers
                 jobs.RemoveAt(i);
             }
 
+            changed |= UpdateBuildingEvacuations();
             retryTimer -= deltaTime;
             if (retryTimer <= 0f)
             {
@@ -740,6 +996,15 @@ namespace NoMansGround.Soldiers
 
         private bool Assign(TrenchJob job)
         {
+            if ((job.Kind == TrenchJobKind.BuildWall || job.Kind == TrenchJobKind.BuildDoor)
+                && map.Data.TryGetGroundItem(job.Cell, out _))
+            {
+                const string waiting = "In attesa del trasporto dell'oggetto";
+                bool changed = job.Status != waiting;
+                job.Status = waiting;
+                return changed;
+            }
+
             var available = new List<SoldierView>();
             foreach (SoldierView soldier in roster.Soldiers)
                 if (soldier != null && soldier.CanTakeEngineeringWork && SoldierTasks.Allows(soldier.Data.Task, job.Kind))
@@ -779,6 +1044,10 @@ namespace NoMansGround.Soldiers
             {
                 Vector2Int workCell = job.Cell + offset;
                 if (!map.Data.IsWalkable(workCell)
+                    || (job.Kind == TrenchJobKind.BuildWall || job.Kind == TrenchJobKind.BuildDoor)
+                        && IsInsideEvacuatingBuilding(workCell)
+                    || job.Kind == TrenchJobKind.CutTree
+                        && (map.Data.HasTree(workCell) || jobs.Exists(other => other.Cell == workCell))
                     || jobs.Exists(other => (other.Kind == TrenchJobKind.Dig
                         || other.Kind == TrenchJobKind.BuildWall) && other.Cell == workCell))
                     continue;
@@ -898,6 +1167,120 @@ namespace NoMansGround.Soldiers
             return best;
         }
 
+        private bool UpdateBuildingEvacuations()
+        {
+            if (map.Data == null)
+                return false;
+            bool changed = false;
+            var soldiers = new List<SoldierView>(roster.Soldiers);
+            foreach (SoldierView soldier in soldiers)
+            {
+                if (soldier == null || !soldier.isActiveAndEnabled)
+                    continue;
+                BuildingRoom building = null;
+                foreach (BuildingRoom candidate in evacuationBuildings)
+                    if (candidate.Bounds.Contains(soldier.Cell)
+                        || (soldier.IsMoving && candidate.Bounds.Contains(soldier.Destination)))
+                    {
+                        building = candidate;
+                        break;
+                    }
+
+                if (building == null)
+                {
+                    if (soldier.IsEvacuatingBuilding && !soldier.IsMoving && !soldier.HasWorkAssignment)
+                    {
+                        soldier.IsEvacuatingBuilding = false;
+                        soldier.SetTaskStatus("Pronto");
+                        changed = true;
+                    }
+                    continue;
+                }
+
+                soldier.IsEvacuatingBuilding = true;
+                if (soldier.IsMoving || soldier.HasWorkAssignment || soldier.IsReturningTaskTool
+                    || soldier.IsChangingTaskEquipment || soldier.RequestedTask.HasValue)
+                {
+                    soldier.SetTaskStatus("Uscita dall'area al termine dell'incarico");
+                    continue;
+                }
+
+                IReadOnlyList<Vector2Int> route = FindBuildingExitPath(soldier, building);
+                if (route == null)
+                {
+                    soldier.SetTaskStatus("Uscita bloccata: nessuna cella libera fuori dall'edificio");
+                    continue;
+                }
+                soldier.SetTaskStatus("In marcia fuori dall'area dell'edificio");
+                if (route.Count > 1)
+                    soldier.BeginMove(mapView, route);
+                changed = true;
+            }
+
+            var completedEvacuations = new List<BuildingRoom>();
+            foreach (BuildingRoom building in evacuationBuildings)
+            {
+                bool registered = false;
+                foreach (BuildingRoom current in map.Data.Buildings)
+                    if (current == building)
+                        registered = true;
+                if (!registered)
+                {
+                    completedEvacuations.Add(building);
+                    continue;
+                }
+                if (!building.IsComplete)
+                    continue;
+                bool occupied = false;
+                foreach (SoldierView soldier in roster.Soldiers)
+                    if (soldier != null && (building.Bounds.Contains(soldier.Cell)
+                        || (soldier.IsMoving && building.Bounds.Contains(soldier.Destination))))
+                        occupied = true;
+                if (!occupied)
+                    completedEvacuations.Add(building);
+            }
+            foreach (BuildingRoom building in completedEvacuations)
+                evacuationBuildings.Remove(building);
+            return changed;
+        }
+
+        private bool IsInsideEvacuatingBuilding(Vector2Int cell)
+        {
+            foreach (BuildingRoom building in evacuationBuildings)
+                if (building.Bounds.Contains(cell))
+                    return true;
+            return false;
+        }
+
+        private IReadOnlyList<Vector2Int> FindBuildingExitPath(SoldierView soldier, BuildingRoom building)
+        {
+            var destinations = new List<Vector2Int>();
+            for (int y = 0; y < map.Data.Height; y++)
+                for (int x = 0; x < map.Data.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (IsInsideEvacuatingBuilding(cell) || !map.Data.Fog.IsExplored(cell)
+                        || !map.Data.IsWalkable(cell))
+                        continue;
+                    bool reserved = false;
+                    foreach (SoldierView other in roster.Soldiers)
+                        if (other != null && other != soldier
+                            && (other.Cell == cell || other.Destination == cell))
+                        {
+                            reserved = true;
+                            break;
+                        }
+                    if (!reserved)
+                        destinations.Add(cell);
+                }
+            GridPath route = GridPathfinder.FindNearest(map.Data, destinations, soldier.Cell);
+            if (route == null)
+                return null;
+            var cells = new List<Vector2Int>(route.Cells);
+            cells.Reverse();
+            return cells.AsReadOnly();
+        }
+
         private bool AssignToolPickup(TrenchJob job, ItemType tool, IEnumerable<SoldierView> candidates = null)
         {
             int reservedTools = 0;
@@ -907,7 +1290,8 @@ namespace NoMansGround.Soldiers
             var pickupCells = new List<Vector2Int>();
             if (map.Data.StorageStockpile.Count(tool) > reservedTools)
                 pickupCells.AddRange(StorageCells());
-            if (job.Material.HasValue && map.Data.GroundItemCount > 0)
+            if ((job.Material.HasValue || ItemCatalog.Get(tool).Category == ItemCategory.Tool)
+                && map.Data.GroundItemCount > 0)
                 for (int y = 0; y < map.Data.Height; y++)
                     for (int x = 0; x < map.Data.Width; x++)
                     {
@@ -1104,18 +1488,40 @@ namespace NoMansGround.Soldiers
 
         private void ResetJobs()
         {
-            foreach (SoldierView soldier in equipmentWorkers)
-                if (soldier != null)
-                {
-                    soldier.IsChangingTaskEquipment = false;
-                    soldier.SetWorkAssignment(false);
-                }
-            equipmentWorkers.Clear();
-            foreach (TrenchJob job in jobs)
-                Release(job);
-            jobs.Clear();
-            SetMode(DiggingMode.None);
-            retryTimer = 0f;
+            suppressToolDrop = true;
+            try
+            {
+                evacuationBuildings.Clear();
+                foreach (SoldierView soldier in roster.Soldiers)
+                    if (soldier != null && soldier.IsEvacuatingBuilding)
+                    {
+                        soldier.IsEvacuatingBuilding = false;
+                        soldier.SetTaskStatus("Pronto");
+                    }
+                foreach (SoldierView soldier in dutyToolReturns.Keys)
+                    if (soldier != null)
+                    {
+                        soldier.IsReturningTaskTool = false;
+                        soldier.SetWorkAssignment(false);
+                    }
+                dutyToolReturns.Clear();
+                foreach (SoldierView soldier in equipmentWorkers)
+                    if (soldier != null)
+                    {
+                        soldier.IsChangingTaskEquipment = false;
+                        soldier.SetWorkAssignment(false);
+                    }
+                equipmentWorkers.Clear();
+                foreach (TrenchJob job in jobs)
+                    Release(job);
+                jobs.Clear();
+                SetMode(DiggingMode.None);
+                retryTimer = 0f;
+            }
+            finally
+            {
+                suppressToolDrop = false;
+            }
         }
 
         private void HandleMapGenerated(MapData data)
