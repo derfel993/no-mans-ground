@@ -959,18 +959,17 @@ namespace NoMansGround.Soldiers
                         : map.Data.GetBuilding(job.Cell).IsComplete
                         ? "Costruzione completata." : "Parte della costruzione completata.");
                 }
-                else if (job.Kind == TrenchJobKind.Dig || job.Kind == TrenchJobKind.CutTree)
+                else if (job.Kind == TrenchJobKind.Dig)
                 {
                     if (!CanExcavate(job.Cell))
                     {
                         job.Status = "Attesa: cella o percorso occupato";
                         continue;
                     }
-                    if (job.Kind == TrenchJobKind.Dig)
-                        mapView.CompleteTrench(map.Data, job.Cell);
-                    else
-                        mapView.CompleteTreeCut(map.Data, job.Cell);
+                    mapView.CompleteTrench(map.Data, job.Cell);
                 }
+                else if (job.Kind == TrenchJobKind.CutTree)
+                    mapView.CompleteTreeCut(map.Data, job.Cell);
                 else if (job.Kind == TrenchJobKind.MineRock)
                     mapView.CompleteRockMine(map.Data, job.Cell);
                 else

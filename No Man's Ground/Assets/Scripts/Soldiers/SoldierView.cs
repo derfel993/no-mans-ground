@@ -13,6 +13,9 @@ namespace NoMansGround.Soldiers
         private SpriteRenderer body;
         private SpriteRenderer selection;
         private MapTilemapView movementMap;
+        private Sprite fallbackSprite;
+        private Sprite[] directionalSprites;
+        private int displayedDirection = -1;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
         private double guardScanSeconds;
@@ -148,7 +151,8 @@ namespace NoMansGround.Soldiers
             return true;
         }
 
-        public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite)
+        public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite,
+            Sprite[] spritesByDirection = null)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -157,6 +161,8 @@ namespace NoMansGround.Soldiers
 
             Data = data;
             Cell = cell;
+            fallbackSprite = sprite;
+            directionalSprites = spritesByDirection;
             name = data.FullName;
             body = GetComponent<SpriteRenderer>();
             body.sprite = sprite;
@@ -171,7 +177,28 @@ namespace NoMansGround.Soldiers
             selection.sprite = sprite;
             selection.color = new Color(1f, 0.85f, 0.25f);
             selection.sortingOrder = 9;
+            UpdateDirectionalSprite(FacingDirection);
             SetSelected(false);
+        }
+
+        private void UpdateDirectionalSprite(Vector2 direction)
+        {
+            if (body == null || direction.sqrMagnitude < 0.0001f)
+                return;
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            int directionIndex = Mathf.RoundToInt((90f - angle) / 45f) % 8;
+            if (directionIndex < 0)
+                directionIndex += 8;
+            if (directionIndex == displayedDirection)
+                return;
+            displayedDirection = directionIndex;
+            Sprite sprite = directionalSprites != null && directionalSprites.Length == 8
+                ? directionalSprites[directionIndex] : null;
+            if (sprite == null)
+                sprite = fallbackSprite;
+            body.sprite = sprite;
+            if (selection != null)
+                selection.sprite = sprite;
         }
 
         public void SetSelected(bool selected)
@@ -250,7 +277,7 @@ namespace NoMansGround.Soldiers
             else
                 guardScanSeconds = 0d;
             Vector2 direction = LookDirection;
-            transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f);
+            UpdateDirectionalSprite(direction);
         }
 
         public void AdvanceMovement(float deltaTime)
@@ -270,8 +297,7 @@ namespace NoMansGround.Soldiers
                 {
                     FacingDirection = direction.normalized;
                     guardScanSeconds = 0d;
-                    transform.rotation = Quaternion.Euler(0f, 0f,
-                        Mathf.Atan2(FacingDirection.y, FacingDirection.x) * Mathf.Rad2Deg - 90f);
+                    UpdateDirectionalSprite(FacingDirection);
                 }
                 if (distance > remainingDistance)
                 {

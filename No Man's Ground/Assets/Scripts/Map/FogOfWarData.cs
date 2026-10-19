@@ -96,6 +96,14 @@ namespace NoMansGround.Map
                             RevealFromObserver(map, new FogObserver(wall, Vector2.up, 360f), 2);
                     }
             }
+
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    var trench = new Vector2Int(x, y);
+                    if (map.IsTrench(trench))
+                        RevealFromObserver(map, new FogObserver(trench, Vector2.up, 360f), 2);
+                }
         }
 
         private void RevealFromObserver(MapData map, FogObserver observer, int radius)

@@ -1049,6 +1049,33 @@ namespace NoMansGround.Tests
             }
         }
 
+        [Test]
+        public void TreeCutCompletesWhileAnotherSoldiersRouteCrossesTheTreeCell()
+        {
+            TaskTestSetup.AssignWorkers(roster, SoldierTask.Woodcutter);
+            SoldierView cutter = roster.Soldiers[0];
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Axe, 1));
+            cutter.Data.Inventory.Add(ItemType.Axe, 1);
+            var treeCell = new Vector2Int(50, 10);
+            map.Data.SetTree(treeCell, true);
+            Assert.IsTrue(trenches.DesignateTree(treeCell));
+            trenches.Tick(0.01f);
+            TrenchJob job = trenches.Jobs[0];
+            Assert.AreSame(cutter, job.Worker);
+
+            SoldierView passer = roster.Soldiers[7];
+            passer.BeginMove(view, new List<Vector2Int>
+                { passer.Cell, treeCell, treeCell + Vector2Int.up });
+            Assert.IsTrue(passer.IsMoving);
+            Assert.AreEqual(treeCell, passer.CurrentPath[passer.NextWaypoint]);
+            trenches.Tick(10f);
+
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsFalse(map.Data.HasTree(treeCell));
+            Assert.IsTrue(map.Data.TryGetGroundItem(treeCell, out ItemType drop));
+            Assert.AreEqual(ItemType.Wood, drop);
+        }
+
         [TestCase(TerrainKind.Rock, TerrainKind.Dirt, "Dirt")]
         [TestCase(TerrainKind.Mountain, TerrainKind.Tunnel, "Galleria")]
         public void MineJobCollectsPickaxeWorksTenSecondsAndDropsBuildingStoneOnExpectedTerrain(

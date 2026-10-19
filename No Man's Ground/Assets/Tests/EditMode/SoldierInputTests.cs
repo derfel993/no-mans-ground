@@ -283,6 +283,37 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void SoldierUsesDirectionalSpriteForEachEightWayFacing()
+        {
+            EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath);
+            var map = Object.FindAnyObjectByType<MapPrototype>();
+            var roster = Object.FindAnyObjectByType<SoldierRoster>();
+            map.Regenerate();
+            roster.Spawn(map.Data);
+            SoldierView soldier = roster.Soldiers[0];
+            Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Guard));
+            Vector2[] directions =
+            {
+                Vector2.up, new Vector2(1f, 1f), Vector2.right, new Vector2(1f, -1f),
+                Vector2.down, new Vector2(-1f, -1f), Vector2.left, new Vector2(-1f, 1f)
+            };
+            string[] names = { "north", "north-east", "east", "south-east",
+                "south", "south-west", "west", "north-west" };
+            SpriteRenderer body = soldier.GetComponent<SpriteRenderer>();
+            SpriteRenderer selection = soldier.transform.Find("Selection").GetComponent<SpriteRenderer>();
+            for (int index = 0; index < directions.Length; index++)
+            {
+                soldier.SetManualLook(directions[index]);
+                Sprite expected = AssetDatabase.LoadAssetAtPath<Sprite>(
+                    $"Assets/Art/Prototype/Soldiers/ITA/soldier-ita-1-{names[index]}.png");
+                Assert.IsNotNull(expected, names[index]);
+                Assert.AreSame(expected, body.sprite, names[index]);
+                Assert.AreSame(expected, selection.sprite, names[index]);
+                Assert.AreEqual(Quaternion.identity, soldier.transform.rotation, names[index]);
+            }
+        }
+
+        [Test]
         public void ZoneModeDesignatesTheRectangleDraggedWithTheLeftMouseButton()
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);

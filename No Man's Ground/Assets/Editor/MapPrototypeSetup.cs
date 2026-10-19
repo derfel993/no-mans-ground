@@ -96,7 +96,7 @@ namespace NoMansGround.Editor
             var roster = UnityEngine.Object.FindAnyObjectByType<SoldierRoster>();
             if (roster == null)
                 roster = new GameObject("Soldiers", typeof(SoldierRoster)).GetComponent<SoldierRoster>();
-            roster.Configure(prototype, view, CreateSoldierSprite());
+            roster.Configure(prototype, view, CreateSoldierSprite(), CreateSoldierDirectionalSprites());
             roster.ConfigureCook(true);
             var orders = roster.GetComponent<SoldierMovementOrders>();
             if (orders == null)
@@ -156,6 +156,21 @@ namespace NoMansGround.Editor
                 importer.SaveAndReimport();
             }
             return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        private static Sprite[] CreateSoldierDirectionalSprites()
+        {
+            string[] directions = { "north", "north-east", "east", "south-east",
+                "south", "south-west", "west", "north-west" };
+            var sprites = new Sprite[directions.Length];
+            for (int index = 0; index < directions.Length; index++)
+            {
+                string path = ArtFolder + "/Soldiers/ITA/soldier-ita-1-" + directions[index] + ".png";
+                sprites[index] = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+                if (sprites[index] == null)
+                    Debug.LogWarning("Directional soldier sprite not found: " + path);
+            }
+            return sprites;
         }
 
         private static Sprite CreateLadderSprite()

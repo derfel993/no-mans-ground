@@ -149,6 +149,25 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void CompletedTrenchesRevealTwoTilesInEveryDirection()
+        {
+            var map = new MapData(20, 20);
+            var trench = new Vector2Int(10, 10);
+            map[trench.x, trench.y] = TerrainKind.Trench;
+            map.Fog.Enable();
+
+            map.Fog.Update(map, new FogObserver[0], 8);
+
+            Assert.IsTrue(map.Fog.IsVisible(trench));
+            Assert.IsTrue(map.Fog.IsVisible(trench + Vector2Int.up * 2));
+            Assert.IsTrue(map.Fog.IsVisible(trench + Vector2Int.down * 2));
+            Assert.IsTrue(map.Fog.IsVisible(trench + Vector2Int.left * 2));
+            Assert.IsTrue(map.Fog.IsVisible(trench + Vector2Int.right * 2));
+            Assert.IsFalse(map.Fog.IsVisible(trench + Vector2Int.up * 3));
+            Assert.IsTrue(map.Fog.IsExplored(trench + Vector2Int.up * 2));
+        }
+
+        [Test]
         public void RenderingRemembersLastSeenTerrainAndCoversResourcesOutsideSight()
         {
             EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
@@ -361,6 +380,48 @@ namespace NoMansGround.Tests
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
         }
+
+            [Test]
+            public void UnfinishedConstructionPlaceholderRendersAboveRememberedTerrain()
+            {
+                EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath);
+                try
+                {
+                    var view = Object.FindAnyObjectByType<MapTilemapView>();
+                    var map = new MapData(20, 12);
+                    Assert.IsTrue(map.TryPlanBuilding(new Vector2Int(5, 3), new Vector2Int(9, 7),
+                        ItemType.Wood, out _));
+                    map.Fog.Enable();
+                    map.Fog.Update(map, new[] { new FogObserver(new Vector2Int(7, 5), Vector2.up, 360f) }, 5);
+                    map.Fog.Update(map, new[] { new FogObserver(new Vector2Int(18, 10), Vector2.up, 360f) }, 2);
+                    var rememberedWall = new Vector2Int(5, 5);
+                    var unexplored = new Vector2Int(15, 2);
+                    Assert.IsTrue(map.Fog.IsExplored(rememberedWall));
+                    Assert.IsFalse(map.Fog.IsVisible(rememberedWall));
+                    Assert.IsFalse(map.Fog.IsExplored(unexplored));
+
+                    view.Render(map);
+                    var rememberedConstruction = view.transform.Find("Remembered Construction").GetComponent<Tilemap>();
+                    var rememberedTerrain = view.transform.Find("Explored Terrain").GetComponent<Tilemap>();
+                    var fog = view.transform.Find("Fog of War").GetComponent<Tilemap>();
+                    var rememberedPosition = new Vector3Int(rememberedWall.x, rememberedWall.y, 0);
+                    Assert.IsTrue(rememberedConstruction.HasTile(rememberedPosition));
+                    Assert.IsTrue(rememberedTerrain.HasTile(rememberedPosition));
+                    Assert.IsTrue(fog.HasTile(rememberedPosition));
+                    Assert.IsFalse(rememberedConstruction.HasTile(new Vector3Int(unexplored.x, unexplored.y, 0)));
+                    Assert.Greater(rememberedConstruction.GetComponent<TilemapRenderer>().sortingOrder,
+                        rememberedTerrain.GetComponent<TilemapRenderer>().sortingOrder);
+
+                    map.Fog.Update(map, new[] { new FogObserver(rememberedWall, Vector2.up, 360f) }, 2);
+                    view.RenderFog(map);
+                    Assert.IsFalse(rememberedConstruction.HasTile(rememberedPosition));
+                    Assert.IsFalse(fog.HasTile(rememberedPosition));
+                }
+                finally
+                {
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                }
+            }
 
         [Test]
         public void GuardSweepChangesVisibleFlanksWithoutChangingPositionAndStopsWhenWorkingOrPaused()

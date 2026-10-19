@@ -381,6 +381,15 @@ MonoBehaviour:
   map: {fileID: 557374255}
   mapView: {fileID: 1241894002}
   soldierSprite: {fileID: 21300000, guid: 69ed4bafa6d1e6547832c59b7dd152af, type: 3}
+  directionalSoldierSprites:
+  - {fileID: 21300000, guid: d7289f0c3927bfc439d017892b878cb3, type: 3}
+  - {fileID: 21300000, guid: d6457a8254073eb4db0d33a0fefd58fc, type: 3}
+  - {fileID: 21300000, guid: ac47cdd1ae8d0f740b85b5442847f0be, type: 3}
+  - {fileID: 21300000, guid: d14b21a1f4b2ff3499cc5c9c032b5395, type: 3}
+  - {fileID: 21300000, guid: 37572be6c877c854bb9b62c07585ad3b, type: 3}
+  - {fileID: 21300000, guid: 6aebb5755b2435b40ba4e595af920c3a, type: 3}
+  - {fileID: 21300000, guid: 7a1b82bca331cf3438dfe2540aa50b73, type: 3}
+  - {fileID: 21300000, guid: c931f7a7e79377d46aafacd6243d4584, type: 3}
   soldierCount: 8
   seed: 1917
   spawnCook: 1

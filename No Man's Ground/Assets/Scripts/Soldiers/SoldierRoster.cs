@@ -10,6 +10,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private MapPrototype map;
         [SerializeField] private MapTilemapView mapView;
         [SerializeField] private Sprite soldierSprite;
+        [SerializeField] private Sprite[] directionalSoldierSprites = new Sprite[8];
         [SerializeField, Range(1, SoldierGenerator.MaximumSoldiers)] private int soldierCount = 8;
         [SerializeField] private int seed = 1917;
         [SerializeField] private bool spawnCook;
@@ -48,11 +49,14 @@ namespace NoMansGround.Soldiers
             spawnCook = includeCook;
         }
 
-        public void Configure(MapPrototype prototype, MapTilemapView view, Sprite sprite)
+        public void Configure(MapPrototype prototype, MapTilemapView view, Sprite sprite,
+            Sprite[] spritesByDirection = null)
         {
             map = prototype;
             mapView = view;
             soldierSprite = sprite;
+            if (spritesByDirection != null && spritesByDirection.Length == 8)
+                directionalSoldierSprites = spritesByDirection;
         }
 
         private void OnEnable()
@@ -137,7 +141,7 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
-                soldier.Initialize(generated[i], cell, soldierSprite);
+                soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites);
                 soldier.DutyChanged += NotifyDutiesChanged;
                 soldiers.Add(soldier);
             }

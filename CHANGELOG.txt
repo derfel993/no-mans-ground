@@ -8,6 +8,20 @@ Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.9 - 2026-10-19
+===============================================================================
+
+Visuale dalle trincee
+- Ogni tile di trincea completato rivela le celle entro due tile in tutte le
+  direzioni e le aggiunge alla memoria esplorata.
+- Il normale blocco della visuale resta attivo; le designazioni di scavo non
+  rivelano l'area prima che la trincea sia completata.
+
+Test e documentazione
+- Aggiunto un test per raggio, memoria e limite della visuale; aggiornato README.
+- Diagnostiche statiche e `git diff --check` puliti; test EditMode non eseguito.
+
+===============================================================================
 0.4.8 - 2026-10-19
 ===============================================================================
 

@@ -13,6 +13,7 @@ namespace NoMansGround.Map
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
         private Tilemap fogTilemap;
         private Tilemap fogMemoryTilemap;
+        private Tilemap rememberedConstructionTilemap;
         private Tile fogTile;
         private MapData fogMap;
         private TileBase[] rememberedTerrain;
@@ -27,6 +28,7 @@ namespace NoMansGround.Map
             {
                 if (fogTilemap != null) fogTilemap.ClearAllTiles();
                 if (fogMemoryTilemap != null) fogMemoryTilemap.ClearAllTiles();
+                if (rememberedConstructionTilemap != null) rememberedConstructionTilemap.ClearAllTiles();
                 fogMap = null;
                 return;
             }
@@ -89,6 +91,7 @@ namespace NoMansGround.Map
                         fogMemoryTilemap.SetColor(position, tint);
                     }
                 }
+                    RenderRememberedConstruction(map);
         }
         private Tilemap buildingTilemap;
         private readonly Tile[] buildingTiles = new Tile[4];
@@ -181,8 +184,43 @@ namespace NoMansGround.Map
                 buildingTilemap.SetTile(position, buildingTiles[1]);
                 buildingTilemap.SetColor(position, door.IsBuilt ? Color.white : new Color(0.55f, 0.85f, 1f, 0.4f));
             }
+            RenderRememberedConstruction(map);
             RenderSpecializedRooms(map);
             RenderRoofs(map);
+        }
+
+        private void RenderRememberedConstruction(MapData map)
+        {
+            if (rememberedConstructionTilemap == null)
+            {
+                var layer = new GameObject("Remembered Construction", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                rememberedConstructionTilemap = layer.GetComponent<Tilemap>();
+                var renderer = layer.GetComponent<TilemapRenderer>();
+                renderer.sortingOrder = 52;
+                renderer.sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+            }
+            rememberedConstructionTilemap.ClearAllTiles();
+            if (!map.Fog.Enabled)
+                return;
+
+            foreach (BuildingRoom room in map.Buildings)
+                for (int y = room.Bounds.yMin; y < room.Bounds.yMax; y++)
+                    for (int x = room.Bounds.xMin; x < room.Bounds.xMax; x++)
+                    {
+                        var cell = new Vector2Int(x, y);
+                        if (!room.IsPerimeter(cell) || room.IsBuilt(cell)
+                            || !map.Fog.IsExplored(cell) || map.Fog.IsVisible(cell))
+                            continue;
+                        bool door = room.Door == cell;
+                        int index = (room.Material == ItemType.Wood ? 0 : 2) + (door ? 1 : 0);
+                        if (buildingTiles[index] == null)
+                            buildingTiles[index] = CreateBuildingTile(room.Material, door);
+                        var position = new Vector3Int(x, y, 0);
+                        rememberedConstructionTilemap.SetTile(position, buildingTiles[index]);
+                        rememberedConstructionTilemap.SetTileFlags(position, TileFlags.None);
+                        rememberedConstructionTilemap.SetColor(position, new Color(0.55f, 0.85f, 1f, 0.65f));
+                    }
         }
 
         public void RenderSpecializedRooms(MapData map)

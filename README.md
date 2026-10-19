@@ -77,7 +77,8 @@ condivisa di tutti i soldati attivi, indipendentemente da Guardia/Lavoro o compi
 Ogni soldato scopre un **cono di 180 gradi**, con raggio iniziale di **12 tile**
 dalla propria cella, orientato nella direzione dello sguardo: non vede a 360 gradi.
 Camminando guarda verso il passo che sta percorrendo; all'arrivo conserva
-l'ultima direzione. Le sprite provvisorie ruotano per rendere leggibile lo sguardo.
+l'ultima direzione. Lo sprite selezionato corrisponde a uno degli otto orientamenti
+cardinali e diagonali.
 
 Una **guardia ferma e senza incarichi** scruta alternativamente a sinistra
 e a destra della direzione base, con oscillazione morbida di **45 gradi per lato**
@@ -105,8 +106,10 @@ visuale; il primo ostacolo resta visibile ma le celle dietro sono nascoste.
 Ogni tile di parete o porta completato rivela inoltre le celle entro 2 tile
 in tutte le direzioni, anche durante la costruzione parziale dell'edificio.
 Oltre questo raggio la parete continua a bloccare la visuale.
-Non si vede diagonalmente attraverso gli angoli chiusi. Alberi e trincee non
-bloccano la visuale. Una porta designata ma non ancora costruita non la blocca.
+Ogni tile di trincea completato rivela a sua volta le celle entro 2 tile in
+tutte le direzioni. Non si vede diagonalmente attraverso gli angoli chiusi.
+Alberi e trincee non bloccano la visuale. Una porta designata ma non ancora
+costruita non la blocca.
 Entrando su una porta o in una galleria il soldato scopre lo spazio dall'interno.
 
 I comandi di movimento, scavo, minatura, costruzione e zona richiedono celle
@@ -366,7 +369,10 @@ Il pannello aggiorna immediatamente XP e livello.
 ### Configurazione e limiti
 
 - Oggetto **Soldiers**, componente **Soldier Roster**: numero di soldati,
-  seed e sprite. **Spawn Cook** aggiunge un personaggio, anch'esso Trasportatore,
+  seed e otto sprite direzionali, nell'ordine Nord, Nord-Est, Est, Sud-Est,
+  Sud, Sud-Ovest, Ovest, Nord-Ovest. Usare canvas, pivot e Pixels Per Unit
+  uguali tra i frame; se manca un frame viene usato lo sprite di fallback.
+  **Spawn Cook** aggiunge un personaggio, anch'esso Trasportatore,
   entro il limite totale di 64
   personaggi e la capienza della mappa. Cambiare prima di Play o rigenerare.
 - Le posizioni iniziali sono celle distinte centrate orizzontalmente vicino al
@@ -486,6 +492,9 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
   Il job richiede un'**Accetta**: il lavoratore la ritira dal deposito se non l'ha gia
   nell'inventario. Senza Accette il lavoro resta in attesa. Completato il taglio,
   l'albero viene sostituito da un item **Legna** sulla stessa cella.
+  Il taglio non attende che la cella sia libera dai percorsi altrui: rimuovere
+  un albero non cambia la percorribilita, quindi job adiacenti non restano
+  bloccati al 100% mentre altri soldati transitano.
 - **C** o **Raccogli** attiva la raccolta: cliccare un item Resource a terra
   oppure trascinare un rettangolo per raccogliere tutte le risorse al suo interno.
   L'anteprima mostra il contorno; gli ordini vengono accodati al rilascio del
@@ -841,7 +850,9 @@ Un clic singolo designa un muro di un tile. Le linee devono usare tutte lo stess
 materiale e attraversare terreno libero, senza alberi, rocce, trincee, strada,
 depositi, zone o costruzioni sovrapposte. Il terreno deve essere esplorato, ma
 non deve essere attualmente visibile. Gli item gia presenti sul tile del muro
-vengono prima portati al deposito da un Hauler.
+vengono prima portati al deposito da un Hauler. I placeholder dei muri pianificati
+restano visibili sulle celle remembered, ma non vengono mostrati su celle mai
+esplorate.
 
 Quando le linee chiudono un perimetro rettangolare di almeno **3 x 3 tile**, il
 sistema lo riconosce automaticamente come edificio. I soldati all'interno o sul
