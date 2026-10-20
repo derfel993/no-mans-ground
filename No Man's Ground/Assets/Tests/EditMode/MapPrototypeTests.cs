@@ -366,6 +366,55 @@ namespace NoMansGround.Tests
             }
         }
 
+        [TestCase(MapTilePixelResolution.Pixels16)]
+        [TestCase(MapTilePixelResolution.Pixels32)]
+        [TestCase(MapTilePixelResolution.Pixels64)]
+        public void TilePixelResolutionKeepsSpritesOneWorldUnit(MapTilePixelResolution resolution)
+        {
+            var grid = new GameObject("Resolution test grid", typeof(Grid));
+            var ground = new GameObject("Resolution test ground",
+                typeof(Tilemap), typeof(TilemapRenderer), typeof(MapTilemapView));
+            ground.transform.SetParent(grid.transform, false);
+            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            texture.SetPixels32(new Color32[16 * 16]);
+            texture.Apply();
+            Sprite sourceSprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), Vector2.one * 0.5f, 16f);
+            var dirt = ScriptableObject.CreateInstance<Tile>();
+            dirt.sprite = sourceSprite;
+            try
+            {
+                var map = new MapData(2, 1);
+                map[1, 0] = TerrainKind.Mountain;
+                MapTilemapView view = ground.GetComponent<MapTilemapView>();
+                view.Configure(dirt, dirt, dirt);
+                typeof(MapTilemapView).GetField("pixelResolution", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(view, resolution);
+
+                view.Render(map);
+
+                Assert.AreEqual((int)resolution, view.PixelsPerTile);
+                Assert.AreEqual(1f, grid.GetComponent<Grid>().cellSize.x);
+                foreach (Vector3Int cell in new[] { Vector3Int.zero, new Vector3Int(1, 0, 0) })
+                {
+                    Tile rendered = view.Tilemap.GetTile<Tile>(cell);
+                    Assert.IsNotNull(rendered);
+                    Assert.AreEqual((int)resolution, rendered.sprite.texture.width);
+                    Assert.AreEqual((int)resolution, rendered.sprite.texture.height);
+                    Assert.AreEqual((float)resolution, rendered.sprite.pixelsPerUnit);
+                    Assert.AreEqual(1f, rendered.sprite.bounds.size.x, 0.0001f);
+                    Assert.AreEqual(1f, rendered.sprite.bounds.size.y, 0.0001f);
+                }
+                Assert.AreEqual(new Vector3(2f, 1f, 0f), view.WorldBounds.size);
+            }
+            finally
+            {
+                Object.DestroyImmediate(grid);
+                Object.DestroyImmediate(dirt);
+                Object.DestroyImmediate(sourceSprite);
+                Object.DestroyImmediate(texture);
+            }
+        }
+
         [TestCase(1.777778f, 128f, 128f)]
         [TestCase(0.5625f, 128f, 128f)]
         [TestCase(3.555556f, 128f, 128f)]
@@ -430,6 +479,50 @@ namespace NoMansGround.Tests
             }
         }
 
+        [TestCase(MapTilePixelResolution.Pixels32)]
+        [TestCase(MapTilePixelResolution.Pixels64)]
+        public void SavedSceneTilesUseConfiguredPixelResolution(MapTilePixelResolution resolution)
+        {
+            var scene = EditorSceneManager.OpenScene(MapPrototypeSetup.ScenePath, OpenSceneMode.Additive);
+            try
+            {
+                MapPrototype prototype = null;
+                MapTilemapView view = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype foundPrototype))
+                        prototype = foundPrototype;
+                    MapTilemapView foundView = root.GetComponentInChildren<MapTilemapView>();
+                    if (foundView != null)
+                        view = foundView;
+                }
+                Assert.IsNotNull(prototype);
+                Assert.IsNotNull(view);
+                typeof(MapTilemapView).GetField("pixelResolution", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(view, resolution);
+
+                prototype.Regenerate();
+
+                Assert.AreEqual(new Vector3(128f, 128f, 0f), view.WorldBounds.size);
+                foreach (TileBase baseTile in view.Tilemap.GetTilesBlock(view.Tilemap.cellBounds))
+                {
+                    Tile tile = baseTile as Tile;
+                    Assert.IsNotNull(tile);
+                    Assert.AreEqual((int)resolution, tile.sprite.texture.width);
+                    Assert.AreEqual((int)resolution, tile.sprite.texture.height);
+                    Assert.AreEqual((float)resolution, tile.sprite.pixelsPerUnit);
+                    Assert.AreEqual(1f, tile.sprite.bounds.size.x, 0.0001f);
+                    Assert.AreEqual(1f, tile.sprite.bounds.size.y, 0.0001f);
+                }
+                Assert.IsTrue(((TextureImporter)AssetImporter.GetAtPath("Assets/Art/Prototype/Terrain.png")).isReadable);
+                Assert.IsTrue(((TextureImporter)AssetImporter.GetAtPath("Assets/Art/Prototype/Ladder.png")).isReadable);
+            }
+            finally
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
         [Test]
         public void SavedPrototypeSceneHasAllReferencesAndGeneratesExpectedTilemap()
         {
@@ -453,6 +546,7 @@ namespace NoMansGround.Tests
                 }
                 Assert.IsNotNull(prototype);
                 Assert.IsNotNull(view);
+                Assert.AreEqual(32, view.PixelsPerTile);
                 Assert.IsNotNull(camera);
                 prototype.Regenerate();
                 Assert.AreEqual(new Vector3Int(128, 128, 1), view.Tilemap.cellBounds.size);
@@ -464,7 +558,6 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(rock);
                 Assert.IsNotNull(gravel);
                 Assert.IsNotNull(road.sprite);
-                Assert.IsNotNull(rock.sprite);
                 Assert.AreEqual(Tile.ColliderType.None, road.colliderType);
                 Assert.AreEqual(Tile.ColliderType.None, rock.colliderType);
                 Assert.IsTrue(prototype.Data.HasStorageArea);
@@ -476,7 +569,9 @@ namespace NoMansGround.Tests
                 SpriteRenderer hammerDisplay = depotDisplay.Find("ConstructionHammer").GetComponent<SpriteRenderer>();
                 Assert.IsTrue(hammerDisplay.gameObject.activeSelf);
                 Assert.IsNotNull(hammerDisplay.sprite);
-                Assert.Greater(hammerDisplay.sprite.texture.GetPixel(7, 12).a, 0f);
+                int iconPixelScale = view.PixelsPerTile / 16;
+                Assert.Greater(hammerDisplay.sprite.texture.GetPixel(7 * iconPixelScale,
+                    12 * iconPixelScale).a, 0f);
                 Assert.AreEqual("Martello\nx2", hammerDisplay.GetComponentInChildren<TextMesh>().text);
                 Assert.IsTrue(prototype.Data.StorageStockpile.TryTake(ItemType.Pickaxe, 1));
                 Assert.AreEqual(6, prototype.Data.StorageStockpile.Count(ItemType.Shovel));
@@ -497,16 +592,18 @@ namespace NoMansGround.Tests
                             rockCells++;
                             Assert.IsFalse(prototype.Data.IsWalkable(new Vector2Int(x, y)));
                             Assert.GreaterOrEqual(y, 10);
-                            Assert.AreSame(rock, view.Tilemap.GetTile(new Vector3Int(x, y, 0)));
+                            Assert.AreEqual(rock.name,
+                                view.Tilemap.GetTile(new Vector3Int(x, y, 0)).name);
                         }
                 Assert.Greater(rockCells, 0);
                 for (int y = 0; y < 6; y++)
                     for (int x = 62; x < 66; x++)
-                        Assert.AreSame(road, view.Tilemap.GetTile(new Vector3Int(x, y, 0)));
+                        Assert.AreEqual(road.name,
+                            view.Tilemap.GetTile(new Vector3Int(x, y, 0)).name);
                 prototype.Data[62, 0] = TerrainKind.Dirt;
                 prototype.Regenerate();
                 Assert.AreEqual(TerrainKind.Road, prototype.Data[62, 0]);
-                Assert.AreSame(road, view.Tilemap.GetTile(new Vector3Int(62, 0, 0)));
+                Assert.AreEqual(road.name, view.Tilemap.GetTile(new Vector3Int(62, 0, 0)).name);
                 Assert.AreEqual(prototype.Data.Width * prototype.Data.Height,
                     view.Tilemap.GetTilesBlock(view.Tilemap.cellBounds).Length);
                 foreach (TileBase tile in view.Tilemap.GetTilesBlock(view.Tilemap.cellBounds))

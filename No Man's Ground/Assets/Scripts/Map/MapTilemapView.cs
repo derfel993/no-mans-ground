@@ -7,10 +7,18 @@ using UnityEngine.Tilemaps;
 
 namespace NoMansGround.Map
 {
+    public enum MapTilePixelResolution { Pixels16 = 16, Pixels32 = 32, Pixels64 = 64 }
+
     [RequireComponent(typeof(Tilemap), typeof(TilemapRenderer))]
     public sealed class MapTilemapView : MonoBehaviour
     {
+        [SerializeField] private MapTilePixelResolution pixelResolution = MapTilePixelResolution.Pixels32;
         private readonly HashSet<Vector2Int> renderedZoneCells = new HashSet<Vector2Int>();
+        private readonly Dictionary<TileBase, TileBase> resolutionTileCache = new Dictionary<TileBase, TileBase>();
+        private readonly Dictionary<Sprite, Sprite> resolutionSpriteCache = new Dictionary<Sprite, Sprite>();
+        private readonly List<Tile> resolutionTiles = new List<Tile>();
+        private readonly List<Sprite> resolutionSprites = new List<Sprite>();
+        private readonly List<Texture2D> resolutionTextures = new List<Texture2D>();
         private Tilemap fogTilemap;
         private Tilemap fogMemoryTilemap;
         private Tilemap rememberedConstructionTilemap;
@@ -19,6 +27,9 @@ namespace NoMansGround.Map
         private TileBase[] rememberedTerrain;
         private Color[] rememberedColors;
         private byte[] renderedFog;
+
+        public int PixelsPerTile => Enum.IsDefined(typeof(MapTilePixelResolution), pixelResolution)
+            ? (int)pixelResolution : 16;
 
         public void RenderFog(MapData map)
         {
@@ -109,8 +120,6 @@ namespace NoMansGround.Map
                 return mountainTerrainTiles[index];
             bool mountain = index == 0;
             int edges = index - 1;
-            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Point;
             var pixels = new Color32[256];
             for (int y = 0; y < 16; y++)
                 for (int x = 0; x < 16; x++)
@@ -125,11 +134,10 @@ namespace NoMansGround.Map
                     if (!mountain && wall && (x == 2 || x == 13 || y == 2 || y == 13))
                         pixels[y * 16 + x] = new Color32(26, 29, 27, 255);
                 }
-            texture.SetPixels32(pixels);
-            texture.Apply();
+            Texture2D texture = CreatePixelTexture(pixels, 16, 16);
             var tile = ScriptableObject.CreateInstance<Tile>();
             tile.name = mountain ? "Montagna" : "Galleria";
-            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.sprite = CreatePixelSprite(texture, tile.name);
             tile.flags = TileFlags.None;
             tile.colliderType = Tile.ColliderType.None;
             mountainTerrainTiles[index] = tile;
@@ -354,8 +362,6 @@ namespace NoMansGround.Map
 
         private Tile CreateRoofTile()
         {
-            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Point;
             var pixels = new Color32[256];
             for (int y = 0; y < 16; y++)
                 for (int x = 0; x < 16; x++)
@@ -363,11 +369,10 @@ namespace NoMansGround.Map
                         ? new Color32(53, 65, 62, 255)
                         : x % 8 == 1 ? new Color32(143, 160, 150, 255)
                         : new Color32(100, 121, 111, 255);
-            texture.SetPixels32(pixels);
-            texture.Apply();
+            Texture2D texture = CreatePixelTexture(pixels, 16, 16);
             var tile = ScriptableObject.CreateInstance<Tile>();
             tile.name = "Roof";
-            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.sprite = CreatePixelSprite(texture, tile.name);
             tile.flags = TileFlags.None;
             tile.colliderType = Tile.ColliderType.None;
             return tile;
@@ -423,8 +428,6 @@ namespace NoMansGround.Map
 
         private Tile CreateBuildingTile(ItemType material, bool door)
         {
-            var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Point;
             var pixels = new Color32[256];
             bool wood = material == ItemType.Wood;
             for (int y = 0; y < 16; y++)
@@ -441,11 +444,10 @@ namespace NoMansGround.Map
                         color = new Color32(245, 215, 105, 255);
                     pixels[y * 16 + x] = color;
                 }
-            texture.SetPixels32(pixels);
-            texture.Apply();
+            Texture2D texture = CreatePixelTexture(pixels, 16, 16);
             var tile = ScriptableObject.CreateInstance<Tile>();
             tile.name = (wood ? "Wood" : "Stone") + (door ? "Door" : "Wall");
-            tile.sprite = Sprite.Create(texture, new Rect(0, 0, 16, 16), new Vector2(0.5f, 0.5f), 16f);
+            tile.sprite = CreatePixelSprite(texture, tile.name);
             tile.flags = TileFlags.None;
             tile.colliderType = Tile.ColliderType.None;
             return tile;
@@ -513,7 +515,7 @@ namespace NoMansGround.Map
             if (ladderTile == null)
                 throw new InvalidOperationException("Assign a ladder tile before installing ladders.");
             map.AddLadder(cell);
-            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), ladderTile);
+            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), ResolveTile(ladderTile));
         }
 
         public void CompleteTrench(MapData map, Vector2Int cell)
@@ -527,7 +529,7 @@ namespace NoMansGround.Map
             if (trenchTile == null)
                 throw new InvalidOperationException("Assign a trench tile before digging.");
             map[cell.x, cell.y] = TerrainKind.Trench;
-            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), trenchTile);
+            Tilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), ResolveTile(trenchTile));
         }
 
         public void CompleteTreeCut(MapData map, Vector2Int cell)
@@ -560,7 +562,7 @@ namespace NoMansGround.Map
             map[cell.x, cell.y] = mountain ? TerrainKind.Tunnel : TerrainKind.Dirt;
             map.AddGroundItem(cell, ItemType.BuildingStone);
             var position = new Vector3Int(cell.x, cell.y, 0);
-            Tilemap.SetTile(position, mountain ? GetTunnelTile(map, cell) : dirtTile);
+            Tilemap.SetTile(position, mountain ? GetTunnelTile(map, cell) : ResolveTile(dirtTile));
             Tilemap.SetTileFlags(position, TileFlags.None);
             Tilemap.SetColor(position, Color.white);
             foreach (Vector2Int offset in new[] { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up })
@@ -587,32 +589,33 @@ namespace NoMansGround.Map
                 {
                     switch (map[x, y])
                     {
-                        case TerrainKind.Dirt: tiles[y * map.Width + x] = dirtTile; break;
-                        case TerrainKind.Grass: tiles[y * map.Width + x] = grassTile; break;
-                        case TerrainKind.Mud: tiles[y * map.Width + x] = mudTile; break;
+                        case TerrainKind.Dirt: tiles[y * map.Width + x] = ResolveTile(dirtTile); break;
+                        case TerrainKind.Grass: tiles[y * map.Width + x] = ResolveTile(grassTile); break;
+                        case TerrainKind.Mud: tiles[y * map.Width + x] = ResolveTile(mudTile); break;
                         case TerrainKind.Mountain: tiles[y * map.Width + x] = GetMountainTerrainTile(0); break;
                         case TerrainKind.Tunnel: tiles[y * map.Width + x] = GetTunnelTile(map, new Vector2Int(x, y)); break;
                         case TerrainKind.Rock:
                             if (rockTile == null)
                                 throw new InvalidOperationException("Assign a rock tile before rendering rocks.");
-                            tiles[y * map.Width + x] = rockTile;
+                            tiles[y * map.Width + x] = ResolveTile(rockTile);
                             break;
                         case TerrainKind.Gravel:
                             if (gravelTile == null)
                                 throw new InvalidOperationException("Assign a gravel tile before rendering gravel.");
-                            tiles[y * map.Width + x] = gravelTile;
+                            tiles[y * map.Width + x] = ResolveTile(gravelTile);
                             break;
                         case TerrainKind.Road:
                             if (roadTile == null)
                                 throw new InvalidOperationException("Assign a road tile before rendering roads.");
-                            tiles[y * map.Width + x] = roadTile;
+                            tiles[y * map.Width + x] = ResolveTile(roadTile);
                             break;
                         case TerrainKind.Trench:
                             if (trenchTile == null)
                                 throw new InvalidOperationException("Assign a trench tile before rendering trenches.");
                             if (map.HasLadder(new Vector2Int(x, y)) && ladderTile == null)
                                 throw new InvalidOperationException("Assign a ladder tile before rendering ladders.");
-                            tiles[y * map.Width + x] = map.HasLadder(new Vector2Int(x, y)) ? ladderTile : trenchTile;
+                            tiles[y * map.Width + x] = map.HasLadder(new Vector2Int(x, y))
+                                ? ResolveTile(ladderTile) : ResolveTile(trenchTile);
                             break;
                         default: throw new ArgumentOutOfRangeException(nameof(map), "Unknown terrain kind.");
                     }
@@ -769,11 +772,6 @@ namespace NoMansGround.Map
 
         private Sprite CreateItemSprite(ItemType type, int index)
         {
-            runtimeItemTextures[index] = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-            Texture2D texture = runtimeItemTextures[index];
-            texture.name = ItemCatalog.Get(type).DisplayName + " Sprite";
-            texture.filterMode = FilterMode.Point;
-            texture.wrapMode = TextureWrapMode.Clamp;
             var pixels = new Color32[256];
             Color32 wood = new Color32(112, 73, 39, 255);
             Color32 woodLight = new Color32(170, 119, 61, 255);
@@ -868,9 +866,92 @@ namespace NoMansGround.Map
                     throw new ArgumentOutOfRangeException(nameof(type));
             }
 
+            runtimeItemTextures[index] = CreatePixelTexture(pixels, 16, 16);
+            runtimeItemTextures[index].name = ItemCatalog.Get(type).DisplayName + " Sprite";
+            return CreatePixelSprite(runtimeItemTextures[index], runtimeItemTextures[index].name);
+        }
+
+        private Texture2D CreatePixelTexture(Color32[] sourcePixels, int sourceWidth, int sourceHeight)
+        {
+            int size = PixelsPerTile;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    int sourceX = Mathf.Min(sourceWidth - 1, x * sourceWidth / size);
+                    int sourceY = Mathf.Min(sourceHeight - 1, y * sourceHeight / size);
+                    pixels[y * size + x] = sourcePixels[sourceY * sourceWidth + sourceX];
+                }
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Clamp;
             texture.SetPixels32(pixels);
             texture.Apply();
-            return Sprite.Create(texture, new Rect(0f, 0f, 16f, 16f), new Vector2(0.5f, 0.5f), 16f);
+            return texture;
+        }
+
+        private Sprite CreatePixelSprite(Texture2D texture, string spriteName)
+        {
+            int size = PixelsPerTile;
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f), size);
+            sprite.name = spriteName;
+            return sprite;
+        }
+
+        private TileBase ResolveTile(TileBase source)
+        {
+            if (source is not Tile tile || tile.sprite == null)
+                return source;
+            if (tile.sprite.rect.width == PixelsPerTile && tile.sprite.rect.height == PixelsPerTile
+                && Mathf.Approximately(tile.sprite.pixelsPerUnit, PixelsPerTile))
+                return source;
+            if (resolutionTileCache.TryGetValue(source, out TileBase cached))
+                return cached;
+
+            Sprite sprite = ResolveSprite(tile.sprite);
+            var variant = ScriptableObject.CreateInstance<Tile>();
+            variant.name = tile.name;
+            variant.sprite = sprite;
+            variant.color = tile.color;
+            variant.transform = tile.transform;
+            variant.flags = tile.flags;
+            variant.colliderType = tile.colliderType;
+            resolutionTiles.Add(variant);
+            resolutionTileCache.Add(source, variant);
+            return variant;
+        }
+
+        private Sprite ResolveSprite(Sprite source)
+        {
+            if (resolutionSpriteCache.TryGetValue(source, out Sprite cached))
+                return cached;
+            if (!source.texture.isReadable)
+                throw new InvalidOperationException("Enable Read/Write on the texture for tile " + source.name + ".");
+
+            Rect rect = source.textureRect;
+            int sourceX = Mathf.RoundToInt(rect.x);
+            int sourceY = Mathf.RoundToInt(rect.y);
+            int sourceWidth = Mathf.RoundToInt(rect.width);
+            int sourceHeight = Mathf.RoundToInt(rect.height);
+            Color32[] texturePixels = source.texture.GetPixels32();
+            int textureWidth = source.texture.width;
+            var pixels = new Color32[sourceWidth * sourceHeight];
+            for (int y = 0; y < sourceHeight; y++)
+                for (int x = 0; x < sourceWidth; x++)
+                    pixels[y * sourceWidth + x] = texturePixels[(sourceY + y) * textureWidth + sourceX + x];
+            Texture2D texture = CreatePixelTexture(pixels, sourceWidth, sourceHeight);
+            texture.name = source.name + " " + PixelsPerTile + "px";
+            resolutionTextures.Add(texture);
+
+            Vector2 pivot = new Vector2(source.pivot.x / source.rect.width,
+                source.pivot.y / source.rect.height);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, PixelsPerTile, PixelsPerTile),
+                pivot, PixelsPerTile);
+            sprite.name = texture.name;
+            resolutionSprites.Add(sprite);
+            resolutionSpriteCache.Add(source, sprite);
+            return sprite;
         }
 
         private static void SetPixel(Color32[] pixels, int x, int y, Color32 color)
@@ -895,7 +976,7 @@ namespace NoMansGround.Map
                 {
                     var cell = new Vector2Int(x, y);
                     if (map.HasTree(cell))
-                        tiles[y * map.Width + x] = treeTile;
+                        tiles[y * map.Width + x] = ResolveTile(treeTile);
                     else if (map.TryGetGroundItem(cell, out ItemType item))
                         tiles[y * map.Width + x] = GetGroundItemTile(item);
                 }
@@ -938,8 +1019,6 @@ namespace NoMansGround.Map
 
         private Tile CreateRuntimeTreeTile()
         {
-            runtimeTreeTexture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-            runtimeTreeTexture.filterMode = FilterMode.Point;
             var pixels = new Color32[256];
             for (int y = 0; y < 7; y++)
                 for (int x = 7; x <= 8; x++)
@@ -956,10 +1035,8 @@ namespace NoMansGround.Map
                             ? new Color32(75, 133, 60, 255) : new Color32(50, 105, 48, 255);
                 }
             }
-            runtimeTreeTexture.SetPixels32(pixels);
-            runtimeTreeTexture.Apply();
-            runtimeTreeSprite = Sprite.Create(runtimeTreeTexture, new Rect(0f, 0f, 16f, 16f),
-                new Vector2(0.5f, 0.5f), 16f);
+            runtimeTreeTexture = CreatePixelTexture(pixels, 16, 16);
+            runtimeTreeSprite = CreatePixelSprite(runtimeTreeTexture, "Tree");
             runtimeTreeTile = ScriptableObject.CreateInstance<Tile>();
             runtimeTreeTile.sprite = runtimeTreeSprite;
             runtimeTreeTile.colliderType = Tile.ColliderType.None;
@@ -969,6 +1046,12 @@ namespace NoMansGround.Map
 
         private void OnDestroy()
         {
+            foreach (Tile tile in resolutionTiles)
+                DestroyGeneratedObject(tile);
+            foreach (Sprite sprite in resolutionSprites)
+                DestroyGeneratedObject(sprite);
+            foreach (Texture2D texture in resolutionTextures)
+                DestroyGeneratedObject(texture);
             if (fogTilemap != null) DestroyGeneratedObject(fogTilemap.gameObject);
             if (fogMemoryTilemap != null) DestroyGeneratedObject(fogMemoryTilemap.gameObject);
             if (fogTile != null)

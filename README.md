@@ -475,11 +475,15 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 - Premere **T** o **Scava**. Il trascinamento sinistro mostra un'anteprima azzurra;
   al rilascio designa una linea tra partenza e arrivo, non un rettangolo.
   Le linee diagonali sono collegate a otto direzioni. Un clic designa una sola cella.
+- Se la linea attraversa una cella con un albero, viene accodato anche il job di
+  taglio: prima si rimuove l'albero, poi il job scava la stessa cella. Lo scavo
+  resta in attesa finche il taglio non e completato.
 - Le celle gialle sono lavori pendenti; il colore tende al verde durante lo scavo.
   Duplicati, celle gia scavate, bloccate o fuori mappa non generano altri lavori.
   Il rilascio fuori mappa o sopra la UI scarta il trascinamento.
 - **X** o **Annulla scavi** attiva una modalita analoga, con anteprima rossa,
   che rimuove i lavori di scavo o installazione scala lungo la linea.
+  Sulla cella con albero annulla insieme il taglio associato e lo scavo.
   Le trincee e le scale completate non vengono rimosse.
 - **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
   In queste modalita il sinistro non cambia il soldato selezionato.
