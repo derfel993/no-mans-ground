@@ -7,6 +7,19 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.11 - 2026-10-20
+===============================================================================
+
+Scavo di linee con alberi
+- Una linea di scavo che attraversa un albero accoda il taglio prima dello scavo
+  della stessa cella; lo scavo attende la rimozione dell'albero.
+- Annullare la cella rimuove entrambi i job.
+
+Test e documentazione
+- Aggiunti test mirati per l'ordine taglio/scavo e l'annullamento coordinato; i
+  test mirati sono passati. La suite TrenchWorkTests ha riportato quattro failure.
+
+===============================================================================
 0.4.10 - 2026-10-20
 ===============================================================================
 

@@ -908,6 +908,88 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void DigLineThroughTreeQueuesCutBeforeDiggingThatCell()
+        {
+            for (int y = 9; y <= 11; y++)
+                for (int x = 49; x <= 52; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    map.Data[x, y] = TerrainKind.Dirt;
+                    map.Data.SetTree(cell, false);
+                    map.Data.SetWalkable(cell, true);
+                }
+            var treeCell = new Vector2Int(50, 10);
+            map.Data.SetTree(treeCell, true);
+            view.Render(map.Data);
+
+            SoldierView cutter = roster.Soldiers[0];
+            TaskTestSetup.Assign(cutter, SoldierTask.Woodcutter);
+            Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.Axe, 1));
+            cutter.Data.Inventory.Add(ItemType.Axe, 1);
+
+            IReadOnlyList<Vector2Int> line = TrenchWorkOrders.RasterLine(treeCell, new Vector2Int(51, 10));
+            foreach (Vector2Int cell in line)
+                Assert.IsTrue(trenches.Designate(cell));
+
+            Assert.AreEqual(3, trenches.Jobs.Count);
+            TrenchJob cutJob = null;
+            TrenchJob treeDigJob = null;
+            foreach (TrenchJob job in trenches.Jobs)
+                if (job.Cell == treeCell)
+                {
+                    if (job.Kind == TrenchJobKind.CutTree) cutJob = job;
+                    if (job.Kind == TrenchJobKind.Dig) treeDigJob = job;
+                }
+            Assert.IsNotNull(cutJob);
+            Assert.IsNotNull(treeDigJob);
+            int cutIndex = -1;
+            int digIndex = -1;
+            for (int index = 0; index < trenches.Jobs.Count; index++)
+            {
+                if (ReferenceEquals(trenches.Jobs[index], cutJob)) cutIndex = index;
+                if (ReferenceEquals(trenches.Jobs[index], treeDigJob)) digIndex = index;
+            }
+            Assert.Less(cutIndex, digIndex);
+
+            trenches.Tick(0.01f);
+            Assert.IsNotNull(cutJob.Worker);
+            Assert.IsNull(treeDigJob.Worker);
+            Assert.AreEqual("In attesa del taglio dell'albero", treeDigJob.Status);
+
+            foreach (SoldierView soldier in roster.Soldiers)
+                soldier.AdvanceMovement(1000f);
+            trenches.Tick(10f);
+            Assert.IsFalse(map.Data.HasTree(treeCell));
+            bool treeDigPending = false;
+            foreach (TrenchJob job in trenches.Jobs)
+                treeDigPending |= ReferenceEquals(job, treeDigJob);
+            Assert.IsTrue(treeDigPending);
+            Assert.IsNotNull(treeDigJob.Worker);
+
+            for (int step = 0; step < 30 && trenches.Jobs.Count > 0; step++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                trenches.Tick(10f);
+            }
+            Assert.IsTrue(map.Data.IsTrench(treeCell));
+        }
+
+        [Test]
+        public void CancellingDigCellWithTreeRemovesCutAndDigJobs()
+        {
+            var cell = new Vector2Int(50, 10);
+            map.Data.SetTree(cell, true);
+
+            Assert.IsTrue(trenches.Designate(cell));
+            Assert.AreEqual(2, trenches.Jobs.Count);
+            Assert.IsTrue(trenches.Cancel(cell));
+
+            Assert.Zero(trenches.Jobs.Count);
+            Assert.IsTrue(map.Data.HasTree(cell));
+        }
+
+        [Test]
         public void DigJobSendsUnequippedWorkerToCollectShovelAndAddsItToInventory()
         {
             ReturnShovelsToDepot();
@@ -1188,13 +1270,14 @@ namespace NoMansGround.Tests
             view.CompleteRockMine(map.Data, entrance);
             Tile tunnelBefore = view.Tilemap.GetTile<Tile>(entrancePosition);
             Assert.AreEqual("Galleria", tunnelBefore.name);
-            Assert.Less(tunnelBefore.sprite.texture.GetPixel(8, 15).grayscale,
-                tunnelBefore.sprite.texture.GetPixel(8, 8).grayscale);
+            int pixelScale = view.PixelsPerTile / 16;
+            Assert.Less(tunnelBefore.sprite.texture.GetPixel(8 * pixelScale, 15 * pixelScale).grayscale,
+                tunnelBefore.sprite.texture.GetPixel(8 * pixelScale, 8 * pixelScale).grayscale);
             view.CompleteRockMine(map.Data, interior);
             Tile tunnelAfter = view.Tilemap.GetTile<Tile>(entrancePosition);
             Assert.AreNotSame(tunnelBefore, tunnelAfter);
-            Assert.Greater(tunnelAfter.sprite.texture.GetPixel(8, 15).grayscale,
-                tunnelBefore.sprite.texture.GetPixel(8, 15).grayscale);
+            Assert.Greater(tunnelAfter.sprite.texture.GetPixel(8 * pixelScale, 15 * pixelScale).grayscale,
+                tunnelBefore.sprite.texture.GetPixel(8 * pixelScale, 15 * pixelScale).grayscale);
             map.Data.TryTakeGroundItem(entrance, out _);
             map.Data.TryTakeGroundItem(interior, out _);
             view.RefreshGroundItems(map.Data);
