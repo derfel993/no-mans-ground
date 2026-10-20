@@ -133,6 +133,7 @@ prima di Play e salvarla; il sistema riutilizza quello presente.
 | Input | Azione |
 | --- | --- |
 | WASD / frecce | Sposta la camera |
+| P | Attiva/disattiva la pausa; riprendendo torna all'ultima velocita selezionata |
 | Tasto centrale + trascinamento | Trascina la visuale |
 | Rotella | Zoom sul punto sotto il cursore |
 | Clic sinistro su un soldato | Seleziona e mostra la scheda |
@@ -220,8 +221,9 @@ Il giorno aumenta a mezzanotte; la prima arriva dopo 25 minuti, perche si parte
 dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
 
 Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
-I pulsanti 1x, 2x, 5x e 10x sotto l'orologio accelerano insieme orologio, movimento
-dei soldati e sistemi che usano il tempo scalato.
+I pulsanti 0x, 1x, 2x, 5x e 10x sotto l'orologio impostano pausa o velocita;
+0x ferma la simulazione. Anche P attiva/disattiva la pausa e, alla ripresa,
+resta selezionata l'ultima velocita attiva. Il movimento della camera resta disponibile.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
 Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
 durata dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
@@ -303,9 +305,9 @@ Le durate sono generate con il seed dei soldati e restano costanti nella
 sessione, senza alterare anagrafica, skill e altri stati generati.
 Il consumo avviene sia da fermi sia in marcia o al lavoro e segue la velocita
 della simulazione. Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x
-un secondo reale corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende
-il consumo. I pulsanti 1x, 2x, 5x e 10x sotto l'orologio cambiano la velocita;
-un controllo di pausa dedicato non e ancora disponibile.
+un secondo reale corrisponde a un secondo di gioco; pausa 0x sospende il consumo.
+I pulsanti 0x, 1x, 2x, 5x e 10x sotto l'orologio cambiano la velocita; P attiva
+e disattiva la pausa.
 
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione

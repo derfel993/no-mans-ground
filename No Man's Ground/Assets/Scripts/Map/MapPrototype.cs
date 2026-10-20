@@ -1,4 +1,5 @@
 using System;
+using UnityEngine.InputSystem;
 using UnityEngine;
 
 namespace NoMansGround.Map
@@ -13,6 +14,7 @@ namespace NoMansGround.Map
         public MapGenerationSettings Generation => generation;
         public GameClock Clock { get; } = new GameClock();
         public int SimulationSpeed { get; private set; } = 1;
+        private int lastNonPausedSpeed = 1;
         public event Action<MapData> Generated;
         public event Action<int> SimulationSpeedChanged;
 
@@ -24,11 +26,18 @@ namespace NoMansGround.Map
 
         public void SetSimulationSpeed(int multiplier)
         {
-            if (multiplier != 1 && multiplier != 2 && multiplier != 5 && multiplier != 10)
+            if (multiplier != 0 && multiplier != 1 && multiplier != 2 && multiplier != 5 && multiplier != 10)
                 throw new ArgumentOutOfRangeException(nameof(multiplier));
+            if (multiplier > 0)
+                lastNonPausedSpeed = multiplier;
             SimulationSpeed = multiplier;
             Time.timeScale = multiplier;
             SimulationSpeedChanged?.Invoke(multiplier);
+        }
+
+        public void TogglePause()
+        {
+            SetSimulationSpeed(SimulationSpeed == 0 ? lastNonPausedSpeed : 0);
         }
 
         private void Awake()
@@ -40,6 +49,7 @@ namespace NoMansGround.Map
         {
             Time.timeScale = 1f;
             SimulationSpeed = 1;
+            lastNonPausedSpeed = 1;
         }
 
         private void Start()
@@ -49,6 +59,9 @@ namespace NoMansGround.Map
 
         private void Update()
         {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.pKey.wasPressedThisFrame)
+                TogglePause();
             Clock.AdvanceTime(Time.deltaTime);
         }
 

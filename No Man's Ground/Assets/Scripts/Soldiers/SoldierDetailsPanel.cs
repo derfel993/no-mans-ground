@@ -815,11 +815,12 @@ namespace NoMansGround.Soldiers
                 var speedLayout = speedRow.gameObject.AddComponent<HorizontalLayoutGroup>();
                 speedLayout.spacing = 3f;
                 speedLayout.childForceExpandWidth = true;
-                speedButtons = new Button[4];
-                speedButtons[0] = CreateSpeedButton(speedRow, 1);
-                speedButtons[1] = CreateSpeedButton(speedRow, 2);
-                speedButtons[2] = CreateSpeedButton(speedRow, 5);
-                speedButtons[3] = CreateSpeedButton(speedRow, 10);
+                speedButtons = new Button[5];
+                speedButtons[0] = CreateSpeedButton(speedRow, 0);
+                speedButtons[1] = CreateSpeedButton(speedRow, 1);
+                speedButtons[2] = CreateSpeedButton(speedRow, 2);
+                speedButtons[3] = CreateSpeedButton(speedRow, 5);
+                speedButtons[4] = CreateSpeedButton(speedRow, 10);
                 RefreshSpeedButtons();
             }
             CreateText(content, "SOLDATI", 13, 20f);
@@ -1190,7 +1191,7 @@ namespace NoMansGround.Soldiers
             if (speedButtons == null || gameMap == null)
                 return;
             int selectedSpeed = speed < 0 ? gameMap.SimulationSpeed : speed;
-            int[] speeds = { 1, 2, 5, 10 };
+            int[] speeds = { 0, 1, 2, 5, 10 };
             for (int i = 0; i < speedButtons.Length; i++)
                 speedButtons[i].GetComponent<Image>().color = speeds[i] == selectedSpeed
                     ? new Color(0.48f, 0.58f, 0.34f)

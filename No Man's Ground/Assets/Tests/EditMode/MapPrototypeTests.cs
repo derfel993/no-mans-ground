@@ -7,11 +7,44 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Tilemaps;
 using Object = UnityEngine.Object;
 
 namespace NoMansGround.Tests
 {
+    public sealed class MapPauseInputTests : InputTestFixture
+    {
+        [Test]
+        public void PressingPPausesAndResumesAtPreviousSpeed()
+        {
+            var mapObject = new GameObject("Pause test map", typeof(MapPrototype));
+            MapPrototype map = mapObject.GetComponent<MapPrototype>();
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            MethodInfo update = typeof(MapPrototype).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic);
+            try
+            {
+                map.SetSimulationSpeed(5);
+                Press(keyboard.pKey);
+                update.Invoke(map, null);
+                Assert.AreEqual(0, map.SimulationSpeed);
+                Assert.AreEqual(0f, Time.timeScale);
+
+                Release(keyboard.pKey);
+                Press(keyboard.pKey);
+                update.Invoke(map, null);
+                Assert.AreEqual(5, map.SimulationSpeed);
+                Assert.AreEqual(5f, Time.timeScale);
+                Release(keyboard.pKey);
+            }
+            finally
+            {
+                InputSystem.RemoveDevice(keyboard);
+                Object.DestroyImmediate(mapObject);
+            }
+        }
+    }
+
     public sealed class MapPrototypeTests
     {
         [Test]
