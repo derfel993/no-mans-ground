@@ -7,6 +7,20 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.4.12 - 2026-10-20
+===============================================================================
+
+Pausa della simulazione
+- Aggiunto il pulsante 0x sotto l'orologio per mettere in pausa la simulazione.
+- Premere P attiva o disattiva la pausa; alla ripresa viene ripristinata l'ultima
+  velocita selezionata.
+
+Test e documentazione
+- Il test isolato della scorciatoia P e passato (1/1). Il test PlayMode della
+  scena non e stato conclusivo: il setup non ha trovato il SoldierRoster.
+- Aggiornato README con pulsante e scorciatoia.
+
+===============================================================================
 0.4.11 - 2026-10-20
 ===============================================================================
 
