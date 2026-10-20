@@ -1,14 +1,13 @@
 NO MAN'S GROUND - CHANGELOG
 
 Versioni in ordine dalla piu recente alla meno recente.
-Aggiornare questo file su richiesta dell'utente, senza chiedere conferma
-del commit. Ogni voce riporta versione, data e novita.
-Non aggiornare il changelog automaticamente durante lo sviluppo.
-Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z+1).
+Aggiornare README e changelog quando l'utente conferma che il task e corretto.
+Ogni voce riporta versione, data e novita. Mantenere la versione corrente,
+salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
-0.4.9 - 2026-10-19
+0.4.10 - 2026-10-20
 ===============================================================================
 
 Visuale dalle trincee
@@ -17,9 +16,18 @@ Visuale dalle trincee
 - Il normale blocco della visuale resta attivo; le designazioni di scavo non
   rivelano l'area prima che la trincea sia completata.
 
+Trasporto automatico
+- Il Trasportatore puo attivare il checkbox **Trasporto Automatico**, inizialmente
+  disattivato e configurato per singolo soldato.
+- Se attivo, raccoglie qualsiasi item a terra nelle celle esplorate, non soltanto
+  le risorse, e lo consegna al deposito. La raccolta manuale resta invariata.
+
 Test e documentazione
 - Aggiunto un test per raggio, memoria e limite della visuale; aggiornato README.
-- Diagnostiche statiche e `git diff --check` puliti; test EditMode non eseguito.
+- Aggiornati README e test per visibilita/stato del checkbox e raccolta automatica
+  di item non Resource.
+- Nessun errore statico nei file modificati; il runner EditMode non ha prodotto
+  risultati ne log in questa sessione.
 
 ===============================================================================
 0.4.8 - 2026-10-19

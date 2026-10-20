@@ -44,6 +44,8 @@ namespace NoMansGround.Soldiers
         private Text dutyStatus;
         private Text taskStatus;
         private Dropdown taskDropdown;
+        private GameObject automaticTransportRow;
+        private Toggle automaticTransportToggle;
         private Text zoneStatus;
         private Text roomDesignationButton;
         private Text roomStatus;
@@ -597,6 +599,14 @@ namespace NoMansGround.Soldiers
                     ? $"{SoldierTasks.DisplayName(Selected.Data.Task)} -> {SoldierTasks.DisplayName(Selected.RequestedTask.Value)}\n{Selected.TaskStatus}"
                     : Selected.TaskStatus) : string.Empty;
             }
+            if (automaticTransportRow != null)
+            {
+                bool haulerSelected = selected
+                    && (Selected.RequestedTask ?? Selected.Data.Task) == SoldierTask.Hauler;
+                automaticTransportRow.SetActive(haulerSelected);
+                automaticTransportToggle.SetIsOnWithoutNotify(selected && Selected.AutomaticTransportEnabled);
+                automaticTransportToggle.interactable = selected;
+            }
             if (facilityStatus != null)
                 facilityStatus.gameObject.SetActive(false);
             identity.text = selected ? Selected.Data.FullName : "Nessun soldato selezionato";
@@ -914,6 +924,7 @@ namespace NoMansGround.Soldiers
             guardButton = CreateDutyButton(dutyRow, "Guardia", SoldierDuty.Guard);
             workButton = CreateDutyButton(dutyRow, "Lavoro", SoldierDuty.Work);
             taskDropdown = CreateTaskDropdown(info);
+            automaticTransportRow = CreateAutomaticTransportToggle(info);
             taskStatus = CreateText(info, "", 9, 26f);
             activity = CreateText(info, "", 10, 24f);
             carryCapacity = CreateText(info, "", 10, 20f);
@@ -1002,6 +1013,35 @@ namespace NoMansGround.Soldiers
             });
             dropdown.RefreshShownValue();
             return dropdown;
+        }
+
+        private GameObject CreateAutomaticTransportToggle(Transform parent)
+        {
+            var row = CreateRect("Trasporto Automatico", parent);
+            row.gameObject.AddComponent<LayoutElement>().preferredHeight = 20f;
+            var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 6f;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = true;
+
+            var box = CreateRect("Automatic transport checkbox", row);
+            box.gameObject.AddComponent<LayoutElement>().preferredWidth = 16f;
+            var background = box.gameObject.AddComponent<Image>();
+            background.color = new Color(0.26f, 0.32f, 0.22f);
+            automaticTransportToggle = box.gameObject.AddComponent<Toggle>();
+            automaticTransportToggle.targetGraphic = background;
+            var check = CreateRect("Checked", box);
+            check.anchorMin = new Vector2(0.5f, 0.5f);
+            check.anchorMax = new Vector2(0.5f, 0.5f);
+            check.sizeDelta = new Vector2(8f, 8f);
+            automaticTransportToggle.graphic = check.gameObject.AddComponent<Image>();
+            automaticTransportToggle.onValueChanged.AddListener(enabled =>
+            {
+                if (Selected != null)
+                    Selected.SetAutomaticTransport(enabled);
+            });
+            CreateText(row, "Trasporto Automatico", 10, 0f);
+            return row.gameObject;
         }
 
         private Dropdown CreateRoomSpecializationDropdown(Transform parent)

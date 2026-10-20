@@ -6,10 +6,9 @@ con visuale dall'alto. Il progetto Unity si trova in `No Man's Ground`.
 ## Changelog
 
 Le versioni e le novita implementate sono raccolte in [CHANGELOG.txt](CHANGELOG.txt),
-con la versione piu recente in alto. Il file viene aggiornato soltanto quando
-l'utente lo richiede, senza chiedere conferma del commit, non automaticamente
-a ogni modifica. Salvo indicazione diversa, ogni aggiornamento incrementa di uno
-la versione patch (per esempio, da 0.3.0 a 0.3.1).
+con la versione piu recente in alto. README e changelog vengono aggiornati dopo
+che l'utente conferma che il task e corretto. La versione del changelog resta
+invariata, salvo richiesta esplicita dell'utente.
 Ogni voce indica versione, data e novita rispetto alla precedente;
 la prima versione, 0.1.0, riepiloga il prototipo esistente.
 I lavori futuri restano nelle checklist TODO di questo README.
@@ -667,6 +666,13 @@ il personaggio aggiuntivo precedentemente riservato alla cucina.
 | Costruttore | Martello da Costruzione | Costruisce pareti, porte e scale designate. |
 | Cuoco | Nessuno | Prepara e distribuisce rancio e rifornisce le borracce alla consegna. |
 
+Quando e selezionato **Trasportatore**, sotto il menu compare il checkbox
+**Trasporto Automatico**, inizialmente disattivato e salvato per singolo soldato.
+Se attivo, il trasportatore raccoglie gli item presenti nelle celle esplorate,
+incluse le categorie diverse da Resource, e li consegna al deposito. Serve un
+deposito disponibile. Senza l'opzione, raccoglie soltanto le risorse designate
+manualmente come prima.
+
 Al cambio compito, il soldato raggiunge fisicamente una cella libera del
 **deposito degli utensili**, restituisce i vecchi tool e prende quello nuovo,
 se richiesto. Il prelievo non avviene a distanza. Le borracce e le risorse
@@ -690,9 +696,11 @@ ha un solo cuoco operativo; eventuali altri Cuochi restano di riserva. Lasciando
 il compito, il cuoco termina la razione in preparazione o gestisce il carico
 prima del cambio; scorte e progresso della cucina non vengono azzerati.
 
-I compiti lavorano sulle designazioni del giocatore, non scelgono automaticamente
-alberi o aree da scavare. La rigenerazione ripristina tutti a Trasportatore,
-senza utensili personali e con una borraccia piena.
+I compiti lavorano sulle designazioni del giocatore: nessuno sceglie
+automaticamente alberi o aree da scavare. La raccolta automatica del
+Trasportatore riguarda soltanto gli item gia a terra. La rigenerazione ripristina
+tutti a Trasportatore, con trasporto automatico disattivato, senza utensili
+personali e con una borraccia piena.
 API: `SoldierData.Task`, `SoldierView.RequestTask(task)`, `RequestedTask`,
 `TaskReady` e `TaskStatus`. `SoldierData.Profession` resta un dato iniziale,
 non limita l'assegnazione dei compiti.
