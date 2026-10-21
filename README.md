@@ -926,6 +926,29 @@ Rigenerare la mappa elimina progetti e costruzioni.
 
 ## Step successivi (non implementati)
 
+### TODO grafica e risoluzione
+
+- [ ] **Passaggio a tile e sprite 32 x 32, predisposto per 64 x 64**:
+  introdurre una configurazione condivisa della risoluzione grafica e dei
+  Pixels Per Unit (PPU), inizialmente 32, mantenendo ogni cella pari a
+  1 unita Unity e invariati mappa, movimento, pathfinding e visuale.
+- [ ] Aggiornare asset importati, otto direzioni del soldato e sprite di
+  fallback a 32 x 32 con PPU 32, conservando pivot, proporzioni e riferimenti;
+  adeguare gli strumenti Editor anche alla migrazione degli asset esistenti.
+- [ ] Rendere configurabili tutti i generatori grafici procedurali di terreno,
+  scale, soldati, alberi, oggetti, pareti, porte, tetti, montagne e gallerie:
+  dimensioni, buffer, indici, coordinate e spessori devono dipendere dalla
+  risoluzione scelta, senza vincoli fissi a 16 o 32 pixel. Lasciare invariate
+  le texture uniformi 1 x 1 dove non serve dettaglio aggiuntivo.
+- [ ] Creare o rifinire la grafica a 32 x 32: il solo ingrandimento delle
+  immagini 16 x 16 non aggiunge dettaglio. Conservare il filtro Point e
+  verificare impostazioni di importazione, nitidezza allo zoom, allineamento,
+  selezione e sovrapposizioni.
+- [ ] Adeguare i test grafici alle dimensioni configurate e verificare sia
+  32 x 32 / PPU 32 sia 64 x 64 / PPU 64, senza modificare la logica di gioco.
+  Il futuro passaggio a 64 dovra richiedere configurazione e asset adeguati,
+  non una nuova riscrittura dei generatori.
+
 ### TODO zone e logistica
 
 - [ ] Collegare i bisogni fisiologici alla **discarica**: senza una zona valida
