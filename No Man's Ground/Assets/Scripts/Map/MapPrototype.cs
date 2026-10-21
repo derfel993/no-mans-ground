@@ -54,6 +54,13 @@ namespace NoMansGround.Map
 
         private void Start()
         {
+            if (cameraController != null)
+            {
+                DayNightCycle cycle = GetComponent<DayNightCycle>();
+                if (cycle == null)
+                    cycle = gameObject.AddComponent<DayNightCycle>();
+                cycle.Configure(this, cameraController.GetComponent<Camera>());
+            }
             Regenerate();
         }
 

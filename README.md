@@ -3,6 +3,8 @@
 Prototipo Unity 6 di un gestionale 2D sulle trincee della prima guerra mondiale,
 con visuale dall'alto. Il progetto Unity si trova in `No Man's Ground`.
 
+**Versione corrente: 0.5.0.**
+
 ## Changelog
 
 Le versioni e le novita implementate sono raccolte in [CHANGELOG.txt](CHANGELOG.txt),
@@ -73,8 +75,10 @@ convogli, consegne e trasporto dei feriti **non sono ancora implementati**.
 
 La fog of war si attiva automaticamente nella scena di gioco e usa la visuale
 condivisa di tutti i soldati attivi, indipendentemente da Guardia/Lavoro o compito.
-Ogni soldato scopre un **cono di 180 gradi**, con raggio iniziale di **12 tile**
-dalla propria cella, orientato nella direzione dello sguardo: non vede a 360 gradi.
+Ogni soldato scopre un **cono di 180 gradi**, con raggio di **12 tile di giorno**
+e **6 tile di notte** dalla propria cella, orientato nella direzione dello sguardo:
+non vede a 360 gradi. Il raggio varia gradualmente all'alba e al tramonto,
+arrotondato alla cella; le zone che escono dalla visuale restano esplorate.
 Camminando guarda verso il passo che sta percorrendo; all'arrivo conserva
 l'ultima direzione. Lo sprite selezionato corrisponde a uno degli otto orientamenti
 cardinali e diagonali.
@@ -124,9 +128,12 @@ La visuale viene aggiornata ogni **0,1 secondi reali**, anche durante la pausa;
 nessun movimento o lavoro avanza per questo motivo. Rigenerare elimina tutta
 la memoria esplorata e scopre nuovamente soltanto l'area della squadra.
 Il componente **Soldier Fog Of War** viene aggiunto all'oggetto Soldiers
-durante Play: **Sight Radius** regola il raggio tra 1 e 64 tile. Per conservare
-un valore personalizzato si puo aggiungere lo stesso componente alla scena
-prima di Play e salvarla; il sistema riutilizza quello presente.
+durante Play: **Sight Radius** regola il raggio diurno e **Night Sight Radius**
+quello notturno, entrambi tra 1 e 64 tile. Il raggio notturno effettivo non puo
+superare quello diurno. Senza un componente **Day Night Cycle** sulla mappa,
+resta attivo il raggio diurno. Per conservare valori personalizzati si puo
+aggiungere il componente alla scena prima di Play e salvarla; il sistema
+riutilizza quello presente.
 
 ### Comandi
 
@@ -177,7 +184,12 @@ in modo da non mostrare spazio esterno.
 - Oggetto **Main Camera**, componente **Map Camera Controller**: velocita di
   movimento, sensibilita dello zoom e limiti della dimensione ortografica.
 - Oggetto **Soldiers**, componente **Soldier Fog Of War**: raggio della visuale
-  condivisa; viene aggiunto automaticamente durante Play se non presente.
+  condivisa diurna (**Sight Radius**, 12) e notturna (**Night Sight Radius**, 6);
+  viene aggiunto automaticamente durante Play se non presente.
+- Oggetto **Map**, componente **Day Night Cycle**: orari di inizio e fine
+  di alba e tramonto, tonalita di giorno, alba, tramonto e notte. Il sistema
+  prevede l'aggiunta automatica durante Play; si puo aggiungere prima di Play
+  per salvare i parametri personalizzati. Vedere il limite noto sotto.
 - Per rigenerare senza riavviare, usare **Regenerate Map** nel menu contestuale
   del componente **Map Prototype**. Le modifiche fatte durante Play non sono persistenti.
 
@@ -198,6 +210,9 @@ La scena non viene inserita automaticamente nelle Build Profiles.
 - `Assets/Scripts/Map/MapTilemapView.cs`: disegno del terreno e colori persistenti delle zone.
 - `Assets/Scripts/Map/MapCameraController.cs`: input tramite Input System.
 - `Assets/Scripts/Map/MapPrototype.cs`: collegamento tra generazione, vista e camera.
+- `Assets/Scripts/Map/GameClock.cs`: orologio e ora frazionaria della simulazione.
+- `Assets/Scripts/Map/DayNightCycle.cs`: fasi, luminosita e filtro visivo del mondo.
+- `Assets/Resources/DayNightTint.shader`: filtro moltiplicativo del ciclo.
 - `Assets/Editor/MapPrototypeSetup.cs`: creazione della scena e degli asset provvisori.
 
 ### Test
@@ -225,9 +240,41 @@ I pulsanti 0x, 1x, 2x, 5x e 10x sotto l'orologio impostano pausa o velocita;
 0x ferma la simulazione. Anche P attiva/disattiva la pausa e, alla ripresa,
 resta selezionata l'ultima velocita attiva. Il movimento della camera resta disponibile.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
-Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
-durata dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
+Il ciclo modifica la tonalita del mondo e il raggio visivo dei soldati.
+Velocita di consumo dei bisogni, durata dei job e preparazione del rancio
+mantengono i tempi esistenti, senza modificatori notturni.
 Alle 13:00 viene avviata automaticamente la distribuzione del rancio.
+
+### Illuminazione e visibilita notturna
+
+Il componente **Day Night Cycle** usa direttamente l'ora frazionaria
+dell'orologio, senza un secondo timer. Le fasi predefinite sono:
+
+| Fase | Orario | Raggio visivo dei soldati |
+| --- | --- | --- |
+| Alba | 05:00-07:00 | Da 6 a 12 tile |
+| Giorno | 07:00-18:00 | 12 tile |
+| Tramonto | 18:00-20:00 | Da 12 a 6 tile |
+| Notte | 20:00-05:00 | 6 tile |
+
+Le transizioni di colore e luminosita sono morbide: tonalita calde all'alba
+e al tramonto, neutre di giorno e piu scure di notte. Il filtro moltiplicativo
+agisce sul mondo, non sui pannelli UI, e non intercetta i comandi del mouse.
+Le celle inesplorate restano nere; i colori del terreno conservati dalla
+fog of war non vengono modificati. La notte riduce la visuale corrente,
+senza cancellare la memoria delle celle gia esplorate.
+
+Orari e colori sono configurabili nell'Inspector. Il raggio segue la luminosita
+del ciclo, anche se il filtro grafico e disattivato, e viene aggiornato dalla
+fog of war ogni 0,1 secondi reali. Pausa e accelerazione seguono l'orologio;
+rigenerare ripristina la fase diurna e il raggio iniziale. Sonno, recupero
+notturno e turni automatici non sono ancora implementati.
+
+**Verifiche e limite noto della 0.5.0:** superati 38 dei 39 test mirati
+di orologio e ciclo, incluso il rendering del filtro, e tutti i 17 test
+mirati della visibilita notturna e della fog of war. Resta aperto il test
+di avvio automatico del ciclo: la fixture di integrazione non trova il
+componente. L'avvio automatico nella scena non e quindi completamente verificato.
 
 ## Step 2: soldati, stato e skill
 

@@ -7,6 +7,36 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.5.0 - 2026-10-21
+===============================================================================
+
+Ciclo giorno-notte
+- Aggiunte alba 05:00-07:00, giorno 07:00-18:00, tramonto 18:00-20:00 e
+  notte 20:00-05:00, con orari e tonalita configurabili in Day Night Cycle.
+- La tonalita del mondo cambia gradualmente tramite un filtro moltiplicativo;
+  l'interfaccia resta invariata e le celle inesplorate restano nere.
+- Il ciclo usa l'orologio esistente, con giornate da 40 minuti a velocita 1x,
+  rispetta pausa e accelerazione e torna alle 09:00 rigenerando la mappa.
+- Esposta l'ora frazionaria per transizioni continue, senza un secondo timer.
+
+Visibilita notturna
+- Il raggio visivo dei soldati passa da 12 tile di giorno a 6 di notte,
+  con valori intermedi all'alba e al tramonto, arrotondati alla cella.
+- Sight Radius e Night Sight Radius sono configurabili; il raggio notturno
+  effettivo non puo superare quello diurno.
+- Le celle uscite dalla visuale restano esplorate; cono di 180 gradi, ostacoli
+  e visuale condivisa restano invariati.
+- Consumo dei bisogni, durata dei lavori e rancio non cambiano con la notte;
+  sonno e turni automatici non sono ancora implementati.
+
+Test e documentazione
+- Superati 38 dei 39 test mirati di orologio e ciclo, incluso il controllo
+  del filtro sui pixel; resta aperto il test di avvio automatico del ciclo,
+  che non trova il componente nella fixture di integrazione.
+- Superati tutti i 17 test mirati della visibilita notturna e della fog of war.
+- Aggiornato il README con fasi, configurazione, raggi visivi e limite noto.
+
+===============================================================================
 0.4.12 - 2026-10-20
 ===============================================================================
 

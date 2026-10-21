@@ -8,6 +8,7 @@ namespace NoMansGround.Soldiers
     public sealed class SoldierFogOfWar : MonoBehaviour
     {
         [SerializeField, Range(1, 64)] private int sightRadius = 12;
+        [SerializeField, Range(1, 64)] private int nightSightRadius = 6;
         private MapPrototype map;
         private MapTilemapView view;
         private SoldierRoster roster;
@@ -15,6 +16,19 @@ namespace NoMansGround.Soldiers
         private readonly List<FogObserver> observers = new List<FogObserver>();
 
         public int SightRadius => sightRadius;
+        public int NightSightRadius => nightSightRadius;
+        public int CurrentSightRadius
+        {
+            get
+            {
+                int dayRadius = Mathf.Clamp(sightRadius, 1, 64);
+                DayNightCycle cycle = map != null ? map.GetComponent<DayNightCycle>() : null;
+                if (cycle == null)
+                    return dayRadius;
+                float daylight = cycle.Evaluate(map.Clock.TimeOfDayHours).Daylight;
+                return Mathf.RoundToInt(Mathf.Lerp(Mathf.Clamp(nightSightRadius, 1, dayRadius), dayRadius, daylight));
+            }
+        }
 
         public void Configure(MapPrototype prototype, MapTilemapView mapView, SoldierRoster soldiers)
         {
@@ -79,7 +93,7 @@ namespace NoMansGround.Soldiers
             foreach (SoldierView soldier in roster.Soldiers)
                 if (soldier != null && soldier.isActiveAndEnabled && soldier.Data != null)
                     observers.Add(new FogObserver(soldier.Cell, soldier.LookDirection));
-            map.Data.Fog.Update(map.Data, observers, Mathf.Clamp(sightRadius, 1, 64));
+            map.Data.Fog.Update(map.Data, observers, CurrentSightRadius);
             view.RenderFog(map.Data);
         }
     }

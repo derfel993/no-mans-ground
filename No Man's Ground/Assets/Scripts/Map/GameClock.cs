@@ -10,6 +10,7 @@ namespace NoMansGround.Map
 
         public double ElapsedSeconds => elapsedSeconds;
         private double TotalMinutes => 9 * 60 + elapsedSeconds * MinutesPerDay / SecondsPerDay;
+        public double TimeOfDayHours => TotalMinutes % MinutesPerDay / 60d;
         public int Day => 1 + (int)(TotalMinutes / MinutesPerDay);
         public int Hour => (int)(TotalMinutes % MinutesPerDay) / 60;
         public int Minute => (int)(TotalMinutes % 60);

@@ -2,6 +2,7 @@ using NoMansGround.Map;
 using NoMansGround.Editor;
 using NoMansGround.Soldiers;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Tilemaps;
@@ -10,6 +11,94 @@ namespace NoMansGround.Tests
 {
     public sealed class FogOfWarTests
     {
+        [TestCase(0d, 12)]
+        [TestCase(900d, 12)]
+        [TestCase(1000d, 9)]
+        [TestCase(1100d, 6)]
+        [TestCase(1500d, 6)]
+        [TestCase(2000d, 6)]
+        [TestCase(2100d, 9)]
+        [TestCase(2200d, 12)]
+        [TestCase(2400d, 12)]
+        public void SoldierSightFollowsClockThroughDuskNightAndDawn(double seconds, int radius)
+        {
+            var owner = new GameObject("Night sight test", typeof(MapPrototype), typeof(DayNightCycle),
+                typeof(SoldierFogOfWar));
+            try
+            {
+                var map = owner.GetComponent<MapPrototype>();
+                var fog = owner.GetComponent<SoldierFogOfWar>();
+                fog.Configure(map, null, null);
+                map.Clock.AdvanceTime(seconds);
+                Assert.AreEqual(12, fog.SightRadius);
+                Assert.AreEqual(6, fog.NightSightRadius);
+                Assert.AreEqual(radius, fog.CurrentSightRadius);
+                map.Clock.AdvanceTime(0d);
+                Assert.AreEqual(radius, fog.CurrentSightRadius);
+                map.Clock.Reset();
+                Assert.AreEqual(12, fog.CurrentSightRadius);
+            }
+            finally { Object.DestroyImmediate(owner); }
+        }
+
+        [Test]
+        public void NightSightRetainsExplorationAndRestoresDistantVisibilityAtDawn()
+        {
+            var owner = new GameObject("Night sight test", typeof(MapPrototype), typeof(DayNightCycle),
+                typeof(SoldierFogOfWar));
+            try
+            {
+                var prototype = owner.GetComponent<MapPrototype>();
+                var fog = owner.GetComponent<SoldierFogOfWar>();
+                fog.Configure(prototype, null, null);
+                var map = new MapData(40, 40);
+                var origin = new Vector2Int(15, 15);
+                var observers = new[] { new FogObserver(origin, Vector2.up) };
+                Vector2Int near = origin + Vector2Int.up * 6;
+                Vector2Int far = origin + Vector2Int.up * 12;
+                map.Fog.Enable();
+                map.Fog.Update(map, observers, fog.CurrentSightRadius);
+                Assert.IsTrue(map.Fog.IsVisible(far));
+                prototype.Clock.AdvanceTime(1100d);
+                map.Fog.Update(map, observers, fog.CurrentSightRadius);
+                Assert.IsTrue(map.Fog.IsVisible(near));
+                Assert.IsFalse(map.Fog.IsVisible(near + Vector2Int.up));
+                Assert.IsFalse(map.Fog.IsVisible(far));
+                Assert.IsTrue(map.Fog.IsExplored(far));
+                Assert.IsFalse(map.Fog.IsExplored(origin + Vector2Int.up * 13));
+                Assert.IsFalse(map.Fog.IsVisible(origin + Vector2Int.down));
+                prototype.Clock.AdvanceTime(1100d);
+                map.Fog.Update(map, observers, fog.CurrentSightRadius);
+                Assert.IsTrue(map.Fog.IsVisible(far));
+            }
+            finally { Object.DestroyImmediate(owner); }
+        }
+
+        [TestCase(20, 8, 20, 8)]
+        [TestCase(5, 6, 5, 5)]
+        [TestCase(0, 0, 1, 1)]
+        [TestCase(100, 100, 64, 64)]
+        public void CustomSightRadiiStayWithinBoundsAndNightCannotExceedDay(
+            int dayRadius, int nightRadius, int expectedDay, int expectedNight)
+        {
+            var owner = new GameObject("Night sight test", typeof(MapPrototype), typeof(DayNightCycle),
+                typeof(SoldierFogOfWar));
+            try
+            {
+                var map = owner.GetComponent<MapPrototype>();
+                var fog = owner.GetComponent<SoldierFogOfWar>();
+                fog.Configure(map, null, null);
+                var settings = new SerializedObject(fog);
+                settings.FindProperty("sightRadius").intValue = dayRadius;
+                settings.FindProperty("nightSightRadius").intValue = nightRadius;
+                settings.ApplyModifiedPropertiesWithoutUndo();
+                Assert.AreEqual(expectedDay, fog.CurrentSightRadius);
+                map.Clock.AdvanceTime(1100d);
+                Assert.AreEqual(expectedNight, fog.CurrentSightRadius);
+            }
+            finally { Object.DestroyImmediate(owner); }
+        }
+
         [Test]
         public void OneHundredEightyDegreeConeExcludesRearAndRotatesWithObserver()
         {

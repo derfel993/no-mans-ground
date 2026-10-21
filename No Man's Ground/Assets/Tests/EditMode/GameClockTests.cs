@@ -6,6 +6,20 @@ namespace NoMansGround.Tests
 {
     public sealed class GameClockTests
     {
+        [TestCase(0d, 9d)]
+        [TestCase(0.5d, 9.005d)]
+        [TestCase(1499.5d, 23.995d)]
+        [TestCase(1500d, 0d)]
+        [TestCase(2400d, 9d)]
+        public void TimeOfDayPreservesSubMinutePrecisionAndWrapsAtMidnight(double seconds, double hour)
+        {
+            var clock = new GameClock();
+            clock.AdvanceTime(seconds);
+            Assert.AreEqual(hour, clock.TimeOfDayHours, 0.0000001d);
+            clock.Reset();
+            Assert.AreEqual(9d, clock.TimeOfDayHours);
+        }
+
         [Test]
         public void NewClockStartsOnDayOneAtNineAndPreservesFractionalTime()
         {
