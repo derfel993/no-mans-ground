@@ -11,11 +11,13 @@ namespace NoMansGround.Soldiers
         [SerializeField] private MapTilemapView mapView;
         [SerializeField] private Sprite soldierSprite;
         [SerializeField] private Sprite[] directionalSoldierSprites = new Sprite[8];
+        [SerializeField] private Sprite corpseSprite;
         [SerializeField, Range(1, SoldierGenerator.MaximumSoldiers)] private int soldierCount = 8;
         [SerializeField] private int seed = 1917;
         [SerializeField] private bool spawnCook;
 
         private readonly List<SoldierView> soldiers = new List<SoldierView>();
+        private readonly List<GameObject> corpses = new List<GameObject>();
         private IReadOnlyList<SoldierView> readOnlySoldiers;
 
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
@@ -51,13 +53,15 @@ namespace NoMansGround.Soldiers
         }
 
         public void Configure(MapPrototype prototype, MapTilemapView view, Sprite sprite,
-            Sprite[] spritesByDirection = null)
+            Sprite[] spritesByDirection = null, Sprite deadSprite = null)
         {
             map = prototype;
             mapView = view;
             soldierSprite = sprite;
             if (spritesByDirection != null && spritesByDirection.Length == 8)
                 directionalSoldierSprites = spritesByDirection;
+            if (deadSprite != null)
+                corpseSprite = deadSprite;
         }
 
         private void OnEnable()
@@ -117,6 +121,16 @@ namespace NoMansGround.Soldiers
                     DestroyImmediate(soldier.gameObject);
             }
             soldiers.Clear();
+            foreach (GameObject corpse in corpses)
+            {
+                if (corpse == null)
+                    continue;
+                if (Application.isPlaying)
+                    Destroy(corpse);
+                else
+                    DestroyImmediate(corpse);
+            }
+            corpses.Clear();
 
             // Keep arrivals centred horizontally six tiles above the road when possible.
             int columns = Mathf.Min(data.Width, Mathf.CeilToInt(Mathf.Sqrt(count)));
@@ -143,7 +157,7 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
-                soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites);
+                soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites, corpseSprite);
                 soldier.DutyChanged += NotifyDutiesChanged;
                 soldier.Died += HandleSoldierDied;
                 soldiers.Add(soldier);
@@ -156,6 +170,7 @@ namespace NoMansGround.Soldiers
         {
             if (!soldiers.Remove(soldier))
                 return;
+            corpses.Add(soldier.gameObject);
             soldier.DutyChanged -= NotifyDutiesChanged;
             soldier.Died -= HandleSoldierDied;
             if (map != null && map.Data != null && map.Data.Contains(soldier.Cell))
@@ -177,10 +192,6 @@ namespace NoMansGround.Soldiers
             }
             SoldierDied?.Invoke(soldier);
             DutiesChanged?.Invoke();
-            if (Application.isPlaying)
-                Destroy(soldier.gameObject);
-            else
-                DestroyImmediate(soldier.gameObject);
         }
 
         private bool TryDropItem(Vector2Int origin, ItemType item)

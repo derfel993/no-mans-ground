@@ -14,7 +14,9 @@ namespace NoMansGround.Soldiers
         private SpriteRenderer selection;
         private MapTilemapView movementMap;
         private Sprite fallbackSprite;
+        private Sprite corpseSprite;
         private Sprite[] directionalSprites;
+        private static Sprite defaultCorpseSprite;
         private int displayedDirection = -1;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
@@ -172,7 +174,7 @@ namespace NoMansGround.Soldiers
         }
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite,
-            Sprite[] spritesByDirection = null)
+            Sprite[] spritesByDirection = null, Sprite deadSprite = null)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -186,6 +188,7 @@ namespace NoMansGround.Soldiers
             Cell = cell;
             fallbackSprite = sprite;
             directionalSprites = spritesByDirection;
+            corpseSprite = deadSprite != null ? deadSprite : GetDefaultCorpseSprite();
             name = data.FullName;
             body = GetComponent<SpriteRenderer>();
             body.sprite = sprite;
@@ -221,9 +224,62 @@ namespace NoMansGround.Soldiers
             TaskReady = false;
             TaskStatus = "Morto";
             SetSelected(false);
-            gameObject.SetActive(false);
+            body.sprite = corpseSprite;
+            body.color = Color.white;
             MovementChanged?.Invoke();
             Died?.Invoke(this);
+        }
+
+        private static Sprite GetDefaultCorpseSprite()
+        {
+            if (defaultCorpseSprite != null)
+                return defaultCorpseSprite;
+
+            const int size = 32;
+            var pixels = new Color32[size * size];
+            Color32 shadow = new Color32(24, 22, 18, 90);
+            Color32 outline = new Color32(31, 35, 29, 255);
+            Color32 uniform = new Color32(82, 99, 64, 255);
+            Color32 uniformLight = new Color32(116, 132, 82, 255);
+            Color32 helmet = new Color32(75, 78, 66, 255);
+            Color32 skin = new Color32(199, 153, 112, 255);
+            Color32 leather = new Color32(91, 61, 37, 255);
+
+            FillPixels(pixels, size, 3, 7, 29, 12, shadow);
+            FillPixels(pixels, size, 3, 14, 12, 25, outline);
+            FillPixels(pixels, size, 4, 19, 11, 24, helmet);
+            FillPixels(pixels, size, 5, 15, 10, 19, skin);
+            FillPixels(pixels, size, 9, 10, 24, 23, outline);
+            FillPixels(pixels, size, 10, 12, 22, 21, uniform);
+            FillPixels(pixels, size, 11, 18, 20, 21, uniformLight);
+            FillPixels(pixels, size, 16, 12, 18, 21, leather);
+            FillPixels(pixels, size, 21, 11, 29, 21, outline);
+            FillPixels(pixels, size, 22, 13, 27, 19, uniform);
+            FillPixels(pixels, size, 27, 10, 31, 14, outline);
+            FillPixels(pixels, size, 28, 11, 30, 13, helmet);
+            FillPixels(pixels, size, 7, 10, 11, 15, outline);
+            FillPixels(pixels, size, 8, 11, 10, 14, uniformLight);
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            defaultCorpseSprite = Sprite.Create(texture, new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f), 32f);
+            defaultCorpseSprite.hideFlags = HideFlags.HideAndDontSave;
+            return defaultCorpseSprite;
+        }
+
+        private static void FillPixels(Color32[] pixels, int size, int left, int bottom,
+            int right, int top, Color32 color)
+        {
+            for (int y = bottom; y < top; y++)
+                for (int x = left; x < right; x++)
+                    pixels[y * size + x] = color;
         }
 
         private void OnDestroy()

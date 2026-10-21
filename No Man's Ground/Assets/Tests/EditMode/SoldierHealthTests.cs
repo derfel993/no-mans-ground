@@ -86,10 +86,12 @@ namespace NoMansGround.Tests
         }
 
         [Test]
-        public void DeathRemovesSoldierFromRosterDropsInventoryAndPreservesOtherSoldiers()
+        public void DeathLeavesCorpseRemovesSoldierFromRosterDropsInventoryAndPreservesOtherSoldiers()
         {
             SoldierView victim = roster.Soldiers[0];
             SoldierData data = victim.Data;
+            GameObject corpse = victim.gameObject;
+            Sprite livingSprite = victim.GetComponent<SpriteRenderer>().sprite;
             int count = roster.Soldiers.Count;
             data.Inventory.Add(ItemType.Shovel, 1);
             data.Inventory.Add(ItemType.Wood, 2);
@@ -99,6 +101,9 @@ namespace NoMansGround.Tests
             roster.SoldierDied += soldier => { Assert.AreSame(victim, soldier); deaths++; };
             data.TakeDamage(100f);
             Assert.AreEqual(1, deaths);
+            Assert.IsTrue(corpse.activeInHierarchy);
+            Assert.AreNotSame(livingSprite, victim.GetComponent<SpriteRenderer>().sprite);
+            CollectionAssert.DoesNotContain(roster.Soldiers, victim);
             Assert.AreEqual(count - 1, roster.Soldiers.Count);
             Assert.AreEqual(count - 1, roster.WorkCount);
             Assert.Zero(roster.GuardCount);
@@ -112,6 +117,7 @@ namespace NoMansGround.Tests
             data.TakeDamage(100f);
             Assert.AreEqual(1, deaths);
             roster.Spawn(map.Data);
+            Assert.IsTrue(corpse == null);
             Assert.AreEqual(count, roster.Soldiers.Count);
             foreach (SoldierView soldier in roster.Soldiers)
                 Assert.AreEqual(100f, soldier.Data.Health);

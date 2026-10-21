@@ -7,6 +7,22 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.5.1 - 2026-10-21
+===============================================================================
+
+Cadaveri dei soldati
+- Alla morte il soldato resta visibile sulla mappa con uno sprite pixel-art
+  dedicato; e possibile sostituirlo con uno sprite personalizzato nell'Inspector.
+- Il cadavere viene rimosso dalla squadra e non partecipa piu alla simulazione;
+  drop dell'inventario, nebbia e pulizia degli altri sistemi restano invariati.
+- I cadaveri vengono rimossi quando la mappa viene rigenerata.
+
+Test e documentazione
+- Aggiornato il test EditMode per verificare la permanenza del cadavere e i drop.
+- Nessun errore diagnostico nei file modificati; i test EditMode non sono stati
+  eseguiti in questa sessione.
+
+===============================================================================
 0.5.0 - 2026-10-21
 ===============================================================================
 
