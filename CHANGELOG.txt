@@ -1,14 +1,40 @@
 NO MAN'S GROUND - CHANGELOG
 
 Versioni in ordine dalla piu recente alla meno recente.
-Aggiornare questo file su richiesta dell'utente, senza chiedere conferma
-del commit. Ogni voce riporta versione, data e novita.
-Non aggiornare il changelog automaticamente durante lo sviluppo.
-Salvo indicazione diversa, incrementare di uno la versione patch (x.y.z -> x.y.z+1).
+Aggiornare README e changelog quando l'utente conferma che il task e corretto.
+Ogni voce riporta versione, data e novita. Mantenere la versione corrente,
+salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
-0.4.9 - 2026-10-19
+0.4.12 - 2026-10-20
+===============================================================================
+
+Pausa della simulazione
+- Aggiunto il pulsante 0x sotto l'orologio per mettere in pausa la simulazione.
+- Premere P attiva o disattiva la pausa; alla ripresa viene ripristinata l'ultima
+  velocita selezionata.
+
+Test e documentazione
+- Il test isolato della scorciatoia P e passato (1/1). Il test PlayMode della
+  scena non e stato conclusivo: il setup non ha trovato il SoldierRoster.
+- Aggiornato README con pulsante e scorciatoia.
+
+===============================================================================
+0.4.11 - 2026-10-20
+===============================================================================
+
+Scavo di linee con alberi
+- Una linea di scavo che attraversa un albero accoda il taglio prima dello scavo
+  della stessa cella; lo scavo attende la rimozione dell'albero.
+- Annullare la cella rimuove entrambi i job.
+
+Test e documentazione
+- Aggiunti test mirati per l'ordine taglio/scavo e l'annullamento coordinato; i
+  test mirati sono passati. La suite TrenchWorkTests ha riportato quattro failure.
+
+===============================================================================
+0.4.10 - 2026-10-20
 ===============================================================================
 
 Visuale dalle trincee
@@ -17,9 +43,18 @@ Visuale dalle trincee
 - Il normale blocco della visuale resta attivo; le designazioni di scavo non
   rivelano l'area prima che la trincea sia completata.
 
+Trasporto automatico
+- Il Trasportatore puo attivare il checkbox **Trasporto Automatico**, inizialmente
+  disattivato e configurato per singolo soldato.
+- Se attivo, raccoglie qualsiasi item a terra nelle celle esplorate, non soltanto
+  le risorse, e lo consegna al deposito. La raccolta manuale resta invariata.
+
 Test e documentazione
 - Aggiunto un test per raggio, memoria e limite della visuale; aggiornato README.
-- Diagnostiche statiche e `git diff --check` puliti; test EditMode non eseguito.
+- Aggiornati README e test per visibilita/stato del checkbox e raccolta automatica
+  di item non Resource.
+- Nessun errore statico nei file modificati; il runner EditMode non ha prodotto
+  risultati ne log in questa sessione.
 
 ===============================================================================
 0.4.8 - 2026-10-19

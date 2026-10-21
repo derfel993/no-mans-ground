@@ -6,10 +6,9 @@ con visuale dall'alto. Il progetto Unity si trova in `No Man's Ground`.
 ## Changelog
 
 Le versioni e le novita implementate sono raccolte in [CHANGELOG.txt](CHANGELOG.txt),
-con la versione piu recente in alto. Il file viene aggiornato soltanto quando
-l'utente lo richiede, senza chiedere conferma del commit, non automaticamente
-a ogni modifica. Salvo indicazione diversa, ogni aggiornamento incrementa di uno
-la versione patch (per esempio, da 0.3.0 a 0.3.1).
+con la versione piu recente in alto. README e changelog vengono aggiornati dopo
+che l'utente conferma che il task e corretto. La versione del changelog resta
+invariata, salvo richiesta esplicita dell'utente.
 Ogni voce indica versione, data e novita rispetto alla precedente;
 la prima versione, 0.1.0, riepiloga il prototipo esistente.
 I lavori futuri restano nelle checklist TODO di questo README.
@@ -134,6 +133,7 @@ prima di Play e salvarla; il sistema riutilizza quello presente.
 | Input | Azione |
 | --- | --- |
 | WASD / frecce | Sposta la camera |
+| P | Attiva/disattiva la pausa; riprendendo torna all'ultima velocita selezionata |
 | Tasto centrale + trascinamento | Trascina la visuale |
 | Rotella | Zoom sul punto sotto il cursore |
 | Clic sinistro su un soldato | Seleziona e mostra la scheda |
@@ -221,8 +221,9 @@ Il giorno aumenta a mezzanotte; la prima arriva dopo 25 minuti, perche si parte
 dalle 09:00. Dopo 40 minuti si raggiunge il Giorno 2, ore 09:00.
 
 Il tempo segue `Time.deltaTime`: rispetta pausa e velocita della simulazione.
-I pulsanti 1x, 2x, 5x e 10x sotto l'orologio accelerano insieme orologio, movimento
-dei soldati e sistemi che usano il tempo scalato.
+I pulsanti 0x, 1x, 2x, 5x e 10x sotto l'orologio impostano pausa o velocita;
+0x ferma la simulazione. Anche P attiva/disattiva la pausa e, alla ripresa,
+resta selezionata l'ultima velocita attiva. Il movimento della camera resta disponibile.
 Rigenerare la mappa riporta anche l'orologio al Giorno 1, ore 09:00.
 Per ora il ciclo non modifica illuminazione, velocita di consumo dei bisogni,
 durata dei job o preparazione del rancio. I loro tempi esistenti restano invariati.
@@ -304,9 +305,9 @@ Le durate sono generate con il seed dei soldati e restano costanti nella
 sessione, senza alterare anagrafica, skill e altri stati generati.
 Il consumo avviene sia da fermi sia in marcia o al lavoro e segue la velocita
 della simulazione. Usa il tempo scalato Unity (`Time.deltaTime`): a velocita 1x
-un secondo reale corrisponde a un secondo di gioco, `Time.timeScale = 0` sospende
-il consumo. I pulsanti 1x, 2x, 5x e 10x sotto l'orologio cambiano la velocita;
-un controllo di pausa dedicato non e ancora disponibile.
+un secondo reale corrisponde a un secondo di gioco; pausa 0x sospende il consumo.
+I pulsanti 0x, 1x, 2x, 5x e 10x sotto l'orologio cambiano la velocita; P attiva
+e disattiva la pausa.
 
 Le barre si svuotano gradualmente e cambiano da verde a rosso. I valori
 visualizzati sono arrotondati, mentre il consumo mantiene la precisione
@@ -476,11 +477,15 @@ Per aggiornare altre copie usare **No Man's Ground > Update Map Prototype
 - Premere **T** o **Scava**. Il trascinamento sinistro mostra un'anteprima azzurra;
   al rilascio designa una linea tra partenza e arrivo, non un rettangolo.
   Le linee diagonali sono collegate a otto direzioni. Un clic designa una sola cella.
+- Se la linea attraversa una cella con un albero, viene accodato anche il job di
+  taglio: prima si rimuove l'albero, poi il job scava la stessa cella. Lo scavo
+  resta in attesa finche il taglio non e completato.
 - Le celle gialle sono lavori pendenti; il colore tende al verde durante lo scavo.
   Duplicati, celle gia scavate, bloccate o fuori mappa non generano altri lavori.
   Il rilascio fuori mappa o sopra la UI scarta il trascinamento.
 - **X** o **Annulla scavi** attiva una modalita analoga, con anteprima rossa,
   che rimuove i lavori di scavo o installazione scala lungo la linea.
+  Sulla cella con albero annulla insieme il taglio associato e lo scavo.
   Le trincee e le scale completate non vengono rimosse.
 - **Esc** o **destro** esce dalla modalita; quel clic non genera un ordine di marcia.
   In queste modalita il sinistro non cambia il soldato selezionato.
@@ -667,6 +672,13 @@ il personaggio aggiuntivo precedentemente riservato alla cucina.
 | Costruttore | Martello da Costruzione | Costruisce pareti, porte e scale designate. |
 | Cuoco | Nessuno | Prepara e distribuisce rancio e rifornisce le borracce alla consegna. |
 
+Quando e selezionato **Trasportatore**, sotto il menu compare il checkbox
+**Trasporto Automatico**, inizialmente disattivato e salvato per singolo soldato.
+Se attivo, il trasportatore raccoglie gli item presenti nelle celle esplorate,
+incluse le categorie diverse da Resource, e li consegna al deposito. Serve un
+deposito disponibile. Senza l'opzione, raccoglie soltanto le risorse designate
+manualmente come prima.
+
 Al cambio compito, il soldato raggiunge fisicamente una cella libera del
 **deposito degli utensili**, restituisce i vecchi tool e prende quello nuovo,
 se richiesto. Il prelievo non avviene a distanza. Le borracce e le risorse
@@ -690,9 +702,11 @@ ha un solo cuoco operativo; eventuali altri Cuochi restano di riserva. Lasciando
 il compito, il cuoco termina la razione in preparazione o gestisce il carico
 prima del cambio; scorte e progresso della cucina non vengono azzerati.
 
-I compiti lavorano sulle designazioni del giocatore, non scelgono automaticamente
-alberi o aree da scavare. La rigenerazione ripristina tutti a Trasportatore,
-senza utensili personali e con una borraccia piena.
+I compiti lavorano sulle designazioni del giocatore: nessuno sceglie
+automaticamente alberi o aree da scavare. La raccolta automatica del
+Trasportatore riguarda soltanto gli item gia a terra. La rigenerazione ripristina
+tutti a Trasportatore, con trasporto automatico disattivato, senza utensili
+personali e con una borraccia piena.
 API: `SoldierData.Task`, `SoldierView.RequestTask(task)`, `RequestedTask`,
 `TaskReady` e `TaskStatus`. `SoldierData.Profession` resta un dato iniziale,
 non limita l'assegnazione dei compiti.

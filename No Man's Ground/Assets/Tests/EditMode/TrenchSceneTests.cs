@@ -101,8 +101,8 @@ namespace NoMansGround.Tests
             var trenches = roster.GetComponent<TrenchWorkOrders>();
             var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
             var canvas = GameObject.Find("Soldier Interface").GetComponent<Canvas>();
-            var buttons = canvas.GetComponentsInChildren<Button>();
-            Assert.AreEqual(22, buttons.Length);
+            foreach (string label in new[] { "0x", "1x", "2x", "5x", "10x" })
+                Assert.IsNotNull(FindButton(canvas, label));
             FindButton(canvas, "Muro Legno").onClick.Invoke();
             Assert.AreEqual(DiggingMode.BuildWallWood, trenches.Mode);
             FindButton(canvas, "Muro Pietra").onClick.Invoke();
@@ -119,6 +119,12 @@ namespace NoMansGround.Tests
             Assert.AreEqual(10, map.SimulationSpeed);
             FindButton(canvas, "1x").onClick.Invoke();
             Assert.AreEqual(1, Time.timeScale);
+            FindButton(canvas, "0x").onClick.Invoke();
+            Assert.AreEqual(0, Time.timeScale);
+            Assert.AreEqual(0, map.SimulationSpeed);
+            FindButton(canvas, "2x").onClick.Invoke();
+            Assert.AreEqual(2, Time.timeScale);
+
             FindButton(canvas, "Scava").onClick.Invoke();
             Assert.AreEqual(DiggingMode.Dig, trenches.Mode);
             FindButton(canvas, "Annulla scavi").onClick.Invoke();

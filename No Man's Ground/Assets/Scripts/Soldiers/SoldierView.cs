@@ -33,6 +33,10 @@ namespace NoMansGround.Soldiers
         public bool IsReturningTaskTool { get; internal set; }
         public bool IsChangingTaskEquipment { get; internal set; }
         public bool IsEvacuatingBuilding { get; internal set; }
+        public bool AutomaticTransportEnabled { get; private set; }
+        public bool CanAutoTransport => isActiveAndEnabled && Data.Task == SoldierTask.Hauler
+            && AutomaticTransportEnabled && Duty == SoldierDuty.Work && !GuardRequested
+            && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue;
         public string TaskStatus { get; private set; } = "Pronto";
         public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
             && !GuardRequested && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue
@@ -98,6 +102,14 @@ namespace NoMansGround.Soldiers
                 SetTaskStatus(HasWorkAssignment && !IsChangingTaskEquipment ? "Cambio a fine lavoro" : "In attesa del deposito");
             }
             TaskChanged?.Invoke();
+            MovementChanged?.Invoke();
+        }
+
+        public void SetAutomaticTransport(bool enabled)
+        {
+            if (AutomaticTransportEnabled == enabled)
+                return;
+            AutomaticTransportEnabled = enabled;
             MovementChanged?.Invoke();
         }
 

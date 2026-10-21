@@ -25,6 +25,7 @@ namespace NoMansGround.Soldiers
         public ItemType? CollectedItem { get; internal set; }
         public ItemType? Material { get; internal set; }
         public bool IsBuildClearance { get; internal set; }
+        public bool IsAutomaticTransport { get; internal set; }
         internal SpriteRenderer Marker;
 
         internal TrenchJob(Vector2Int cell, TrenchJobKind kind = TrenchJobKind.Dig)
@@ -590,21 +591,33 @@ namespace NoMansGround.Soldiers
 
         public bool Designate(Vector2Int cell)
         {
+            bool hasTree = map.Data != null && map.Data.Contains(cell) && map.Data.HasTree(cell);
             if (!isActiveAndEnabled || map.Data == null || !map.Data.Fog.IsExplored(cell) || !map.Data.IsWalkable(cell)
-                || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.IsTunnel(cell) || map.Data.HasTree(cell)
+                || map.Data[cell.x, cell.y] == TerrainKind.Trench || map.Data.IsTunnel(cell)
                 || map.Data.TryGetZone(cell, out _) || map.Data.GetBuilding(cell) != null
                 || map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell)
-                || jobs.Exists(job => job.Cell == cell))
+                || jobs.Exists(job => job.Cell == cell
+                    && (job.Kind != TrenchJobKind.CutTree || !hasTree)))
             {
                 Notify("Scavo non valido: fuori mappa,\nbloccato o gia presente.");
                 return false;
             }
+            if (hasTree && !jobs.Exists(job => job.Cell == cell && job.Kind == TrenchJobKind.CutTree))
+                CreateTreeCutJob(cell);
             var job = new TrenchJob(cell);
             job.Marker = CreateMarker(cell, new Color(1f, 0.75f, 0.15f, 0.55f), "Dig designation");
             jobs.Add(job);
             retryTimer = 0f;
             Changed?.Invoke();
             return true;
+        }
+
+        private TrenchJob CreateTreeCutJob(Vector2Int cell)
+        {
+            var job = new TrenchJob(cell, TrenchJobKind.CutTree);
+            job.Marker = CreateMarker(cell, new Color(0.76f, 0.49f, 0.2f, 0.7f), "Tree cut designation");
+            jobs.Add(job);
+            return job;
         }
 
         public int DesignateTree(Vector2Int from, Vector2Int to)
@@ -637,9 +650,7 @@ namespace NoMansGround.Soldiers
                 Notify("Taglio non valido: serve un albero senza job gia presente.");
                 return false;
             }
-            var job = new TrenchJob(cell, TrenchJobKind.CutTree);
-            job.Marker = CreateMarker(cell, new Color(0.76f, 0.49f, 0.2f, 0.7f), "Tree cut designation");
-            jobs.Add(job);
+            CreateTreeCutJob(cell);
             retryTimer = 0f;
             Changed?.Invoke();
             return true;
@@ -729,14 +740,17 @@ namespace NoMansGround.Soldiers
                 Notify("Lavori stanza annullati; parti costruite conservate.");
                 return true;
             }
-            int index = jobs.FindIndex(job => job.Cell == cell);
-            if (index < 0)
+            List<TrenchJob> cellJobs = jobs.FindAll(job => job.Cell == cell);
+            if (cellJobs.Count == 0)
             {
                 Notify("Nessuno scavo da annullare.");
                 return false;
             }
-            Release(jobs[index]);
-            jobs.RemoveAt(index);
+            foreach (TrenchJob job in cellJobs)
+            {
+                Release(job);
+                jobs.Remove(job);
+            }
             if (map.Data?.GetTunnelDoor(cell) != null)
             {
                 map.Data.CancelTunnelDoor(cell);
@@ -795,7 +809,8 @@ namespace NoMansGround.Soldiers
                     if (!job.CollectedItem.HasValue)
                     {
                         if (!map.Data.TryGetGroundItem(job.Cell, out ItemType item)
-                            || (!job.IsBuildClearance && ItemCatalog.Get(item).Category != ItemCategory.Resource))
+                            || (!job.IsBuildClearance && !job.IsAutomaticTransport
+                                && ItemCatalog.Get(item).Category != ItemCategory.Resource))
                         {
                             Release(job);
                             jobs.RemoveAt(i);
@@ -984,6 +999,7 @@ namespace NoMansGround.Soldiers
             retryTimer -= deltaTime;
             if (retryTimer <= 0f)
             {
+                changed |= UpdateAutomaticTransportJobs();
                 foreach (TrenchJob job in jobs)
                     if (job.Worker == null)
                         changed |= Assign(job);
@@ -995,6 +1011,13 @@ namespace NoMansGround.Soldiers
 
         private bool Assign(TrenchJob job)
         {
+            if (job.Kind == TrenchJobKind.Dig && map.Data.HasTree(job.Cell))
+            {
+                const string waiting = "In attesa del taglio dell'albero";
+                bool changed = job.Status != waiting;
+                job.Status = waiting;
+                return changed;
+            }
             if ((job.Kind == TrenchJobKind.BuildWall || job.Kind == TrenchJobKind.BuildDoor)
                 && map.Data.TryGetGroundItem(job.Cell, out _))
             {
@@ -1006,7 +1029,9 @@ namespace NoMansGround.Soldiers
 
             var available = new List<SoldierView>();
             foreach (SoldierView soldier in roster.Soldiers)
-                if (soldier != null && soldier.CanTakeEngineeringWork && SoldierTasks.Allows(soldier.Data.Task, job.Kind))
+                if (soldier != null && (job.IsAutomaticTransport
+                    ? soldier.CanAutoTransport : soldier.CanTakeEngineeringWork)
+                    && SoldierTasks.Allows(soldier.Data.Task, job.Kind))
                     available.Add(soldier);
             if (available.Count == 0)
             {
@@ -1077,6 +1102,46 @@ namespace NoMansGround.Soldiers
                 : job.Kind == TrenchJobKind.CutTree ? "Taglio albero"
                 : job.Kind == TrenchJobKind.MineRock ? "Mina roccia" : "Installazione scala";
             return true;
+        }
+
+        private bool UpdateAutomaticTransportJobs()
+        {
+            bool hasAutomaticHauler = false;
+            foreach (SoldierView soldier in roster.Soldiers)
+                if (soldier != null && soldier.CanAutoTransport)
+                {
+                    hasAutomaticHauler = true;
+                    break;
+                }
+
+            bool changed = false;
+            for (int i = jobs.Count - 1; i >= 0; i--)
+            {
+                TrenchJob job = jobs[i];
+                if (!job.IsAutomaticTransport || job.CollectedItem.HasValue || hasAutomaticHauler)
+                    continue;
+                Release(job);
+                jobs.RemoveAt(i);
+                changed = true;
+            }
+
+            if (!hasAutomaticHauler || !map.Data.HasStorageArea)
+                return changed;
+
+            for (int y = 0; y < map.Data.Height; y++)
+                for (int x = 0; x < map.Data.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!map.Data.Fog.IsExplored(cell) || !map.Data.TryGetGroundItem(cell, out _)
+                        || jobs.Exists(job => job.Cell == cell || job.GroundPickupCell == cell))
+                        continue;
+                    jobs.Add(new TrenchJob(cell, TrenchJobKind.CollectItem)
+                    {
+                        IsAutomaticTransport = true
+                    });
+                    changed = true;
+                }
+            return changed;
         }
 
         private bool AssignCollection(TrenchJob job, List<SoldierView> available)

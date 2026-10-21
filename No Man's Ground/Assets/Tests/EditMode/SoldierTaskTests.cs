@@ -101,6 +101,33 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void AutomaticTransportCollectsGroundToolsOnlyWhenEnabled()
+        {
+            SoldierView hauler = roster.Soldiers[0];
+            var cell = new Vector2Int(51, 10);
+            map.Data.SetTree(cell, false);
+            map.Data.SetWalkable(cell, true);
+            map.Data.AddGroundItem(cell, ItemType.Shovel);
+            int storedShovels = map.Data.StorageStockpile.Count(ItemType.Shovel);
+
+            Assert.IsFalse(hauler.AutomaticTransportEnabled);
+            orders.Tick(0.5f);
+            Assert.Zero(orders.Jobs.Count);
+
+            hauler.SetAutomaticTransport(true);
+            for (int step = 0; step < 20 && map.Data.StorageStockpile.Count(ItemType.Shovel) == storedShovels; step++)
+            {
+                foreach (SoldierView soldier in roster.Soldiers)
+                    soldier.AdvanceMovement(1000f);
+                orders.Tick(0.5f);
+            }
+
+            Assert.IsFalse(map.Data.TryGetGroundItem(cell, out _));
+            Assert.AreEqual(storedShovels + 1, map.Data.StorageStockpile.Count(ItemType.Shovel));
+            Assert.Zero(orders.Jobs.Count);
+        }
+
+        [Test]
         public void AnySoldierCanBecomeCookAndChangingCookPreservesKitchenStock()
         {
             SoldierView first = roster.Soldiers[0];
@@ -272,7 +299,21 @@ namespace NoMansGround.Tests
                 Assert.IsNotNull(selector);
                 Assert.AreEqual(6, selector.options.Count);
                 Assert.AreEqual("Trasportatore", selector.captionText.text);
+                Toggle automaticTransport = (Toggle)typeof(SoldierDetailsPanel)
+                    .GetField("automaticTransportToggle", flags).GetValue(panel);
+                GameObject automaticTransportRow = (GameObject)typeof(SoldierDetailsPanel)
+                    .GetField("automaticTransportRow", flags).GetValue(panel);
+                Assert.IsFalse(automaticTransport.isOn);
+                Assert.IsTrue(automaticTransportRow.activeSelf);
+                automaticTransport.isOn = true;
+                Assert.IsTrue(roster.Soldiers[0].AutomaticTransportEnabled);
+                panel.Select(roster.Soldiers[1]);
+                Assert.IsFalse(automaticTransport.isOn);
+                Assert.IsTrue(automaticTransportRow.activeSelf);
+                panel.Select(roster.Soldiers[0]);
+                Assert.IsTrue(automaticTransport.isOn);
                 selector.value = (int)SoldierTask.Miner;
+                Assert.IsFalse(automaticTransportRow.activeSelf);
                 Assert.AreEqual(SoldierTask.Miner, roster.Soldiers[0].RequestedTask);
                 Assert.IsFalse(roster.Soldiers[1].RequestedTask.HasValue);
                 panel.Select(roster.Soldiers[1]);
