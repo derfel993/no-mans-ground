@@ -284,7 +284,7 @@ dal giocatore attraverso il menu Compito nella scheda Info.
 Il primo viene selezionato all'avvio; il contorno giallo indica la selezione.
 Il pannello del soldato compare in basso a sinistra e offre quattro tab:
 **Info** (identita, lavoro/guardia, compito, stato della dotazione e carico massimo), **Stato**
-(fame, sete, bisogni fisiologici, termico, stress, paura e stanchezza),
+(fame, sete, bisogni fisiologici, termico, stress, paura, stanchezza e salute),
 **Skill** e **Inventario**. Il tab Inventario mostra gli utensili, le risorse
 trasportate e la borraccia personale, piena o vuota, aggiornandosi dopo bevuta
 e rifornimento. Il pannello laterale destro mantiene orologio,
@@ -315,10 +315,58 @@ Lo stress cresce con la fame sotto 35, senza impedire il lavoro.
 | Stress | 0 rilassato, 100 stress massimo |
 | Paura | 0 nessuna paura, 100 paura massima |
 | Stanchezza | 0 riposato, 100 esausto |
+| Salute | 100 salute piena, 0 morto |
 
 La temperatura e uno stato relativo, non una misura in gradi Celsius.
 La barra termica indica l'intensita del disagio, blu per freddo e arancione per caldo.
 Il coraggio e una skill distinta dalla paura attuale.
+
+### Salute e morte
+
+Ogni soldato, incluso il cuoco, parte con **Salute 100/100**. La barra nella
+scheda **Stato** si aggiorna immediatamente quando subisce danni e passa
+gradualmente dal verde al rosso. A **0 il soldato muore definitivamente**:
+non puo piu muoversi, lavorare, ricevere ordini o contribuire alla fog of war.
+Viene rimosso dalla squadra e dai conteggi Guardia/Lavoro; se era selezionato,
+la scheda viene deselezionata. Le celle gia esplorate restano memorizzate.
+
+I lavori non conclusi restano in coda per gli altri soldati, senza annullare
+gli incarichi dei sopravvissuti. Se il soldato stava consegnando una risorsa
+gia raccolta, la consegna viene rimossa e la risorsa resta recuperabile a terra.
+L'inventario viene rilasciato sulle celle libere vicine, un oggetto per cella;
+se non c'e spazio, il resto viene conservato nel deposito. Anche le borracce
+piene e vuote possono essere disegnate a terra.
+
+Se muore il cuoco, viveri e razioni in trasporto vengono conservati e puo
+subentrare un altro cuoco disponibile. I morti non ricevono rancio o acqua.
+Non sono ancora implementate cure o rigenerazione automatica della salute.
+**Regenerate Map** ricrea la squadra con salute 100/100.
+
+### Danni da fame e sete
+
+Quando una riserva arriva a **0**, la salute diminuisce continuamente:
+
+| Condizione | Perdita di salute per giorno di gioco |
+| --- | --- |
+| Fame a 0 | 5 punti |
+| Sete a 0 | 30 punti |
+| Fame e sete entrambe a 0 | 35 punti |
+
+Il giorno di riferimento e quello dell'orologio: **2400 secondi di simulazione**,
+pari a **40 minuti reali a velocita 1x**, esclusa la pausa. Il danno conserva
+la precisione frazionaria, non viene applicato a scatti a mezzanotte e rispetta
+pausa e accelerazione. Se una riserva si esaurisce durante un aggiornamento,
+viene conteggiato soltanto il tempo successivo all'esaurimento.
+
+Mangiare interrompe il danno da fame e bere quello da sete, ma **non recuperano
+la salute gia persa**. La bevuta automatica dalla borraccia viene considerata
+prima di applicare danni da disidratazione. I bisogni fisiologici a zero non
+causano danni alla salute. Finche e vivo, il soldato puo continuare a muoversi
+e lavorare anche con fame o sete esaurite.
+
+I **63 test mirati** dei dati e della salute sono superati: verificano ratei,
+soglie di esaurimento, aggiornamenti a 60 frame al secondo, pausa, velocita,
+borracce, morte e integrazione con squadra, lavori, cucina, fog of war e UI.
 
 ### Stanchezza da movimento e lavoro
 
@@ -361,14 +409,18 @@ visualizzati sono arrotondati, mentre il consumo mantiene la precisione
 frazionaria e non scende mai sotto zero. La fame torna a 100 quando il cuoco
 consegna una razione durante il giro delle 13. La sete torna a 100 bevendo dalla
 borraccia sotto il 20%. Non sono ancora presenti servizi igienici o interruzioni
-automatiche dei lavori. La rigenerazione ripristina le tre riserve a 100,
+preventive dei lavori per soddisfare i bisogni; la morte li interrompe.
+La rigenerazione ripristina le tre riserve e la salute a 100,
 ricrea gli stessi rate e assegna una nuova borraccia piena a ogni personaggio.
 
 `SoldierNeeds` espone le durate `HungerDepletionSeconds`,
 `ThirstDepletionSeconds`, `PhysicalNeedsDepletionSeconds` e i rispettivi
 `ConsumptionPerSecond`; `AdvanceTime(gameSeconds)` applica il consumo.
-`SoldierView` avanza i bisogni durante Play e il pannello si aggiorna tramite
-l'evento `Changed`, anche quando il soldato e fermo.
+`SoldierData.AdvanceTime(gameSeconds)` coordina consumo dei bisogni, bevuta
+automatica e danni alla salute; `SoldierView` lo richiama durante Play con
+`Time.deltaTime`. Il pannello si aggiorna tramite gli eventi `Changed`
+e `HealthChanged`, anche quando il soldato e fermo. `TakeDamage(amount)`
+applica danni diretti; `IsAlive` indica se e vivo e `Died` notifica la morte.
 
 ### Borracce e acqua
 
@@ -1041,6 +1093,9 @@ Rigenerare la mappa elimina progetti e costruzioni.
 
 ### TODO stati e inventario
 
+- [x] **Salute e morte**: salute iniziale 100, morte a zero e rilascio degli incarichi.
+- [x] **Danni da riserve esaurite**: fame -5 e sete -30 punti salute per giorno;
+  effetti cumulativi, interrotti da cibo e acqua senza guarigione.
 - [ ] **Termico**: sostituire il valore statico con variazioni ambientali e
   gestione di caldo/freddo.
 - [ ] **Stress**: aggiungere recupero e gestione degli effetti; al momento cresce
@@ -1060,4 +1115,5 @@ vuota 0,5 kg; Martello da Costruzione 1,5 kg.
 
 Priorita modificabili dei lavori, costruzioni e rifornimenti, soddisfacimento
 dei bisogni, evoluzione degli altri stati, copertura e combattimento.
-Anche con riserve a zero i soldati possono ancora muoversi e lavorare.
+Anche con riserve a zero i soldati possono ancora muoversi e lavorare finche
+sono vivi; fame e sete esaurite riducono la salute fino alla morte.

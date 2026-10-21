@@ -21,6 +21,7 @@ namespace NoMansGround.Soldiers
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
         public event Action Rebuilt;
         public event Action DutiesChanged;
+        public event Action<SoldierView> SoldierDied;
         public int GuardCount
         {
             get
@@ -108,6 +109,7 @@ namespace NoMansGround.Soldiers
                 if (soldier == null)
                     continue;
                 soldier.DutyChanged -= NotifyDutiesChanged;
+                soldier.Died -= HandleSoldierDied;
                 soldier.gameObject.SetActive(false);
                 if (Application.isPlaying)
                     Destroy(soldier.gameObject);
@@ -143,10 +145,62 @@ namespace NoMansGround.Soldiers
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
                 soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites);
                 soldier.DutyChanged += NotifyDutiesChanged;
+                soldier.Died += HandleSoldierDied;
                 soldiers.Add(soldier);
             }
             Rebuilt?.Invoke();
             DutiesChanged?.Invoke();
+        }
+
+        private void HandleSoldierDied(SoldierView soldier)
+        {
+            if (!soldiers.Remove(soldier))
+                return;
+            soldier.DutyChanged -= NotifyDutiesChanged;
+            soldier.Died -= HandleSoldierDied;
+            if (map != null && map.Data != null && map.Data.Contains(soldier.Cell))
+            {
+                foreach (ItemType item in Enum.GetValues(typeof(ItemType)))
+                {
+                    int count = soldier.Data.Inventory.Count(item);
+                    if (count == 0 || !soldier.Data.Inventory.TryTake(item, count))
+                        continue;
+                    for (int index = 0; index < count; index++)
+                        if (!TryDropItem(soldier.Cell, item))
+                        {
+                            map.Data.StorageStockpile.Add(item, count - index);
+                            break;
+                        }
+                }
+                if (mapView != null)
+                    mapView.RefreshGroundItems(map.Data);
+            }
+            SoldierDied?.Invoke(soldier);
+            DutiesChanged?.Invoke();
+            if (Application.isPlaying)
+                Destroy(soldier.gameObject);
+            else
+                DestroyImmediate(soldier.gameObject);
+        }
+
+        private bool TryDropItem(Vector2Int origin, ItemType item)
+        {
+            for (int radius = 0; radius < map.Data.Width + map.Data.Height; radius++)
+                for (int offsetY = -radius; offsetY <= radius; offsetY++)
+                {
+                    int offsetX = radius - Mathf.Abs(offsetY);
+                    for (int side = 0; side < (offsetX == 0 ? 1 : 2); side++)
+                    {
+                        var cell = new Vector2Int(origin.x + (side == 0 ? -offsetX : offsetX), origin.y + offsetY);
+                        if (!map.Data.IsWalkable(cell) || map.Data.IsMineable(cell) || map.Data.HasTree(cell)
+                            || map.Data.IsStorageCell(cell) || map.Data.IsPantryCell(cell)
+                            || map.Data.TryGetGroundItem(cell, out _))
+                            continue;
+                        map.Data.AddGroundItem(cell, item);
+                        return true;
+                    }
+                }
+            return false;
         }
 
         private static Vector2Int FindSpawnCell(MapData data, Vector2Int desired, HashSet<Vector2Int> occupied)

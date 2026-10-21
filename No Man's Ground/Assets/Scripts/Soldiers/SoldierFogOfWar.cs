@@ -50,13 +50,21 @@ namespace NoMansGround.Soldiers
         {
             Unsubscribe();
             if (map != null) map.Generated += HandleGenerated;
-            if (roster != null) roster.Rebuilt += Refresh;
+            if (roster != null)
+            {
+                roster.Rebuilt += Refresh;
+                roster.SoldierDied += HandleSoldierDied;
+            }
         }
 
         private void Unsubscribe()
         {
             if (map != null) map.Generated -= HandleGenerated;
-            if (roster != null) roster.Rebuilt -= Refresh;
+            if (roster != null)
+            {
+                roster.Rebuilt -= Refresh;
+                roster.SoldierDied -= HandleSoldierDied;
+            }
         }
 
         private void OnDisable()
@@ -70,6 +78,11 @@ namespace NoMansGround.Soldiers
         }
 
         private void HandleGenerated(MapData data)
+        {
+            Refresh();
+        }
+
+        private void HandleSoldierDied(SoldierView soldier)
         {
             Refresh();
         }

@@ -9,6 +9,217 @@ namespace NoMansGround.Tests
 {
     public sealed class SoldierDataTests
     {
+        [TestCase(0f, 100f, 600f, 98.75f)]
+        [TestCase(100f, 0f, 600f, 92.5f)]
+        [TestCase(0f, 0f, 600f, 91.25f)]
+        [TestCase(100f, 100f, 600f, 100f)]
+        [TestCase(10f, 100f, 240f, 99.75f)]
+        [TestCase(100f, 10f, 240f, 98.5f)]
+        [TestCase(10f, 10f, 240f, 98.25f)]
+        [TestCase(10f, 10f, 120f, 100f)]
+        public void EmptyReservesDamageHealthOnlyAfterTheyRunOut(
+            float hunger, float thirst, float seconds, float expectedHealth)
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi",
+                new SoldierNeeds(hunger, thirst, 100, 0, 0, 0, 0), new[] { 1, 1, 1, 1, 1 });
+            Assert.IsTrue(soldier.Inventory.TryTake(ItemType.FullCanteen, 1));
+            soldier.AdvanceTime(seconds);
+            Assert.AreEqual(expectedHealth, soldier.Health, 0.0001f);
+        }
+
+        [TestCase(true, false, 95f)]
+        [TestCase(false, true, 70f)]
+        [TestCase(true, true, 65f)]
+        public void DailyStarvationAndDehydrationRatesUseTheGameClockDay(
+            bool starving, bool dehydrated, float expectedHealth)
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi",
+                new SoldierNeeds(starving ? 0 : 100, dehydrated ? 0 : 100, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            soldier.Inventory.TryTake(ItemType.FullCanteen, 1);
+            for (int step = 0; step < 24; step++)
+            {
+                if (!starving) soldier.Needs.EatRation();
+                if (!dehydrated) soldier.Needs.DrinkWater();
+                soldier.AdvanceTime((float)(GameClock.SecondsPerDay / 24d));
+            }
+            Assert.AreEqual(expectedHealth, soldier.Health, 0.0001f);
+        }
+
+        [Test]
+        public void EatingAndDrinkingStopDamageWithoutHealingAndZeroTimeDoesNotDamage()
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi",
+                new SoldierNeeds(0, 0, 100, 0, 0, 0, 0), new[] { 1, 1, 1, 1, 1 });
+            soldier.Inventory.TryTake(ItemType.FullCanteen, 1);
+            soldier.AdvanceTime(600f);
+            Assert.AreEqual(91.25f, soldier.Health);
+            soldier.AdvanceTime(0f);
+            Assert.AreEqual(91.25f, soldier.Health);
+            soldier.Needs.EatRation();
+            soldier.Needs.DrinkWater();
+            soldier.AdvanceTime(100f);
+            Assert.AreEqual(91.25f, soldier.Health);
+        }
+
+        [Test]
+        public void CanteenPreventsPrematureDehydrationAndLargeUpdatesMatchSmallUpdates()
+        {
+            var single = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            var stepped = new SoldierData(1, "Luigi", "Verdi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            single.AdvanceTime(2400f);
+            for (int step = 0; step < 2400; step++)
+                stepped.AdvanceTime(1f);
+            Assert.AreEqual(94.5f, single.Health, 0.0001f);
+            Assert.AreEqual(single.Health, stepped.Health, 0.0001f);
+            Assert.AreEqual(1, single.Inventory.Count(ItemType.EmptyCanteen));
+        }
+
+        [Test]
+        public void FrameSizedDamagePreservesFractionalHealthAndDeadSoldiersStopUpdating()
+        {
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(0, 0, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            soldier.Inventory.TryTake(ItemType.FullCanteen, 1);
+            for (int frame = 0; frame < 144000; frame++)
+                soldier.AdvanceTime(1f / 60f);
+            Assert.AreEqual(65f, soldier.Health, 0.0001f);
+            int deaths = 0;
+            soldier.Died += () => deaths++;
+            soldier.AdvanceTime((float)GameClock.SecondsPerDay * 2f);
+            Assert.Zero(soldier.Health);
+            Assert.AreEqual(1, deaths);
+            float stress = soldier.Needs.Stress;
+            soldier.AdvanceTime(100f);
+            Assert.AreEqual(stress, soldier.Needs.Stress);
+            Assert.AreEqual(1, deaths);
+        }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(5)]
+        [TestCase(10)]
+        public void DamageFollowsTheSameScaledTimeAsTheClock(int simulationSpeed)
+        {
+            var clock = new GameClock();
+            var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(0, 0, 100, 0, 0, 0, 0),
+                new[] { 1, 1, 1, 1, 1 });
+            soldier.Inventory.TryTake(ItemType.FullCanteen, 1);
+            for (int step = 0; step < 100; step++)
+            {
+                clock.AdvanceTime(simulationSpeed);
+                soldier.AdvanceTime(simulationSpeed);
+            }
+            Assert.AreEqual(100d - 35d * clock.ElapsedSeconds / GameClock.SecondsPerDay,
+                soldier.Health, 0.0001d);
+        }
+
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        public void InvalidSoldierTimeDoesNotDamageHealth(float seconds)
+        {
+            SoldierData soldier = SoldierGenerator.Generate(1, 1917)[0];
+            Assert.Throws<ArgumentOutOfRangeException>(() => soldier.AdvanceTime(seconds));
+            Assert.AreEqual(100f, soldier.Health);
+        }
+
+        [Test]
+        public void HealthStartsAtOneHundredAndLethalDamageKillsExactlyOnce()
+        {
+            SoldierData soldier = SoldierGenerator.Generate(1, 1917)[0];
+            int healthChanges = 0;
+            int deaths = 0;
+            soldier.HealthChanged += () => healthChanges++;
+            soldier.Died += () => deaths++;
+            Assert.AreEqual(100f, soldier.Health);
+            Assert.IsTrue(soldier.IsAlive);
+            soldier.TakeDamage(0f);
+            Assert.Zero(healthChanges);
+            soldier.TakeDamage(25f);
+            Assert.AreEqual(75f, soldier.Health);
+            Assert.IsTrue(soldier.IsAlive);
+            soldier.TakeDamage(100f);
+            Assert.Zero(soldier.Health);
+            Assert.IsFalse(soldier.IsAlive);
+            Assert.AreEqual(2, healthChanges);
+            Assert.AreEqual(1, deaths);
+            soldier.TakeDamage(100f);
+            Assert.AreEqual(2, healthChanges);
+            Assert.AreEqual(1, deaths);
+            Assert.IsFalse(soldier.TryAddToInventory(ItemType.Wood));
+            Assert.IsFalse(soldier.TryDrinkWater());
+            float hunger = soldier.Needs.Hunger;
+            soldier.ReceiveRation();
+            Assert.AreEqual(hunger, soldier.Needs.Hunger);
+        }
+
+        [TestCase(-1f)]
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        [TestCase(float.NegativeInfinity)]
+        public void InvalidDamageDoesNotChangeHealth(float amount)
+        {
+            SoldierData soldier = SoldierGenerator.Generate(1, 1917)[0];
+            Assert.Throws<ArgumentOutOfRangeException>(() => soldier.TakeDamage(amount));
+            Assert.AreEqual(100f, soldier.Health);
+            Assert.IsTrue(soldier.IsAlive);
+        }
+
+        [Test]
+        public void DeathStopsSoldierMovementWorkSelectionAndNewOrders()
+        {
+            var owner = new GameObject("Health test", typeof(SpriteRenderer), typeof(SoldierView));
+            var grid = new GameObject("Grid", typeof(Grid));
+            var ground = new GameObject("Ground", typeof(UnityEngine.Tilemaps.Tilemap), typeof(MapTilemapView));
+            ground.transform.SetParent(grid.transform, false);
+            var texture = new Texture2D(32, 32);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 32, 32), Vector2.one * 0.5f, 32f);
+            try
+            {
+                SoldierData data = SoldierGenerator.Generate(1, 1917)[0];
+                var soldier = owner.GetComponent<SoldierView>();
+                var view = ground.GetComponent<MapTilemapView>();
+                soldier.Initialize(data, Vector2Int.zero, sprite);
+                soldier.SetSelected(true);
+                soldier.RequestDuty(SoldierDuty.Guard);
+                soldier.BeginMove(view, new[] { Vector2Int.zero, Vector2Int.right });
+                Assert.IsTrue(soldier.IsMoving);
+                int deaths = 0;
+                soldier.Died += dead => { Assert.AreSame(soldier, dead); deaths++; };
+                Vector3 position = owner.transform.position;
+                data.TakeDamage(100f);
+                Assert.AreEqual(1, deaths);
+                Assert.IsFalse(owner.activeSelf);
+                Assert.IsFalse(soldier.IsMoving);
+                Assert.IsFalse(soldier.IsSelected);
+                Assert.IsFalse(soldier.HasWorkAssignment);
+                Assert.IsFalse(soldier.IsAvailable);
+                Assert.IsFalse(soldier.CanTakeGuardMove);
+                Assert.IsFalse(soldier.CanTakeEngineeringWork);
+                Assert.IsFalse(soldier.CanAutoTransport);
+                Assert.IsFalse(soldier.RequestDuty(SoldierDuty.Work));
+                soldier.RequestTask(SoldierTask.Cook);
+                Assert.IsNull(soldier.RequestedTask);
+                Assert.Throws<InvalidOperationException>(() =>
+                    soldier.BeginMove(view, new[] { Vector2Int.zero, Vector2Int.right }));
+                soldier.AdvanceMovement(100f);
+                soldier.AdvanceLook(100f);
+                Assert.AreEqual(position, owner.transform.position);
+                Assert.Zero(data.Needs.Fatigue);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                UnityEngine.Object.DestroyImmediate(grid);
+                UnityEngine.Object.DestroyImmediate(sprite);
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
         [Test]
         public void GeneratedSoldiersHaveUniqueItalianIdentitiesAndDeterministicCharacteristics()
         {

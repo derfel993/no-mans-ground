@@ -83,6 +83,9 @@ namespace NoMansGround.Soldiers
         public float HungerConsumptionPerSecond => 100f / HungerDepletionSeconds;
         public float ThirstConsumptionPerSecond => 100f / ThirstDepletionSeconds;
         public float PhysicalNeedsConsumptionPerSecond => 100f / PhysicalNeedsDepletionSeconds;
+        internal double SecondsUntilHungerEmpty => hunger * HungerDepletionSeconds / 100d;
+        internal double SecondsUntilThirstEmpty => thirst * ThirstDepletionSeconds / 100d;
+        internal double SecondsUntilDrinking => Math.Max(0d, (thirst - 20d) * ThirstDepletionSeconds / 100d);
         public float ThermalState { get; }
         public float Stress => (float)stress;
         public bool WaitingForRations => hunger < 35d;
@@ -135,6 +138,11 @@ namespace NoMansGround.Soldiers
         {
             if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)
                 throw new ArgumentOutOfRangeException(nameof(gameSeconds));
+            AdvanceTimePrecisely(gameSeconds);
+        }
+
+        internal void AdvanceTimePrecisely(double gameSeconds)
+        {
             if (gameSeconds == 0f)
                 return;
 
@@ -208,13 +216,20 @@ namespace NoMansGround.Soldiers
     {
         public const float MinimumCarryWeightKg = 20f;
         public const float MaximumCarryWeightKg = 35f;
+        public const float StarvationDamagePerDay = 5f;
+        public const float DehydrationDamagePerDay = 30f;
         private readonly SkillProgress[] skills;
         private float additionalCarryWeightKg;
+        private double health = 100d;
 
         public int Id { get; }
         public string FirstName { get; }
         public string LastName { get; }
         public string FullName => FirstName + " " + LastName;
+        public float Health => (float)health;
+        public bool IsAlive => health > 0d;
+        public event Action HealthChanged;
+        public event Action Died;
         public SoldierNeeds Needs { get; }
         public ItemStockpile Inventory { get; } = new ItemStockpile();
         public float CarryWeightKg => Inventory.TotalWeightKg + additionalCarryWeightKg;
@@ -231,7 +246,54 @@ namespace NoMansGround.Soldiers
             if (count <= 0)
                 throw new ArgumentOutOfRangeException(nameof(count));
             float addedWeight = ItemCatalog.Get(item).WeightKg * count;
-            return CarryWeightKg + addedWeight <= MaxCarryWeightKg + 0.0001f;
+            return IsAlive && CarryWeightKg + addedWeight <= MaxCarryWeightKg + 0.0001f;
+        }
+
+        public void TakeDamage(float amount)
+        {
+            if (!float.IsFinite(amount) || amount < 0f)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+            ApplyDamage(amount);
+        }
+
+        private void ApplyDamage(double amount)
+        {
+            if (!IsAlive || amount == 0f)
+                return;
+            health = Math.Max(0d, health - amount);
+            bool died = !IsAlive;
+            HealthChanged?.Invoke();
+            if (died)
+                Died?.Invoke();
+        }
+
+        public void AdvanceTime(float gameSeconds)
+        {
+            if (!float.IsFinite(gameSeconds) || gameSeconds < 0f)
+                throw new ArgumentOutOfRangeException(nameof(gameSeconds));
+            if (!IsAlive || gameSeconds == 0f)
+                return;
+            TryDrinkWater();
+            double remaining = gameSeconds;
+            double untilDrinking = Needs.SecondsUntilDrinking;
+            if (Inventory.Count(ItemType.FullCanteen) > 0 && remaining > untilDrinking)
+            {
+                AdvanceNeedsAndHealth(untilDrinking);
+                if (!IsAlive)
+                    return;
+                DrinkFromCanteen();
+                remaining -= untilDrinking;
+            }
+            AdvanceNeedsAndHealth(remaining);
+        }
+
+        private void AdvanceNeedsAndHealth(double gameSeconds)
+        {
+            double starvingSeconds = Math.Max(0d, gameSeconds - Needs.SecondsUntilHungerEmpty);
+            double dehydratedSeconds = Math.Max(0d, gameSeconds - Needs.SecondsUntilThirstEmpty);
+            Needs.AdvanceTimePrecisely(gameSeconds);
+            ApplyDamage((starvingSeconds * StarvationDamagePerDay
+                + dehydratedSeconds * DehydrationDamagePerDay) / GameClock.SecondsPerDay);
         }
 
         public bool TryAddToInventory(ItemType item, int count = 1)
@@ -286,7 +348,14 @@ namespace NoMansGround.Soldiers
 
         public bool TryDrinkWater()
         {
-            if (Needs.Thirst >= 20f || !Inventory.TryTake(ItemType.FullCanteen, 1))
+            if (!IsAlive || Needs.Thirst >= 20f)
+                return false;
+            return DrinkFromCanteen();
+        }
+
+        private bool DrinkFromCanteen()
+        {
+            if (!Inventory.TryTake(ItemType.FullCanteen, 1))
                 return false;
             Inventory.Add(ItemType.EmptyCanteen, 1);
             Needs.DrinkWater();
@@ -295,6 +364,8 @@ namespace NoMansGround.Soldiers
 
         public void ReceiveRation()
         {
+            if (!IsAlive)
+                return;
             int emptyCanteens = Inventory.Count(ItemType.EmptyCanteen);
             for (int i = 0; i < emptyCanteens; i++)
             {

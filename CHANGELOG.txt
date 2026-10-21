@@ -29,12 +29,41 @@ Visibilita notturna
 - Consumo dei bisogni, durata dei lavori e rancio non cambiano con la notte;
   sonno e turni automatici non sono ancora implementati.
 
+Salute e morte dei soldati
+- Aggiunta Salute, inizialmente 100/100 per ogni soldato, con barra nella
+  scheda Stato. A zero il soldato muore definitivamente.
+- La morte interrompe movimento e incarichi, rimuove il soldato dalla squadra,
+  dai conteggi e dalla visuale condivisa e ne annulla la selezione.
+- I lavori non conclusi restano disponibili agli altri soldati; le consegne
+  di risorse gia raccolte vengono rilasciate senza duplicare gli oggetti.
+- L'inventario cade sulle celle libere vicine; se non c'e spazio, gli oggetti
+  rimasti vengono conservati nel deposito. Aggiunto il disegno a terra delle
+  borracce piene e vuote.
+- La morte del cuoco conserva i viveri e il rancio in trasporto e permette
+  il subentro di un altro cuoco disponibile. Rigenerare ripristina la salute.
+
+Danni da fame e sete
+- Fame a zero: perdita continua di 5 punti salute per giorno di gioco.
+- Sete a zero: perdita continua di 30 punti salute per giorno di gioco.
+- I danni si sommano: entrambe le riserve a zero causano 35 punti al giorno.
+- Il giorno di riferimento e quello dell'orologio: 2400 secondi di simulazione,
+  cioe 40 minuti reali a velocita 1x, esclusa la pausa.
+- Il danno inizia solo dopo l'esaurimento della riserva, anche a meta di un
+  aggiornamento, conserva la precisione frazionaria e segue pausa e velocita.
+- Mangiare e bere interrompono il relativo danno ma non ripristinano la salute;
+  la borraccia automatica viene considerata prima del danno da disidratazione.
+
 Test e documentazione
 - Superati 38 dei 39 test mirati di orologio e ciclo, incluso il controllo
   del filtro sui pixel; resta aperto il test di avvio automatico del ciclo,
   che non trova il componente nella fixture di integrazione.
 - Superati tutti i 17 test mirati della visibilita notturna e della fog of war.
+- Superati tutti i 63 test mirati dei dati e della salute dei soldati, inclusi
+  ratei giornalieri, precisione a 60 aggiornamenti al secondo, pausa, velocita,
+  morte, inventario, riassegnazione dei lavori, cucina, fog of war e barra Salute.
 - Aggiornato il README con fasi, configurazione, raggi visivi e limite noto.
+- Documentati salute, morte e danni da riserve esaurite; nessun errore statico
+  rilevato nei file modificati e controllo del diff superato.
 
 ===============================================================================
 0.4.12 - 2026-10-20

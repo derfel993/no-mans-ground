@@ -12,7 +12,7 @@ namespace NoMansGround.Soldiers
     {
         private static readonly string[] SkillNames = { "Mira", "Coraggio", "Forza", "Resistenza", "Velocita" };
         private static readonly string[] NeedNames =
-            { "Fame", "Sete", "Bisogni fisiologici", "Freddo / caldo", "Stress", "Paura", "Stanchezza" };
+            { "Fame", "Sete", "Bisogni fisiologici", "Freddo / caldo", "Stress", "Paura", "Stanchezza", "Salute" };
 
         [SerializeField] private SoldierRoster roster;
         [SerializeField] private Camera mapCamera;
@@ -273,6 +273,8 @@ namespace NoMansGround.Soldiers
             if (selectedData != null)
             {
                 selectedData.Needs.Changed -= RefreshNeeds;
+                selectedData.HealthChanged -= RefreshNeeds;
+                selectedData.Died -= HandleSelectedDeath;
                 selectedData.Inventory.Changed -= RefreshInventory;
                 selectedData.CarryWeightChanged -= RefreshCarryWeight;
                 foreach (SkillProgress skill in selectedData.Skills)
@@ -286,6 +288,8 @@ namespace NoMansGround.Soldiers
             if (Selected != null)
             {
                 selectedData.Needs.Changed += RefreshNeeds;
+                selectedData.HealthChanged += RefreshNeeds;
+                selectedData.Died += HandleSelectedDeath;
                 selectedData.Inventory.Changed += RefreshInventory;
                 selectedData.CarryWeightChanged += RefreshCarryWeight;
                 Selected.MovementChanged += Refresh;
@@ -295,6 +299,11 @@ namespace NoMansGround.Soldiers
             }
             if (identity != null)
                 Refresh();
+        }
+
+        private void HandleSelectedDeath()
+        {
+            Select(null);
         }
 
         public void SelectFacility(bool depot = false)
@@ -666,11 +675,11 @@ namespace NoMansGround.Soldiers
             mealStatus.text = SoldierTasks.DisplayName(Selected.Data.Task) + (state.WaitingForRations
                 ? " | Attende rancio\nStress fame: +5/min" : " | Rancio non richiesto");
             float[] values = { state.Hunger, state.Thirst, state.PhysicalNeeds, state.ThermalState,
-                state.Stress, state.Fear, state.Fatigue };
+                state.Stress, state.Fear, state.Fatigue, Selected.Data.Health };
             for (int i = 0; i < needs.Length; i++)
             {
                 float fill = Mathf.Abs(values[i]) / 100f;
-                float severity = i < 3 ? 1f - fill : fill;
+                float severity = i < 3 || i == 7 ? 1f - fill : fill;
                 Color color = Color.Lerp(new Color(0.35f, 0.70f, 0.43f), new Color(0.85f, 0.32f, 0.24f), severity);
                 string label = NeedNames[i] + ": " + values[i].ToString("0") + "/100";
                 if (i == 3)
@@ -932,7 +941,7 @@ namespace NoMansGround.Soldiers
             orderStatus = CreateText(info, "", 10, 28f);
 
             Transform state = soldierTabPages[1].transform;
-            needs = new Meter[7];
+            needs = new Meter[NeedNames.Length];
             for (int i = 0; i < needs.Length; i++)
                 needs[i] = CreateMeter(state, 24f);
             mealStatus = CreateText(state, "", 10, 28f);

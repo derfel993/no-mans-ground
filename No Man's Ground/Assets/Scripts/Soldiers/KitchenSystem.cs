@@ -140,6 +140,7 @@ namespace NoMansGround.Soldiers
             if (roster != null)
             {
                 roster.Rebuilt += Rebuild;
+                roster.SoldierDied += HandleSoldierDied;
                 if (Application.isPlaying && roster.Soldiers.Count > 0
                     && (!HasFacilities || buildingMap != map.Data))
                     Rebuild();
@@ -149,7 +150,10 @@ namespace NoMansGround.Soldiers
         private void OnDisable()
         {
             if (roster != null)
+            {
                 roster.Rebuilt -= Rebuild;
+                roster.SoldierDied -= HandleSoldierDied;
+            }
             if (Cook != null)
                 Cook.SetWorkAssignment(false);
             SetStatus("Cucina sospesa.");
@@ -420,7 +424,7 @@ namespace NoMansGround.Soldiers
 
         private void UpdateCookAssignment()
         {
-            if (Cook != null && Cook.Data.Task == SoldierTask.Cook && !Cook.IsChangingTaskEquipment
+            if (Cook != null && Cook.IsAlive && Cook.Data.Task == SoldierTask.Cook && !Cook.IsChangingTaskEquipment
                 && (Cook.TaskReady || Cook.HasWorkAssignment))
                 return;
             if (Cook != null && !Cook.IsChangingTaskEquipment)
@@ -444,6 +448,14 @@ namespace NoMansGround.Soldiers
             if (Cook != null)
                 Cook.SetTaskStatus("Pronto");
             retryTimer = 0f;
+            Changed?.Invoke();
+        }
+
+        private void HandleSoldierDied(SoldierView soldier)
+        {
+            mealRecipients.Remove(soldier);
+            if (Cook == soldier)
+                UpdateCookAssignment();
             Changed?.Invoke();
         }
 

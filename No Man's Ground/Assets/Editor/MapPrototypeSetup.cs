@@ -13,6 +13,7 @@ namespace NoMansGround.Editor
     {
         public const string ScenePath = "Assets/Scenes/MapPrototype.unity";
         private const string ArtFolder = "Assets/Art/Prototype";
+        private const int SpriteResolution = 32;
 
         [MenuItem("No Man's Ground/Create Map Prototype Scene")]
         public static void CreateScene()
@@ -127,29 +128,22 @@ namespace NoMansGround.Editor
             string path = ArtFolder + "/Soldier.png";
             if (!File.Exists(path))
             {
-                var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-                var pixels = new Color32[256];
-                for (int y = 0; y < 16; y++)
+                Texture2D texture = CreatePrototypeTexture((column, row) =>
                 {
-                    for (int x = 0; x < 16; x++)
-                    {
-                        int distance = (x - 8) * (x - 8) + (y - 9) * (y - 9);
-                        if (x >= 3 && x <= 12 && y >= 2 && y <= 8)
-                            pixels[y * 16 + x] = new Color32(95, 108, 77, 255);
-                        if (distance <= 30)
-                            pixels[y * 16 + x] = distance >= 19
-                                ? new Color32(40, 48, 35, 255) : new Color32(155, 168, 116, 255);
-                    }
-                }
-                texture.SetPixels32(pixels);
-                texture.Apply();
+                    int distance = (column - 8) * (column - 8) + (row - 9) * (row - 9);
+                    if (distance <= 30)
+                        return distance >= 19
+                            ? new Color32(40, 48, 35, 255) : new Color32(155, 168, 116, 255);
+                    return column >= 3 && column <= 12 && row >= 2 && row <= 8
+                        ? new Color32(95, 108, 77, 255) : new Color32(0, 0, 0, 0);
+                });
                 File.WriteAllBytes(path, texture.EncodeToPNG());
                 UnityEngine.Object.DestroyImmediate(texture);
                 AssetDatabase.ImportAsset(path);
                 var importer = (TextureImporter)AssetImporter.GetAtPath(path);
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
-                importer.spritePixelsPerUnit = 16f;
+                importer.spritePixelsPerUnit = SpriteResolution;
                 importer.filterMode = FilterMode.Point;
                 importer.textureCompression = TextureImporterCompression.Uncompressed;
                 importer.mipmapEnabled = false;
@@ -178,27 +172,20 @@ namespace NoMansGround.Editor
             string path = ArtFolder + "/Ladder.png";
             if (!File.Exists(path))
             {
-                var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-                var pixels = new Color32[256];
-                for (int y = 0; y < 16; y++)
+                Texture2D texture = CreatePrototypeTexture((column, row) =>
                 {
-                    for (int x = 0; x < 16; x++)
-                    {
-                        bool rail = (x == 4 || x == 11) && y >= 2 && y <= 13;
-                        bool rung = x >= 4 && x <= 11 && (y == 3 || y == 6 || y == 9 || y == 12);
-                        pixels[y * 16 + x] = rail || rung
-                            ? new Color32(211, 171, 96, 255) : new Color32(44, 30, 18, 255);
-                    }
-                }
-                texture.SetPixels32(pixels);
-                texture.Apply();
+                    bool rail = (column == 4 || column == 11) && row >= 2 && row <= 13;
+                    bool rung = column >= 4 && column <= 11 && (row == 3 || row == 6 || row == 9 || row == 12);
+                    return rail || rung
+                        ? new Color32(211, 171, 96, 255) : new Color32(44, 30, 18, 255);
+                });
                 File.WriteAllBytes(path, texture.EncodeToPNG());
                 UnityEngine.Object.DestroyImmediate(texture);
                 AssetDatabase.ImportAsset(path);
                 var importer = (TextureImporter)AssetImporter.GetAtPath(path);
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
-                importer.spritePixelsPerUnit = 16f;
+                importer.spritePixelsPerUnit = SpriteResolution;
                 importer.isReadable = true;
                 importer.filterMode = FilterMode.Point;
                 importer.textureCompression = TextureImporterCompression.Uncompressed;
@@ -213,25 +200,18 @@ namespace NoMansGround.Editor
             string path = ArtFolder + "/Terrain.png";
             if (!File.Exists(path))
             {
-                var texture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-                var pixels = new Color32[16 * 16];
-                for (int y = 0; y < 16; y++)
+                Texture2D texture = CreatePrototypeTexture((column, row) =>
                 {
-                    for (int x = 0; x < 16; x++)
-                    {
-                        byte shade = (byte)(x == 0 || y == 0 ? 205 : 235 + (x * 7 + y * 11) % 21);
-                        pixels[y * 16 + x] = new Color32(shade, shade, shade, 255);
-                    }
-                }
-                texture.SetPixels32(pixels);
-                texture.Apply();
+                    byte shade = (byte)(column == 0 || row == 0 ? 205 : 235 + (column * 7 + row * 11) % 21);
+                    return new Color32(shade, shade, shade, 255);
+                });
                 File.WriteAllBytes(path, texture.EncodeToPNG());
                 UnityEngine.Object.DestroyImmediate(texture);
                 AssetDatabase.ImportAsset(path);
                 var importer = (TextureImporter)AssetImporter.GetAtPath(path);
                 importer.textureType = TextureImporterType.Sprite;
                 importer.spriteImportMode = SpriteImportMode.Single;
-                importer.spritePixelsPerUnit = 16f;
+                importer.spritePixelsPerUnit = SpriteResolution;
                 importer.isReadable = true;
                 importer.filterMode = FilterMode.Point;
                 importer.textureCompression = TextureImporterCompression.Uncompressed;
@@ -239,6 +219,18 @@ namespace NoMansGround.Editor
                 importer.SaveAndReimport();
             }
             return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        private static Texture2D CreatePrototypeTexture(Func<int, int, Color32> getPixel)
+        {
+            var texture = new Texture2D(SpriteResolution, SpriteResolution, TextureFormat.RGBA32, false);
+            var pixels = new Color32[SpriteResolution * SpriteResolution];
+            for (int row = 0; row < SpriteResolution; row++)
+                for (int column = 0; column < SpriteResolution; column++)
+                    pixels[row * SpriteResolution + column] = getPixel(column / 2, row / 2);
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return texture;
         }
 
         private static Tile CreateTile(string name, Color color, Sprite sprite)

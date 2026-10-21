@@ -72,14 +72,20 @@ namespace NoMansGround.Soldiers
         private void OnEnable()
         {
             if (roster != null)
+            {
                 roster.Rebuilt += ResetOrders;
+                roster.SoldierDied += HandleSoldierDied;
+            }
         }
 
         private void OnDisable()
         {
             EndLookDrag();
             if (roster != null)
+            {
                 roster.Rebuilt -= ResetOrders;
+                roster.SoldierDied -= HandleSoldierDied;
+            }
             ClearRoute();
         }
 
@@ -284,8 +290,22 @@ namespace NoMansGround.Soldiers
             if (routeSoldier == null || routeSoldier.IsMoving)
                 return;
             string name = routeSoldier.Data.FullName;
+            bool alive = routeSoldier.IsAlive;
             ClearRoute();
-            SetStatus(name + "\nDestinazione raggiunta.");
+            SetStatus(name + (alive ? "\nDestinazione raggiunta." : "\nMorto."));
+        }
+
+        private void HandleSoldierDied(SoldierView soldier)
+        {
+            if (lookSoldier == soldier)
+                EndLookDrag();
+            if (routeSoldier == soldier)
+                ClearRoute();
+            if (Selected == soldier)
+            {
+                Selected = null;
+                SetStatus(soldier.Data.FullName + "\nMorto.");
+            }
         }
 
         private void ClearRoute()

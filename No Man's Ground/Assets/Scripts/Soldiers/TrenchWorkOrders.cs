@@ -97,6 +97,7 @@ namespace NoMansGround.Soldiers
             if (roster != null)
             {
                 roster.Rebuilt += HandleRosterRebuilt;
+                roster.SoldierDied += HandleSoldierDied;
                 SubscribeDutyChanges();
             }
             Changed?.Invoke();
@@ -107,7 +108,10 @@ namespace NoMansGround.Soldiers
             if (map != null)
                 map.Generated -= HandleMapGenerated;
             if (roster != null)
+            {
                 roster.Rebuilt -= HandleRosterRebuilt;
+                roster.SoldierDied -= HandleSoldierDied;
+            }
             UnsubscribeDutyChanges();
             ResetJobs();
         }
@@ -117,6 +121,35 @@ namespace NoMansGround.Soldiers
             UnsubscribeDutyChanges();
             ResetJobs();
             SubscribeDutyChanges();
+        }
+
+        private void HandleSoldierDied(SoldierView soldier)
+        {
+            if (dutyChangedHandlers.TryGetValue(soldier, out Action handler))
+            {
+                soldier.DutyChanged -= handler;
+                dutyChangedHandlers.Remove(soldier);
+            }
+            dutyToolReturns.Remove(soldier);
+            equipmentWorkers.Remove(soldier);
+            for (int index = jobs.Count - 1; index >= 0; index--)
+            {
+                TrenchJob job = jobs[index];
+                if (job.Worker != soldier)
+                    continue;
+                if (job.CollectedItem.HasValue)
+                {
+                    Release(job);
+                    jobs.RemoveAt(index);
+                    continue;
+                }
+                job.Worker = null;
+                job.PickingTool = null;
+                job.GroundPickupCell = null;
+                job.Status = "In attesa";
+            }
+            retryTimer = 0f;
+            Changed?.Invoke();
         }
 
         private void SubscribeDutyChanges()

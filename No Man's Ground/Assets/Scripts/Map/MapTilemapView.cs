@@ -862,6 +862,20 @@ namespace NoMansGround.Map
                                 : new Color32(112, 115, 111, 255));
                         }
                     break;
+                case ItemType.FullCanteen:
+                case ItemType.EmptyCanteen:
+                    for (int row = 3; row <= 10; row++)
+                        for (int column = 4; column <= 11; column++)
+                            SetPixel(pixels, column, row, column == 4 || column == 11 || row == 3
+                                ? metalDark : metal);
+                    for (int row = 11; row <= 13; row++)
+                        for (int column = 6; column <= 9; column++)
+                            SetPixel(pixels, column, row, row == 13 ? wood : metalDark);
+                    for (int row = 5; row <= 8; row++)
+                        for (int column = 6; column <= 9; column++)
+                            SetPixel(pixels, column, row, type == ItemType.FullCanteen
+                                ? new Color32(67, 135, 181, 255) : metalDark);
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(type));
             }

@@ -25,7 +25,8 @@ namespace NoMansGround.Soldiers
             ? (Vector2)(Quaternion.Euler(0f, 0f, 45f * Mathf.Sin((float)(guardScanSeconds / 6d * System.Math.PI * 2d)))
                 * FacingDirection) : FacingDirection;
         public bool HasWorkAssignment { get; private set; }
-        public bool IsAvailable => isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
+        public bool IsAvailable => IsAlive && isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
+        public bool IsAlive => Data != null && Data.IsAlive;
         public SoldierDuty Duty { get; private set; } = SoldierDuty.Work;
         public bool GuardRequested { get; private set; }
         public SoldierTask? RequestedTask { get; private set; }
@@ -34,14 +35,14 @@ namespace NoMansGround.Soldiers
         public bool IsChangingTaskEquipment { get; internal set; }
         public bool IsEvacuatingBuilding { get; internal set; }
         public bool AutomaticTransportEnabled { get; private set; }
-        public bool CanAutoTransport => isActiveAndEnabled && Data.Task == SoldierTask.Hauler
+        public bool CanAutoTransport => IsAlive && isActiveAndEnabled && Data.Task == SoldierTask.Hauler
             && AutomaticTransportEnabled && Duty == SoldierDuty.Work && !GuardRequested
             && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue;
         public string TaskStatus { get; private set; } = "Pronto";
         public bool CanTakeEngineeringWork => IsAvailable && Duty == SoldierDuty.Work
             && !GuardRequested && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue
             && Data.Task != SoldierTask.Cook;
-        public bool CanTakeGuardMove => isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard
+        public bool CanTakeGuardMove => IsAlive && isActiveAndEnabled && !HasWorkAssignment && Duty == SoldierDuty.Guard
             && !IsReturningTaskTool && !IsEvacuatingBuilding && TaskReady && !RequestedTask.HasValue;
         public Vector2Int GuardPathStart => IsMoving && !transform.position.Equals(
             movementMap.Tilemap.GetCellCenterWorld(new Vector3Int(Cell.x, Cell.y, 0)))
@@ -60,6 +61,7 @@ namespace NoMansGround.Soldiers
         public event Action MovementChanged;
         public event Action DutyChanged;
         public event Action TaskChanged;
+        public event Action<SoldierView> Died;
 
         public bool SetManualLook(Vector2 direction)
         {
@@ -88,6 +90,8 @@ namespace NoMansGround.Soldiers
         {
             if (!Enum.IsDefined(typeof(SoldierTask), task))
                 throw new ArgumentOutOfRangeException(nameof(task));
+            if (!IsAlive)
+                return;
             StopManualLook();
             if (task == Data.Task && !IsChangingTaskEquipment)
             {
@@ -107,6 +111,8 @@ namespace NoMansGround.Soldiers
 
         public void SetAutomaticTransport(bool enabled)
         {
+            if (!IsAlive)
+                return;
             if (AutomaticTransportEnabled == enabled)
                 return;
             AutomaticTransportEnabled = enabled;
@@ -146,6 +152,8 @@ namespace NoMansGround.Soldiers
         {
             if (!Enum.IsDefined(typeof(SoldierDuty), duty))
                 throw new ArgumentOutOfRangeException(nameof(duty));
+            if (!IsAlive)
+                return false;
             StopManualLook();
             if (Data.Task == SoldierTask.Cook && duty == SoldierDuty.Guard)
             {
@@ -171,7 +179,10 @@ namespace NoMansGround.Soldiers
             if (sprite == null)
                 throw new ArgumentNullException(nameof(sprite));
 
+            if (Data != null)
+                Data.Died -= HandleDeath;
             Data = data;
+            Data.Died += HandleDeath;
             Cell = cell;
             fallbackSprite = sprite;
             directionalSprites = spritesByDirection;
@@ -191,6 +202,34 @@ namespace NoMansGround.Soldiers
             selection.sortingOrder = 9;
             UpdateDirectionalSprite(FacingDirection);
             SetSelected(false);
+            if (!Data.IsAlive)
+                HandleDeath();
+        }
+
+        private void HandleDeath()
+        {
+            path = null;
+            HasWorkAssignment = false;
+            DiggingProgress = 0f;
+            GuardRequested = false;
+            RequestedTask = null;
+            IsManualLook = false;
+            IsReturningTaskTool = false;
+            IsChangingTaskEquipment = false;
+            IsEvacuatingBuilding = false;
+            AutomaticTransportEnabled = false;
+            TaskReady = false;
+            TaskStatus = "Morto";
+            SetSelected(false);
+            gameObject.SetActive(false);
+            MovementChanged?.Invoke();
+            Died?.Invoke(this);
+        }
+
+        private void OnDestroy()
+        {
+            if (Data != null)
+                Data.Died -= HandleDeath;
         }
 
         private void UpdateDirectionalSprite(Vector2 direction)
@@ -225,7 +264,7 @@ namespace NoMansGround.Soldiers
         {
             if (mapView == null)
                 throw new ArgumentNullException(nameof(mapView));
-            if (Data == null || IsMoving)
+            if (!IsAlive || IsMoving)
                 throw new InvalidOperationException("Only initialized, available soldiers can begin moving.");
             if (cells == null || cells.Count < 2 || cells[0] != Cell)
                 throw new ArgumentException("A movement path must start at the soldier cell and include a destination.", nameof(cells));
@@ -275,7 +314,9 @@ namespace NoMansGround.Soldiers
 
         private void Update()
         {
-            Data.Needs.AdvanceTime(Time.deltaTime);
+            if (!IsAlive)
+                return;
+            Data.AdvanceTime(Time.deltaTime);
             AdvanceMovement(Time.deltaTime);
             AdvanceLook(Time.deltaTime);
         }
@@ -284,6 +325,8 @@ namespace NoMansGround.Soldiers
         {
             if (!float.IsFinite(deltaTime) || deltaTime < 0f)
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            if (!IsAlive)
+                return;
             if (!IsManualLook && Duty == SoldierDuty.Guard && !IsMoving && !HasWorkAssignment)
                 guardScanSeconds = (guardScanSeconds + deltaTime) % 6d;
             else
@@ -296,7 +339,7 @@ namespace NoMansGround.Soldiers
         {
             if (!float.IsFinite(deltaTime) || deltaTime < 0f)
                 throw new ArgumentOutOfRangeException(nameof(deltaTime));
-            if (!IsMoving)
+            if (!IsAlive || !IsMoving)
                 return;
             float remainingDistance = MovementSpeed * deltaTime;
             while (IsMoving && remainingDistance > 0f)
