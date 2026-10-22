@@ -317,6 +317,7 @@ namespace NoMansGround.Map
                 case RoomSpecialization.Armory: return "ARMERIA";
                 case RoomSpecialization.Shelter: return "RICOVERO";
                 case RoomSpecialization.Hospital: return "OSPEDALE";
+                case RoomSpecialization.Warehouse: return "MAGAZZINO";
                 default: throw new ArgumentOutOfRangeException(nameof(specialization));
             }
         }
@@ -331,6 +332,7 @@ namespace NoMansGround.Map
                 case RoomSpecialization.Armory: return new Color(0.78f, 0.27f, 0.23f, 0.48f);
                 case RoomSpecialization.Shelter: return new Color(0.56f, 0.68f, 0.49f, 0.48f);
                 case RoomSpecialization.Hospital: return new Color(0.83f, 0.86f, 0.72f, 0.48f);
+                case RoomSpecialization.Warehouse: return new Color(0.86f, 0.74f, 0.32f, 0.48f);
                 default: throw new ArgumentOutOfRangeException(nameof(specialization));
             }
         }

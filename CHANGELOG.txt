@@ -7,6 +7,31 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.5.3 - 2026-10-22
+===============================================================================
+
+Job porta sulla cella del muro
+- Se sulla cella scelta per la porta e gia in coda un job di costruzione muro,
+  il job viene rilasciato e sostituito con quello di costruzione della porta.
+- Gli altri job del perimetro restano in coda.
+
+Test
+- Superato il nuovo test mirato alla sostituzione del job muro e i due casi
+  del test di costruzione del perimetro e successiva porta.
+
+===============================================================================
+0.5.2 - 2026-10-22
+===============================================================================
+
+Tipo di stanza Magazzino
+- Aggiunto Magazzino tra le specializzazioni selezionabili nel disegno delle
+  stanze, con colore, etichetta e conteggio dedicati.
+- Il tipo identifica la stanza ma non e ancora collegato alla gestione scorte.
+
+Test
+- Superato il test mirato di designazione delle stanze specializzate.
+
+===============================================================================
 0.5.1 - 2026-10-21
 ===============================================================================
 

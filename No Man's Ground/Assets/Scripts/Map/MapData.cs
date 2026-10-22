@@ -89,7 +89,8 @@ namespace NoMansGround.Map
         Kitchen,
         Armory,
         Shelter,
-        Hospital
+        Hospital,
+        Warehouse
     }
 
     public sealed class SpecializedRoom

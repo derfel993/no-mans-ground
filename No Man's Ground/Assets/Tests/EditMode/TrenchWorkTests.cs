@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NoMansGround.Editor;
 using NoMansGround.Map;
 using NoMansGround.Soldiers;
@@ -129,6 +130,10 @@ namespace NoMansGround.Tests
             Assert.AreSame(room, reassigned);
             Assert.AreEqual(RoomSpecialization.Kitchen, room.Specialization);
             Assert.AreEqual(1, data.SpecializedRooms.Count);
+            Assert.IsTrue(data.TryDesignateSpecializedRoom(RoomSpecialization.Warehouse,
+                new Vector2Int(3, 3), new Vector2Int(4, 4), out SpecializedRoom warehouse));
+            Assert.AreSame(room, warehouse);
+            Assert.AreEqual(RoomSpecialization.Warehouse, room.Specialization);
         }
 
         [Test]
@@ -452,6 +457,29 @@ namespace NoMansGround.Tests
             Assert.IsTrue(map.Data.IsWalkable(door));
             Assert.IsTrue(roofs.HasTile(new Vector3Int(51, 11, 0)));
             Assert.Zero(map.Data.StorageStockpile.Count(ItemType.Wood));
+        }
+
+        [Test]
+        public void DoorDesignationReplacesWallJobOnSelectedCell()
+        {
+            PrepareBuildingArea();
+            var door = new Vector2Int(51, 12);
+            Assert.IsTrue(map.Data.TryPlanBuilding(new Vector2Int(50, 10), new Vector2Int(52, 12),
+                ItemType.Wood, out BuildingRoom room));
+            var existingWallJob = (TrenchJob)System.Activator.CreateInstance(typeof(TrenchJob),
+                BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new object[] { door, TrenchJobKind.BuildWall }, null);
+            var jobs = (List<TrenchJob>)typeof(TrenchWorkOrders)
+                .GetField("jobs", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(trenches);
+            jobs.Add(existingWallJob);
+
+            Assert.IsTrue(trenches.DesignateDoor(door));
+
+            Assert.AreEqual(8, trenches.Jobs.Count);
+            Assert.IsFalse(jobs.Contains(existingWallJob));
+            Assert.AreEqual(1, jobs.FindAll(job => job.Cell == door).Count);
+            Assert.AreEqual(TrenchJobKind.BuildDoor, jobs.Find(job => job.Cell == door).Kind);
+            Assert.AreEqual(door, room.Door.Value);
         }
 
         [TestCase(ItemType.Wood)]

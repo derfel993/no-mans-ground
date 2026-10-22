@@ -527,7 +527,7 @@ namespace NoMansGround.Soldiers
             foreach (SpecializedRoom room in gameMap.Data.SpecializedRooms)
                 counts[(int)room.Specialization]++;
             return $"Comando {counts[0]} | Telegrafo {counts[1]} | Cucina {counts[2]}\n"
-                + $"Armeria {counts[3]} | Ricovero {counts[4]} | Ospedale {counts[5]}";
+                + $"Armeria {counts[3]} | Ricovero {counts[4]} | Ospedale {counts[5]} | Magazzino {counts[6]}";
         }
 
         private static string RoomSpecializationName(RoomSpecialization specialization)
@@ -540,6 +540,7 @@ namespace NoMansGround.Soldiers
                 case RoomSpecialization.Armory: return "Armeria";
                 case RoomSpecialization.Shelter: return "Ricovero";
                 case RoomSpecialization.Hospital: return "Ospedale";
+                case RoomSpecialization.Warehouse: return "Magazzino";
                 default: return "Stanza";
             }
         }

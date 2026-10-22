@@ -607,8 +607,16 @@ namespace NoMansGround.Soldiers
             var perimeter = RectanglePerimeter(room.Bounds.min, room.Bounds.max - Vector2Int.one);
             foreach (Vector2Int target in perimeter)
             {
-                if ((target != cell && room.IsBuilt(target)) || jobs.Exists(existing => existing.Cell == target))
+                if (target != cell && room.IsBuilt(target))
                     continue;
+                TrenchJob existing = jobs.Find(job => job.Cell == target);
+                if (existing != null)
+                {
+                    if (target != cell || existing.Kind != TrenchJobKind.BuildWall)
+                        continue;
+                    Release(existing);
+                    jobs.Remove(existing);
+                }
                 var job = new TrenchJob(target, target == cell ? TrenchJobKind.BuildDoor : TrenchJobKind.BuildWall);
                 job.Material = room.Material;
                 job.Marker = CreateMarker(target, new Color(0.4f, 0.8f, 0.9f, 0.6f), "Building designation");
