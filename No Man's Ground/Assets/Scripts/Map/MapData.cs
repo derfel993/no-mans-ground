@@ -133,6 +133,7 @@ namespace NoMansGround.Map
         private readonly List<BuildingRoom> buildings = new List<BuildingRoom>();
         private readonly List<SpecializedRoom> specializedRooms = new List<SpecializedRoom>();
         private readonly List<TunnelDoor> tunnelDoors = new List<TunnelDoor>();
+        private readonly List<Vector2Int> targetCells = new List<Vector2Int>();
         private readonly byte[] tunnelShelterStates;
         private bool sheltersDirty = true;
         private int closedTunnelShelterCount;
@@ -140,6 +141,7 @@ namespace NoMansGround.Map
         public IReadOnlyList<BuildingRoom> Buildings => buildings.AsReadOnly();
         public IReadOnlyList<SpecializedRoom> SpecializedRooms => specializedRooms.AsReadOnly();
         public IReadOnlyList<TunnelDoor> TunnelDoors => tunnelDoors.AsReadOnly();
+        public IReadOnlyList<Vector2Int> TargetCells => targetCells.AsReadOnly();
         public int ClosedTunnelShelterCount { get { UpdateTunnelShelters(); return closedTunnelShelterCount; } }
         public int OpenTunnelCount { get { UpdateTunnelShelters(); return openTunnelCount; } }
 
@@ -149,6 +151,23 @@ namespace NoMansGround.Map
                 if (door.Cell == cell)
                     return door;
             return null;
+        }
+
+        public bool IsTargetCell(Vector2Int cell) => targetCells.Contains(cell);
+
+        public bool ToggleTargetCell(Vector2Int cell)
+        {
+            int existing = targetCells.IndexOf(cell);
+            if (existing >= 0)
+            {
+                targetCells.RemoveAt(existing);
+                return true;
+            }
+            if (!Contains(cell) || !Fog.IsExplored(cell) || !IsWalkable(cell) || IsTrench(cell)
+                || HasTree(cell) || TryGetGroundItem(cell, out _) || GetBuilding(cell) != null)
+                return false;
+            targetCells.Add(cell);
+            return true;
         }
 
         public bool TryPlanTunnelDoor(Vector2Int cell)

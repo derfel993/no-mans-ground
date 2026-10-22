@@ -20,6 +20,7 @@ namespace NoMansGround.Soldiers
         private readonly List<SoldierView> soldiers = new List<SoldierView>();
         private readonly List<GameObject> corpses = new List<GameObject>();
         private IReadOnlyList<SoldierView> readOnlySoldiers;
+        private SoldierFogOfWar fogOfWar;
 
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
         public event Action Rebuilt;
@@ -88,6 +89,7 @@ namespace NoMansGround.Soldiers
         {
             SoldierFogOfWar fog = GetComponent<SoldierFogOfWar>();
             if (fog == null) fog = gameObject.AddComponent<SoldierFogOfWar>();
+            fogOfWar = fog;
             fog.Configure(map, mapView, this);
         }
 
@@ -162,7 +164,7 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
                 soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites,
-                    corpseSprite, guardDirectionalSoldierSprites);
+                    corpseSprite, guardDirectionalSoldierSprites, data, mapView, fogOfWar);
                 soldier.DutyChanged += NotifyDutiesChanged;
                 soldier.Died += HandleSoldierDied;
                 soldiers.Add(soldier);

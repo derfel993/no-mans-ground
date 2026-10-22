@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using NoMansGround.Map;
 using NoMansGround.Soldiers;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace NoMansGround.Tests
 {
@@ -280,6 +283,112 @@ namespace NoMansGround.Tests
             Assert.AreEqual(ItemCategory.Weapon, ItemCatalog.Get(ItemType.CarcanoMod91).Category);
             Assert.AreEqual(3.8f, ItemCatalog.Get(ItemType.CarcanoMod91).WeightKg);
             Assert.AreEqual(1, ItemCatalog.Get(ItemType.EmptyCanteen).StackSize);
+        }
+
+        [Test]
+        public void AimLevelControlsGuardHitProbabilityFromTwentyToEightyPercent()
+        {
+            Assert.AreEqual(0.2f, SoldierView.GetAimHitProbability(0));
+            Assert.AreEqual(0.8f, SoldierView.GetAimHitProbability(SkillProgress.MaximumLevel));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SoldierView.GetAimHitProbability(-1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SoldierView.GetAimHitProbability(21));
+        }
+
+        [Test]
+        public void ZeroLevelSkillNeedsOneHundredExperienceForItsFirstLevel()
+        {
+            var skill = new SkillProgress(0);
+            Assert.Zero(skill.Value);
+            Assert.AreEqual(100, skill.ExperienceToNextLevel);
+            skill.AddExperience(99);
+            Assert.Zero(skill.Level);
+            Assert.AreEqual(99, skill.Experience);
+            skill.AddExperience(1);
+            Assert.AreEqual(1, skill.Level);
+            Assert.Zero(skill.Experience);
+        }
+
+        [Test]
+        public void GuardShotConsumesOneRoundAndAddsOneAimExperienceOnHitAndMiss()
+        {
+            var map = new MapData(10, 10);
+            var target = new Vector2Int(5, 5);
+            Assert.IsTrue(map.ToggleTargetCell(target));
+            var data = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 19, 1, 1, 1, 1 });
+            var owner = new GameObject("Guard combat test", typeof(SpriteRenderer), typeof(SoldierView));
+            var texture = new Texture2D(1, 1);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f);
+            try
+            {
+                SoldierView soldier = owner.GetComponent<SoldierView>();
+                soldier.Initialize(data, new Vector2Int(1, 1), sprite, mapData: map);
+                Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Guard));
+                MethodInfo fireAtTarget = typeof(SoldierView).GetMethod("TryFireAtTarget",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                object[] parameters = { target, 0.76f, false };
+                LogAssert.Expect(LogType.Log, new Regex(@"Guard shot: Mario Rossi -> \(5, 5\) HIT; aim=19; chance=.*; roll=.*"));
+                Assert.IsTrue((bool)fireAtTarget.Invoke(soldier, parameters));
+                bool hit = (bool)parameters[2];
+                Assert.IsTrue(hit);
+                Assert.AreEqual(167, data.Inventory.Count(ItemType.CarcanoAmmunition));
+                Assert.AreEqual(1, data.GetSkill(SoldierSkill.Aim).Experience);
+                Assert.IsTrue(map.IsTargetCell(target));
+
+                parameters[1] = 0.99f;
+                LogAssert.Expect(LogType.Log, new Regex(@"Guard shot: Mario Rossi -> \(5, 5\) MISS; aim=19; chance=.*; roll=.*"));
+                Assert.IsTrue((bool)fireAtTarget.Invoke(soldier, parameters));
+                hit = (bool)parameters[2];
+                Assert.IsFalse(hit);
+                Assert.AreEqual(166, data.Inventory.Count(ItemType.CarcanoAmmunition));
+                Assert.AreEqual(2, data.GetSkill(SoldierSkill.Aim).Experience);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                UnityEngine.Object.DestroyImmediate(sprite);
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        [Test]
+        public void GuardFiresAtVisibleTargetOnlyAfterLineOfSightIsClear()
+        {
+            var map = new MapData(10, 10);
+            var target = new Vector2Int(5, 5);
+            Assert.IsTrue(map.ToggleTargetCell(target));
+            map[3, 3] = TerrainKind.Mountain;
+            var data = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
+                new[] { 10, 1, 1, 1, 1 });
+            var owner = new GameObject("Guard target visibility test", typeof(SpriteRenderer), typeof(SoldierView));
+            var texture = new Texture2D(1, 1);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), Vector2.one * 0.5f);
+            try
+            {
+                SoldierView soldier = owner.GetComponent<SoldierView>();
+                soldier.Initialize(data, new Vector2Int(1, 1), sprite, mapData: map);
+                int shots = 0;
+                soldier.ShotFired += (_, __) => shots++;
+                soldier.AdvanceGuardCombat(1f);
+                Assert.Zero(shots);
+
+                Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Guard));
+                soldier.AdvanceGuardCombat(1f);
+                Assert.Zero(shots);
+                Assert.AreEqual(168, data.Inventory.Count(ItemType.CarcanoAmmunition));
+
+                map[3, 3] = TerrainKind.Dirt;
+                soldier.AdvanceGuardCombat(1f);
+                Assert.AreEqual(1, shots);
+                Assert.AreEqual(167, data.Inventory.Count(ItemType.CarcanoAmmunition));
+                Assert.AreEqual(1, data.GetSkill(SoldierSkill.Aim).Experience);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(owner);
+                UnityEngine.Object.DestroyImmediate(sprite);
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
         }
 
         [Test]
@@ -604,7 +713,7 @@ namespace NoMansGround.Tests
         [Test]
         public void SkillInputValidationAndIndependentProgressArePreserved()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => new SkillProgress(0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new SkillProgress(-1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new SkillProgress(21));
             var soldiers = SoldierGenerator.Generate(2, 1917);
             SkillProgress aim = soldiers[0].GetSkill(SoldierSkill.Aim);

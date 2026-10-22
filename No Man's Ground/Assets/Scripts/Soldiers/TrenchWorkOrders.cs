@@ -9,7 +9,8 @@ namespace NoMansGround.Soldiers
 {
     public enum DiggingMode
     {
-        None, Dig, Cancel, Ladder, Cut, Mine, Collect, BuildWood, BuildStone, BuildWallWood, BuildWallStone, Door
+        None, Dig, Cancel, Ladder, Cut, Mine, Collect, BuildWood, BuildStone, BuildWallWood, BuildWallStone, Door,
+        Target
     }
     public enum TrenchJobKind { Dig, Ladder, CutTree, MineRock, CollectItem, BuildWall, BuildDoor }
 
@@ -259,8 +260,9 @@ namespace NoMansGround.Soldiers
                 : mode == DiggingMode.BuildWallWood ? "MURO LEGNO: trascina una linea. Esc o destro: esci."
                 : mode == DiggingMode.BuildWallStone ? "MURO PIETRA: trascina una linea. Esc o destro: esci."
                 : mode == DiggingMode.Door ? "PORTA: parete o ingresso galleria."
+                : mode == DiggingMode.Target ? "BERSAGLIO: clicca una cella libera. Esc o destro: esci."
                 : mode == DiggingMode.Cancel ? "ANNULLA: trascina sugli scavi.\nEsc o destro: esci."
-                : "T: scava | A: taglia | M: mina | C: raccogli | L: scala\nX: annulla | Esc: esci");
+                : "T: scava | A: taglia | M: mina | C: raccogli | L: scala | B: bersaglio\nX: annulla | Esc: esci");
         }
 
         private void Update()
@@ -285,6 +287,8 @@ namespace NoMansGround.Soldiers
                     SetMode(Mode == DiggingMode.Cancel ? DiggingMode.None : DiggingMode.Cancel);
                 if (keyboard.lKey.wasPressedThisFrame)
                     SetMode(Mode == DiggingMode.Ladder ? DiggingMode.None : DiggingMode.Ladder);
+                if (keyboard.bKey.wasPressedThisFrame)
+                    SetMode(Mode == DiggingMode.Target ? DiggingMode.None : DiggingMode.Target);
                 if (keyboard.escapeKey.wasPressedThisFrame)
                 {
                     if (Mode != DiggingMode.None)
@@ -303,7 +307,7 @@ namespace NoMansGround.Soldiers
             Vector2 pointer = mouse.position.ReadValue();
             bool buildingMode = Mode == DiggingMode.BuildWood || Mode == DiggingMode.BuildStone
                 || Mode == DiggingMode.BuildWallWood || Mode == DiggingMode.BuildWallStone
-                || Mode == DiggingMode.Door;
+                || Mode == DiggingMode.Door || Mode == DiggingMode.Target;
             if (!buildingMode && mouse.leftButton.wasPressedThisFrame && mapCamera.pixelRect.Contains(pointer)
                 && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject())
                 && IsPointerOverSoldier(pointer))
@@ -318,6 +322,20 @@ namespace NoMansGround.Soldiers
                 return;
             }
             bool valid = TryPointerCell(pointer, out Vector2Int cell);
+            if (Mode == DiggingMode.Target)
+            {
+                if (mouse.leftButton.wasPressedThisFrame && valid)
+                {
+                    if (map.Data.ToggleTargetCell(cell))
+                    {
+                        mapView.RenderTargets(map.Data);
+                        Notify(map.Data.IsTargetCell(cell) ? "Bersaglio aggiunto." : "Bersaglio rimosso.");
+                    }
+                    else
+                        Notify("Bersaglio non valido: scegli una cella libera ed esplorata.", true);
+                }
+                return;
+            }
             if (Mode == DiggingMode.Ladder)
             {
                 if (valid) ShowPreview(new[] { cell });

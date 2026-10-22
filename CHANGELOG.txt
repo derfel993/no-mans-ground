@@ -7,6 +7,29 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.6.0 - 2026-10-22
+===============================================================================
+
+Tiro delle guardie e bersagli di prova
+- Aggiunta la modalita bersaglio: premere B e cliccare una cella libera per
+  aggiungere o rimuovere un marker persistente.
+- Le guardie armate sparano al bersaglio visibile piu vicino nel proprio cono
+  visivo, entro il raggio di vista e con linea di tiro libera; il tiro avviene
+  al massimo una volta al secondo.
+- La probabilita di colpire va dal 20% con Mira 0 all'80% con Mira 20,
+  aumentando di 3 punti percentuali per livello. Ogni colpo, centrato o meno,
+  consuma una munizione e assegna 1 XP Mira.
+- Ogni sparo registra in Console soldato, bersaglio, esito, Mira, probabilita
+  e tiro casuale; i marker danno un breve feedback visivo sull'esito.
+- Il livello skill 0 e ora valido e richiede 100 XP per raggiungere il livello 1.
+- Il bersaglio non subisce danni e non viene rimosso: nemici, danni e distruzione
+  dei target restano da implementare.
+
+Test
+- Superati i test mirati per input B, piazzamento/rimozione, accuratezza,
+  consumo munizioni, XP Mira e linea di vista.
+
+===============================================================================
 0.5.4 - 2026-10-22
 ===============================================================================
 

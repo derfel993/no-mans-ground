@@ -21,8 +21,10 @@ namespace NoMansGround.Map
         private readonly List<Texture2D> resolutionTextures = new List<Texture2D>();
         private Tilemap fogTilemap;
         private Tilemap fogMemoryTilemap;
+        private Tilemap targetTilemap;
         private Tilemap rememberedConstructionTilemap;
         private Tile fogTile;
+        private Tile targetTile;
         private MapData fogMap;
         private TileBase[] rememberedTerrain;
         private Color[] rememberedColors;
@@ -642,8 +644,86 @@ namespace NoMansGround.Map
             RenderZones(map);
             RenderStorageArea(map);
             RenderTrees(map);
+            RenderTargets(map);
             RenderBuildings(map);
             RenderFog(map);
+        }
+
+        public void RenderTargets(MapData map)
+        {
+            if (map == null)
+                throw new ArgumentNullException(nameof(map));
+            if (targetTilemap == null)
+            {
+                var layer = new GameObject("Target Markers", typeof(Tilemap), typeof(TilemapRenderer));
+                layer.transform.SetParent(transform, false);
+                targetTilemap = layer.GetComponent<Tilemap>();
+                TilemapRenderer renderer = layer.GetComponent<TilemapRenderer>();
+                renderer.sortingOrder = 8;
+                renderer.sortingLayerID = GetComponent<TilemapRenderer>().sortingLayerID;
+            }
+            if (targetTile == null)
+            {
+                int size = PixelsPerTile;
+                var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                var pixels = new Color32[size * size];
+                int center = size / 2;
+                float scale = size / 32f;
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        int dx = x - center;
+                        int dy = y - center;
+                        float distance = dx * dx + dy * dy;
+                        bool crosshair = (Mathf.Abs(dx) <= scale && Mathf.Abs(dy) >= 10f * scale
+                                && Mathf.Abs(dy) <= 15f * scale)
+                            || (Mathf.Abs(dy) <= scale && Mathf.Abs(dx) >= 10f * scale
+                                && Mathf.Abs(dx) <= 15f * scale);
+                        Color32 color = default;
+                        if (distance >= 38f * scale * scale && distance <= 78f * scale * scale)
+                            color = distance >= 68f * scale * scale
+                                ? new Color32(35, 35, 31, 255) : new Color32(220, 62, 48, 255);
+                        if (crosshair)
+                            color = new Color32(242, 222, 186, 255);
+                        if (distance <= 8f * scale * scale)
+                            color = new Color32(242, 222, 186, 255);
+                        pixels[y * size + x] = color;
+                    }
+                texture.SetPixels32(pixels);
+                texture.Apply();
+                targetTile = ScriptableObject.CreateInstance<Tile>();
+                targetTile.name = "Target Marker";
+                targetTile.sprite = Sprite.Create(texture, new Rect(0, 0, size, size),
+                    new Vector2(0.5f, 0.5f), size);
+                targetTile.flags = TileFlags.None;
+                targetTile.colliderType = Tile.ColliderType.None;
+            }
+            targetTilemap.ClearAllTiles();
+            foreach (Vector2Int cell in map.TargetCells)
+                targetTilemap.SetTile(new Vector3Int(cell.x, cell.y, 0), targetTile);
+        }
+
+        public void ShowTargetShot(Vector2Int cell, bool hit)
+        {
+            if (targetTilemap == null)
+                return;
+            var position = new Vector3Int(cell.x, cell.y, 0);
+            if (!targetTilemap.HasTile(position))
+                return;
+            targetTilemap.SetTileFlags(position, TileFlags.None);
+            targetTilemap.SetColor(position, hit
+                ? new Color(0.55f, 1f, 0.62f) : new Color(1f, 0.72f, 0.35f));
+            StartCoroutine(RestoreTargetColor(position));
+        }
+
+        private System.Collections.IEnumerator RestoreTargetColor(Vector3Int position)
+        {
+            yield return new WaitForSeconds(0.18f);
+            if (targetTilemap != null && targetTilemap.HasTile(position))
+            {
+                targetTilemap.SetTileFlags(position, TileFlags.None);
+                targetTilemap.SetColor(position, Color.white);
+            }
         }
 
         private void RenderStorageArea(MapData map)
@@ -1070,6 +1150,13 @@ namespace NoMansGround.Map
                 DestroyGeneratedObject(texture);
             if (fogTilemap != null) DestroyGeneratedObject(fogTilemap.gameObject);
             if (fogMemoryTilemap != null) DestroyGeneratedObject(fogMemoryTilemap.gameObject);
+            if (targetTilemap != null) DestroyGeneratedObject(targetTilemap.gameObject);
+            if (targetTile != null)
+            {
+                DestroyGeneratedObject(targetTile.sprite.texture);
+                DestroyGeneratedObject(targetTile.sprite);
+                DestroyGeneratedObject(targetTile);
+            }
             if (fogTile != null)
             {
                 DestroyGeneratedObject(fogTile.sprite.texture);

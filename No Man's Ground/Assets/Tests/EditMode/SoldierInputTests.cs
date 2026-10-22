@@ -376,6 +376,71 @@ namespace NoMansGround.Tests
         }
 
         [Test]
+        public void PressingBEntersTargetModeAndClickTogglesTargetMarker()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var scene = EditorSceneManager.OpenScene(NoMansGround.Editor.MapPrototypeSetup.ScenePath,
+                OpenSceneMode.Additive);
+            var viewport = new RenderTexture(800, 600, 0);
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            Mouse mouse = InputSystem.AddDevice<Mouse>();
+            Camera camera = null;
+            try
+            {
+                MapPrototype map = null;
+                TrenchWorkOrders trenches = null;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    if (root.TryGetComponent(out MapPrototype prototype)) map = prototype;
+                    if (root.TryGetComponent(out TrenchWorkOrders orders)) trenches = orders;
+                    if (root.TryGetComponent(out Camera foundCamera)) camera = foundCamera;
+                }
+                map.Regenerate();
+                map.Data.Fog.Disable();
+                Vector2Int cell = new Vector2Int(64, 64);
+                map.Data[cell.x, cell.y] = TerrainKind.Dirt;
+                map.Data.SetTree(cell, false);
+                map.Data.SetWalkable(cell, true);
+                var view = map.GetComponentInChildren<MapTilemapView>();
+                view.Render(map.Data);
+                camera.targetTexture = viewport;
+                camera.GetComponent<MapCameraController>().FocusOn(new Vector3(64f, 64f, 0f));
+
+                Press(keyboard.bKey);
+                UpdateTrenches(trenches);
+                Release(keyboard.bKey);
+                Assert.AreEqual(DiggingMode.Target, trenches.Mode);
+
+                Vector2 pointer = camera.WorldToScreenPoint(view.Tilemap.GetCellCenterWorld(
+                    new Vector3Int(cell.x, cell.y, 0)));
+                Set(mouse.position, pointer);
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.IsTrue(map.Data.IsTargetCell(cell));
+                Assert.IsTrue(view.transform.Find("Target Markers").GetComponent<Tilemap>()
+                    .HasTile(new Vector3Int(cell.x, cell.y, 0)));
+
+                Press(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Release(mouse.leftButton);
+                UpdateTrenches(trenches);
+                Assert.IsFalse(map.Data.IsTargetCell(cell));
+                Assert.IsFalse(view.transform.Find("Target Markers").GetComponent<Tilemap>()
+                    .HasTile(new Vector3Int(cell.x, cell.y, 0)));
+            }
+            finally
+            {
+                camera.targetTexture = null;
+                InputSystem.RemoveDevice(mouse);
+                InputSystem.RemoveDevice(keyboard);
+                EditorSceneManager.CloseScene(scene, true);
+                Object.DestroyImmediate(viewport);
+            }
+        }
+
+        [Test]
         public void ClickingSoldierExitsRoomDesignationModeAndUpdatesSelection()
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);

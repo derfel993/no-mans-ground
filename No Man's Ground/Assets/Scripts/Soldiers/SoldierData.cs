@@ -183,14 +183,14 @@ namespace NoMansGround.Soldiers
         public int Level { get; private set; }
         public int Experience { get; private set; }
         public bool IsMaximumLevel => Level == MaximumLevel;
-        public int ExperienceToNextLevel => IsMaximumLevel ? 0 : Level * 100;
+        public int ExperienceToNextLevel => IsMaximumLevel ? 0 : Math.Max(100, Level * 100);
         public int Value => Level * 5;
         public event Action Changed;
 
         public SkillProgress(int level = 1)
         {
-            if (level < 1 || level > MaximumLevel)
-                throw new ArgumentOutOfRangeException(nameof(level), "Skill level must be between 1 and 20.");
+            if (level < 0 || level > MaximumLevel)
+                throw new ArgumentOutOfRangeException(nameof(level), "Skill level must be between 0 and 20.");
             Level = level;
         }
 

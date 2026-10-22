@@ -17,12 +17,17 @@ namespace NoMansGround.Soldiers
         private Sprite corpseSprite;
         private Sprite[] directionalSprites;
         private Sprite[] guardDirectionalSprites;
+        private MapData combatMap;
+        private MapTilemapView combatMapView;
+        private SoldierFogOfWar fogOfWar;
         private static Sprite defaultCorpseSprite;
         private int displayedDirection = -1;
         private int displayedDuty = -1;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
         private double guardScanSeconds;
+        private float shotCooldown;
+        public const float GuardShotIntervalSeconds = 1f;
         public Vector2 FacingDirection { get; private set; } = Vector2.up;
         public bool IsManualLook { get; private set; }
         public Vector2 LookDirection => !IsManualLook && Duty == SoldierDuty.Guard && !IsMoving && !HasWorkAssignment
@@ -66,6 +71,7 @@ namespace NoMansGround.Soldiers
         public event Action DutyChanged;
         public event Action TaskChanged;
         public event Action<SoldierView> Died;
+        public event Action<Vector2Int, bool> ShotFired;
 
         public bool SetManualLook(Vector2 direction)
         {
@@ -178,7 +184,8 @@ namespace NoMansGround.Soldiers
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite,
             Sprite[] spritesByDirection = null, Sprite deadSprite = null,
-            Sprite[] spritesWhileGuarding = null)
+            Sprite[] spritesWhileGuarding = null, MapData mapData = null,
+            MapTilemapView mapView = null, SoldierFogOfWar sight = null)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -193,6 +200,9 @@ namespace NoMansGround.Soldiers
             fallbackSprite = sprite;
             directionalSprites = spritesByDirection;
             guardDirectionalSprites = spritesWhileGuarding;
+            combatMap = mapData;
+            combatMapView = mapView;
+            fogOfWar = sight;
             corpseSprite = deadSprite != null ? deadSprite : GetDefaultCorpseSprite();
             name = data.FullName;
             body = GetComponent<SpriteRenderer>();
@@ -383,6 +393,116 @@ namespace NoMansGround.Soldiers
             Data.AdvanceTime(Time.deltaTime);
             AdvanceMovement(Time.deltaTime);
             AdvanceLook(Time.deltaTime);
+            AdvanceGuardCombat(Time.deltaTime);
+        }
+
+        public static float GetAimHitProbability(int aimLevel)
+        {
+            if (aimLevel < 0 || aimLevel > SkillProgress.MaximumLevel)
+                throw new ArgumentOutOfRangeException(nameof(aimLevel));
+            return 0.2f + aimLevel * 0.03f;
+        }
+
+        public void AdvanceGuardCombat(float deltaTime)
+        {
+            if (!float.IsFinite(deltaTime) || deltaTime < 0f)
+                throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            if (deltaTime == 0f || !IsAlive || Duty != SoldierDuty.Guard || IsMoving
+                || HasWorkAssignment || combatMap == null)
+                return;
+            if (shotCooldown > 0f)
+            {
+                shotCooldown = Mathf.Max(0f, shotCooldown - deltaTime);
+                if (shotCooldown > 0f)
+                    return;
+            }
+            if (Data.Inventory.Count(ItemType.CarcanoMod91) == 0
+                || Data.Inventory.Count(ItemType.CarcanoAmmunition) == 0)
+                return;
+
+            Vector2Int? nearestTarget = null;
+            int nearestDistance = int.MaxValue;
+            foreach (Vector2Int target in combatMap.TargetCells)
+            {
+                int distance = (target - Cell).sqrMagnitude;
+                if (distance >= nearestDistance || !CanSeeTarget(target))
+                    continue;
+                nearestTarget = target;
+                nearestDistance = distance;
+            }
+            if (nearestTarget.HasValue)
+                TryFireAtTarget(nearestTarget.Value, UnityEngine.Random.value, out _);
+        }
+
+        internal bool TryFireAtTarget(Vector2Int target, float roll, out bool hit)
+        {
+            hit = false;
+            if (!float.IsFinite(roll) || roll < 0f || roll > 1f)
+                throw new ArgumentOutOfRangeException(nameof(roll));
+            if (!IsAlive || Duty != SoldierDuty.Guard || IsMoving || HasWorkAssignment
+                || combatMap == null || Data.Inventory.Count(ItemType.CarcanoMod91) == 0
+                || !CanSeeTarget(target) || !Data.Inventory.TryTake(ItemType.CarcanoAmmunition, 1))
+                return false;
+
+            Vector2 direction = (Vector2)(target - Cell);
+            FacingDirection = direction.normalized;
+            guardScanSeconds = 0d;
+            UpdateDirectionalSprite(FacingDirection);
+            shotCooldown = GuardShotIntervalSeconds;
+            SkillProgress aim = Data.GetSkill(SoldierSkill.Aim);
+            float hitProbability = GetAimHitProbability(aim.Level);
+            hit = roll < hitProbability;
+            Debug.Log($"Guard shot: {Data.FullName} -> ({target.x}, {target.y}) "
+                + $"{(hit ? "HIT" : "MISS")}; aim={aim.Level}; "
+                + $"chance={hitProbability:P0}; roll={roll:P0}", this);
+            aim.AddExperience(1);
+            combatMapView?.ShowTargetShot(target, hit);
+            ShotFired?.Invoke(target, hit);
+            return true;
+        }
+
+        private bool CanSeeTarget(Vector2Int target)
+        {
+            if (combatMap == null || !combatMap.IsTargetCell(target)
+                || !combatMap.Fog.IsVisible(target))
+                return false;
+            Vector2Int offset = target - Cell;
+            int distanceSquared = offset.sqrMagnitude;
+            if (distanceSquared == 0)
+                return false;
+            int sightRadius = fogOfWar != null ? fogOfWar.CurrentSightRadius : 12;
+            if (distanceSquared > sightRadius * sightRadius
+                || Vector2.Dot(LookDirection, ((Vector2)offset).normalized) < 0f)
+                return false;
+            return HasLineOfSight(target);
+        }
+
+        private bool HasLineOfSight(Vector2Int target)
+        {
+            int x = Cell.x;
+            int y = Cell.y;
+            int dx = Mathf.Abs(target.x - x);
+            int dy = Mathf.Abs(target.y - y);
+            int stepX = x < target.x ? 1 : -1;
+            int stepY = y < target.y ? 1 : -1;
+            int error = dx - dy;
+            while (x != target.x || y != target.y)
+            {
+                int doubledError = error * 2;
+                if (doubledError > -dy)
+                {
+                    error -= dy;
+                    x += stepX;
+                }
+                if (doubledError < dx)
+                {
+                    error += dx;
+                    y += stepY;
+                }
+                if ((x != target.x || y != target.y) && combatMap.BlocksSight(new Vector2Int(x, y)))
+                    return false;
+            }
+            return true;
         }
 
         public void AdvanceLook(float deltaTime)

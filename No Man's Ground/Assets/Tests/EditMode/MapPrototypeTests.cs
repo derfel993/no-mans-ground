@@ -48,6 +48,21 @@ namespace NoMansGround.Tests
     public sealed class MapPrototypeTests
     {
         [Test]
+        public void TargetCellsCanBePlacedRemovedAndRejectInvalidCells()
+        {
+            var map = new MapData(4, 4);
+            var target = new Vector2Int(1, 1);
+            Assert.IsTrue(map.ToggleTargetCell(target));
+            Assert.IsTrue(map.IsTargetCell(target));
+            Assert.AreEqual(target, map.TargetCells[0]);
+            Assert.IsTrue(map.ToggleTargetCell(target));
+            Assert.IsFalse(map.IsTargetCell(target));
+            Assert.IsFalse(map.ToggleTargetCell(new Vector2Int(-1, 0)));
+            map[2, 2] = TerrainKind.Rock;
+            Assert.IsFalse(map.ToggleTargetCell(new Vector2Int(2, 2)));
+        }
+
+        [Test]
         public void SameSeedProducesSameCellsWithoutChangingUnityRandom()
         {
             UnityEngine.Random.State state = UnityEngine.Random.state;
