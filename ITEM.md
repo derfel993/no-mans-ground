@@ -23,12 +23,14 @@ non il limite totale dell'inventario o del deposito.
 | Pietra da costruzione | `BuildingStone` | Resource | 250 | Ottenuta minando roccia o montagna. Materiale consumato per edifici in pietra. |
 | Borraccia piena (acqua) | `FullCanteen` | Equipment | 1 | Ogni soldato, incluso il cuoco, ne riceve una alla generazione. Sotto il 20% di sete viene usata automaticamente: sete a 100% e sostituzione con una borraccia vuota. |
 | Borraccia vuota | `EmptyCanteen` | Equipment | 1 | Resta nell'inventario dopo la bevuta. Alla consegna effettiva del rancio viene sostituita con una borraccia piena; lo stesso vale per il cuoco quando mangia. |
+| Fucile Carcano Mod. 91 | `CarcanoMod91` | Weapon | 1 | Ogni soldato generato ne riceve uno. Peso: 3,8 kg; uso non implementato. |
+| 6,5 x 52 mm | `CarcanoAmmunition` | Ammunition | 250 | Ogni soldato generato ne riceve 168. Peso unitario: 0,025 kg; ricarica e consumo non implementati. |
 
 ## Disponibilita Iniziale
 
 - Deposito: 6 Pale, 2 Accette, 2 Picconi e 2 Martelli da Costruzione.
 - Dispensa: 1000 Razioni, in quattro stack da 250.
-- Ogni personaggio generato: 1 Borraccia piena (acqua).
+- Ogni personaggio generato: 1 Borraccia piena (acqua), 1 Fucile Carcano Mod. 91 e 168 munizioni 6,5 x 52 mm.
 - Legna e Pietra da costruzione: ottenute dai lavori, senza scorte iniziali gratuite.
 - Borraccia vuota: prodotta dalla bevuta, non assegnata alla generazione.
 
@@ -53,7 +55,13 @@ gratuitamente e non riceve job di un altro compito.
 
 ## Previsto E Da Definire
 
-- **Weapon**: categoria gia definita, senza ancora tipi di armi specifici nel catalogo.
+- **Weapon**: il Carcano Mod. 91 e un item iniziale comune a tutti i soldati ed
+  e associato come arma predefinita al Regio Esercito Italiano. Altri tipi
+  pianificati: Pistola, Fucile,
+  Mitragliatrice leggera, Mitragliatrice pesante, Bombe a mano, Artiglieria e
+  Arma bianca. Uso e equipaggiamento delle armi restano da implementare.
+- **Ammunition**: il catalogo definisce le munizioni 6,5 x 52 mm per il Carcano;
+  caricamento e consumo non sono implementati.
 - **Acqua separata dalla borraccia**: non esiste ancora come item autonomo;
   fonti, scorte e approvvigionamento restano da implementare.
 - **Rancio pronto**: esiste come conteggio della cucina e del carico del cuoco,

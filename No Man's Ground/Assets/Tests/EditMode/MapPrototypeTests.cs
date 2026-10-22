@@ -212,6 +212,11 @@ namespace NoMansGround.Tests
             Assert.AreEqual(1000, map.PantryStockpile.Count(ItemType.Rations));
             Assert.AreEqual(ItemCategory.Food, ItemCatalog.Get(ItemType.Rations).Category);
             Assert.AreEqual(250, ItemCatalog.Get(ItemType.Rations).StackSize);
+            ItemDefinition carcanoAmmunition = ItemCatalog.Get(ItemType.CarcanoAmmunition);
+            Assert.AreEqual("6,5 x 52 mm", carcanoAmmunition.DisplayName);
+            Assert.AreEqual(ItemCategory.Ammunition, carcanoAmmunition.Category);
+            Assert.AreEqual(250, carcanoAmmunition.StackSize);
+            Assert.AreEqual(0.025f, carcanoAmmunition.WeightKg);
             IReadOnlyList<ItemStack> rationStacks = map.PantryStockpile.GetStacks(ItemType.Rations);
             Assert.AreEqual(4, rationStacks.Count);
             foreach (ItemStack stack in rationStacks)

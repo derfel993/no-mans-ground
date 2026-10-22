@@ -11,6 +11,7 @@ namespace NoMansGround.Soldiers
         [SerializeField] private MapTilemapView mapView;
         [SerializeField] private Sprite soldierSprite;
         [SerializeField] private Sprite[] directionalSoldierSprites = new Sprite[8];
+        [SerializeField] private Sprite[] guardDirectionalSoldierSprites = new Sprite[8];
         [SerializeField] private Sprite corpseSprite;
         [SerializeField, Range(1, SoldierGenerator.MaximumSoldiers)] private int soldierCount = 8;
         [SerializeField] private int seed = 1917;
@@ -53,7 +54,8 @@ namespace NoMansGround.Soldiers
         }
 
         public void Configure(MapPrototype prototype, MapTilemapView view, Sprite sprite,
-            Sprite[] spritesByDirection = null, Sprite deadSprite = null)
+            Sprite[] spritesByDirection = null, Sprite deadSprite = null,
+            Sprite[] spritesWhileGuarding = null)
         {
             map = prototype;
             mapView = view;
@@ -62,6 +64,8 @@ namespace NoMansGround.Soldiers
                 directionalSoldierSprites = spritesByDirection;
             if (deadSprite != null)
                 corpseSprite = deadSprite;
+            if (spritesWhileGuarding != null && spritesWhileGuarding.Length == 8)
+                guardDirectionalSoldierSprites = spritesWhileGuarding;
         }
 
         private void OnEnable()
@@ -157,7 +161,8 @@ namespace NoMansGround.Soldiers
                 soldierObject.transform.position = mapView.Tilemap.GetCellCenterWorld(new Vector3Int(cell.x, cell.y, 0));
                 soldierObject.transform.localScale = Vector3.one * 0.9f;
                 SoldierView soldier = soldierObject.GetComponent<SoldierView>();
-                soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites, corpseSprite);
+                soldier.Initialize(generated[i], cell, soldierSprite, directionalSoldierSprites,
+                    corpseSprite, guardDirectionalSoldierSprites);
                 soldier.DutyChanged += NotifyDutiesChanged;
                 soldier.Died += HandleSoldierDied;
                 soldiers.Add(soldier);

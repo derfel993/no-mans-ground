@@ -305,12 +305,17 @@ namespace NoMansGround.Tests
             {
                 soldier.SetManualLook(directions[index]);
                 Sprite expected = AssetDatabase.LoadAssetAtPath<Sprite>(
-                    $"Assets/Art/Prototype/Soldiers/ITA/soldier-ita-1-{names[index]}.png");
+                    $"Assets/Art/Prototype/Soldiers/ITA/soldier-ita-1-guard-{names[index]}.png");
                 Assert.IsNotNull(expected, names[index]);
                 Assert.AreSame(expected, body.sprite, names[index]);
                 Assert.AreSame(expected, selection.sprite, names[index]);
                 Assert.AreEqual(Quaternion.identity, soldier.transform.rotation, names[index]);
             }
+            Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Work));
+            Sprite unarmed = AssetDatabase.LoadAssetAtPath<Sprite>(
+                "Assets/Art/Prototype/Soldiers/ITA/soldier-ita-1-north-west.png");
+            Assert.AreSame(unarmed, body.sprite);
+            Assert.AreSame(unarmed, selection.sprite);
         }
 
         [Test]

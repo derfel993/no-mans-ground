@@ -7,6 +7,7 @@ namespace NoMansGround.Map
     {
         Tool,
         Weapon,
+        Ammunition,
         Food,
         Resource,
         Equipment
@@ -22,7 +23,9 @@ namespace NoMansGround.Map
         BuildingStone,
         FullCanteen,
         EmptyCanteen,
-        ConstructionHammer
+        ConstructionHammer,
+        CarcanoMod91,
+        CarcanoAmmunition
     }
 
     public enum ItemAction
@@ -73,6 +76,10 @@ namespace NoMansGround.Map
                     return new ItemDefinition(type, "Borraccia vuota", ItemCategory.Equipment, null, 1, 0.5f);
                 case ItemType.ConstructionHammer:
                     return new ItemDefinition(type, "Martello da Costruzione", ItemCategory.Tool, ItemAction.Build, 1, 1.5f);
+                case ItemType.CarcanoMod91:
+                    return new ItemDefinition(type, "Fucile Carcano Mod. 91", ItemCategory.Weapon, null, 1, 3.8f);
+                case ItemType.CarcanoAmmunition:
+                    return new ItemDefinition(type, "6,5 x 52 mm", ItemCategory.Ammunition, null, 250, 0.025f);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

@@ -33,12 +33,12 @@ namespace NoMansGround.Tests
                 FindButton(canvas, "Inventario").onClick.Invoke();
                 Text inventory = canvas.transform.Find("Soldier Details Panel/Inventario content")
                     .GetComponentInChildren<Text>(true);
-                Assert.AreEqual("Borraccia piena (acqua) x1", inventory.text);
+                Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nBorraccia piena (acqua) x1", inventory.text);
                 soldier.Data.Needs.AdvanceTime(soldier.Data.Needs.ThirstDepletionSeconds * 0.8f + 1f);
-                Assert.AreEqual("Borraccia vuota x1", inventory.text);
+                Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nBorraccia vuota x1", inventory.text);
                 Assert.AreEqual(100f, soldier.Data.Needs.Thirst);
                 soldier.Data.ReceiveRation();
-                Assert.AreEqual("Borraccia piena (acqua) x1", inventory.text);
+                Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nBorraccia piena (acqua) x1", inventory.text);
                 Assert.IsTrue(map.Data.StorageStockpile.TryTake(ItemType.ConstructionHammer, 1));
                 soldier.Data.Inventory.Add(ItemType.ConstructionHammer, 1);
                 StringAssert.Contains("Martello da Costruzione x1", inventory.text);
@@ -140,11 +140,11 @@ namespace NoMansGround.Tests
             Assert.IsTrue(inventoryPage.gameObject.activeSelf);
             Text inventoryText = inventoryPage.GetComponentInChildren<Text>(true);
             Assert.IsNotNull(inventoryText);
-            Assert.AreEqual("Borraccia piena (acqua) x1", inventoryText.text);
+            Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nBorraccia piena (acqua) x1", inventoryText.text);
             selected.Data.Inventory.Add(ItemType.Pickaxe, 1);
-            Assert.AreEqual("Piccone x1\nBorraccia piena (acqua) x1", inventoryText.text);
+            Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nPiccone x1\nBorraccia piena (acqua) x1", inventoryText.text);
             Assert.IsTrue(selected.Data.Inventory.TryTake(ItemType.Pickaxe, 1));
-            Assert.AreEqual("Borraccia piena (acqua) x1", inventoryText.text);
+            Assert.AreEqual("Fucile Carcano Mod. 91 x1\n6,5 x 52 mm x168\nBorraccia piena (acqua) x1", inventoryText.text);
             FindButton(canvas, "Info").onClick.Invoke();
             SkillProgress strength = selected.Data.GetSkill(SoldierSkill.Strength);
             float initialCarryWeight = selected.Data.MaxCarryWeightKg;

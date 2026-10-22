@@ -390,6 +390,15 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 6aebb5755b2435b40ba4e595af920c3a, type: 3}
   - {fileID: 21300000, guid: 7a1b82bca331cf3438dfe2540aa50b73, type: 3}
   - {fileID: 21300000, guid: c931f7a7e79377d46aafacd6243d4584, type: 3}
+  guardDirectionalSoldierSprites:
+  - {fileID: 21300000, guid: bb0cf77cab36403983cec08abd16c8ba, type: 3}
+  - {fileID: 21300000, guid: 4ad99e5544624b02b0878003e648ae22, type: 3}
+  - {fileID: 21300000, guid: 93d07275dcaa42f989abcba5f3e25ea3, type: 3}
+  - {fileID: 21300000, guid: 8fcb10c78d004f59b8a4445549b5869d, type: 3}
+  - {fileID: 21300000, guid: c01d6f97075d4dd3a9540209bb33b97f, type: 3}
+  - {fileID: 21300000, guid: 29b09a51a2ac4e0eafe30173369e4341, type: 3}
+  - {fileID: 21300000, guid: e42322fe8a584ab3a61feb3aff77ad83, type: 3}
+  - {fileID: 21300000, guid: 14a8d68127f54297826fc968096c9ad0, type: 3}
   soldierCount: 8
   seed: 1917
   spawnCook: 1

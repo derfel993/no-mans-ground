@@ -1,0 +1,7 @@
+ID;Esercito;Tipo;Nome;Munizioni;Capacita;Storia;Pregi;Difetti;Precisione (0-20);Danni (0-100);Aggiunta fatica;Peso (kg)
+1;Regio Esercito Italiano;Fucile;Carcano Mod. 91;6,5 x 52 mm;6;"Negli ultimi decenni del XIX secolo, l'introduzione della polvere infume (senza fumo) rivoluzionò la tecnologia bellica: consentiva pressioni di sparo molto più elevate, traiettorie più tese e proiettili di calibro ridotto ad alta velocità.
+La richiesta del Regio Esercito (1888): Una commissione presieduta dal Generale Luigi Avogadro di Casanova fu incaricata di sostituire i vecchi fucili Vetterli-Vitali a polvere nera con un'arma moderna a ripetizione manuale.
+I progettisti:
+Salvatore Carcano, capo controllore della Regia Fabbrica d'Armi di Terni, sviluppò l'azione dell'otturatore e il meccanismo di scatto.
+Ferdinand Mannlicher (progettista austriaco) fornì il concetto del sistema di alimentazione con caricatore integrato a pacchetto reticolare (en-bloc).
+Adozione ufficiale: L'arma venne adottata con Decreto Reale il 29 marzo 1891 nella versione fucile da fanteria. La produzione principale fu affidata agli stabilimenti statali di Terni, Brescia, Torre Annunziata e alla fabbrica privata Beretta.";Precisione e Leggerezza - Robustezza;Scarsi danni;14;20;1;3.8

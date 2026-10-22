@@ -16,8 +16,10 @@ namespace NoMansGround.Soldiers
         private Sprite fallbackSprite;
         private Sprite corpseSprite;
         private Sprite[] directionalSprites;
+        private Sprite[] guardDirectionalSprites;
         private static Sprite defaultCorpseSprite;
         private int displayedDirection = -1;
+        private int displayedDuty = -1;
         private IReadOnlyList<Vector2Int> path;
         private int waypoint;
         private double guardScanSeconds;
@@ -170,11 +172,13 @@ namespace NoMansGround.Soldiers
             }
             DutyChanged?.Invoke();
             MovementChanged?.Invoke();
+            UpdateDirectionalSprite(LookDirection);
             return true;
         }
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite,
-            Sprite[] spritesByDirection = null, Sprite deadSprite = null)
+            Sprite[] spritesByDirection = null, Sprite deadSprite = null,
+            Sprite[] spritesWhileGuarding = null)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -188,6 +192,7 @@ namespace NoMansGround.Soldiers
             Cell = cell;
             fallbackSprite = sprite;
             directionalSprites = spritesByDirection;
+            guardDirectionalSprites = spritesWhileGuarding;
             corpseSprite = deadSprite != null ? deadSprite : GetDefaultCorpseSprite();
             name = data.FullName;
             body = GetComponent<SpriteRenderer>();
@@ -296,11 +301,14 @@ namespace NoMansGround.Soldiers
             int directionIndex = Mathf.RoundToInt((90f - angle) / 45f) % 8;
             if (directionIndex < 0)
                 directionIndex += 8;
-            if (directionIndex == displayedDirection)
+            int dutyIndex = (int)Duty;
+            if (directionIndex == displayedDirection && dutyIndex == displayedDuty)
                 return;
             displayedDirection = directionIndex;
-            Sprite sprite = directionalSprites != null && directionalSprites.Length == 8
-                ? directionalSprites[directionIndex] : null;
+            displayedDuty = dutyIndex;
+            Sprite[] sprites = Duty == SoldierDuty.Guard && guardDirectionalSprites != null
+                && guardDirectionalSprites.Length == 8 ? guardDirectionalSprites : directionalSprites;
+            Sprite sprite = sprites != null && sprites.Length == 8 ? sprites[directionIndex] : null;
             if (sprite == null)
                 sprite = fallbackSprite;
             body.sprite = sprite;

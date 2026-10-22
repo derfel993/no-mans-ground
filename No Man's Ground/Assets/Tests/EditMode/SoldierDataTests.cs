@@ -241,6 +241,8 @@ namespace NoMansGround.Tests
                 Assert.Zero(first[i].Needs.Fear);
                 Assert.Zero(first[i].Needs.Fatigue);
                 Assert.AreEqual(1, first[i].Inventory.Count(ItemType.FullCanteen));
+                Assert.AreEqual(1, first[i].Inventory.Count(ItemType.CarcanoMod91));
+                Assert.AreEqual(168, first[i].Inventory.Count(ItemType.CarcanoAmmunition));
                 Assert.Zero(first[i].Inventory.Count(ItemType.EmptyCanteen));
                 Assert.AreEqual(first[i].Needs.Hunger, second[i].Needs.Hunger);
                 Assert.AreEqual(first[i].Needs.Thirst, second[i].Needs.Thirst);
@@ -266,13 +268,17 @@ namespace NoMansGround.Tests
         [TestCase(SoldierProfession.Soldier)]
         [TestCase(SoldierProfession.Engineer)]
         [TestCase(SoldierProfession.Cook)]
-        public void EveryProfessionStartsWithOneFullCanteen(SoldierProfession profession)
+        public void EveryProfessionStartsWithFullCanteenCarcanoAndAmmunition(SoldierProfession profession)
         {
             var soldier = new SoldierData(0, "Mario", "Rossi", new SoldierNeeds(100, 100, 100, 0, 0, 0, 0),
                 new[] { 1, 1, 1, 1, 1 }, profession);
-            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            Assert.AreEqual(170, soldier.Inventory.TotalCount);
             Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
+            Assert.AreEqual(1, soldier.Inventory.Count(ItemType.CarcanoMod91));
+            Assert.AreEqual(168, soldier.Inventory.Count(ItemType.CarcanoAmmunition));
             Assert.AreEqual(ItemCategory.Equipment, ItemCatalog.Get(ItemType.FullCanteen).Category);
+            Assert.AreEqual(ItemCategory.Weapon, ItemCatalog.Get(ItemType.CarcanoMod91).Category);
+            Assert.AreEqual(3.8f, ItemCatalog.Get(ItemType.CarcanoMod91).WeightKg);
             Assert.AreEqual(1, ItemCatalog.Get(ItemType.EmptyCanteen).StackSize);
         }
 
@@ -293,7 +299,7 @@ namespace NoMansGround.Tests
             Assert.Zero(soldier.Needs.Thirst);
             Assert.IsFalse(soldier.TryDrinkWater());
             Assert.AreEqual(1, soldier.Inventory.Count(ItemType.EmptyCanteen));
-            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            Assert.AreEqual(170, soldier.Inventory.TotalCount);
         }
 
         [Test]
@@ -309,7 +315,7 @@ namespace NoMansGround.Tests
             Assert.AreEqual(1, soldier.Inventory.Count(ItemType.FullCanteen));
             Assert.Zero(soldier.Inventory.Count(ItemType.EmptyCanteen));
             soldier.ReceiveRation();
-            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            Assert.AreEqual(170, soldier.Inventory.TotalCount);
             soldier.Needs.AdvanceTime(soldier.Needs.ThirstDepletionSeconds);
             Assert.Zero(soldier.Inventory.Count(ItemType.FullCanteen));
             Assert.AreEqual(1, soldier.Inventory.Count(ItemType.EmptyCanteen));
@@ -317,7 +323,7 @@ namespace NoMansGround.Tests
             Assert.Zero(soldier.Needs.Thirst);
             soldier.ReceiveRation();
             Assert.AreEqual(100f, soldier.Needs.Thirst);
-            Assert.AreEqual(1, soldier.Inventory.TotalCount);
+            Assert.AreEqual(170, soldier.Inventory.TotalCount);
         }
 
         [Test]
@@ -586,13 +592,13 @@ namespace NoMansGround.Tests
             var needs = new SoldierNeeds(100, 100, 100, 0, 0, 0, 0);
             var soldier = new SoldierData(0, "Giovanni", "Rossi", needs, new[] { 1, 1, 1, 1, 1 });
             Assert.AreEqual(1.5f, ItemCatalog.Get(ItemType.FullCanteen).WeightKg);
-            Assert.AreEqual(1.5f, soldier.CarryWeightKg);
-            Assert.IsTrue(soldier.CanCarry(ItemType.Wood, 18));
-            Assert.IsFalse(soldier.CanCarry(ItemType.Wood, 19));
-            Assert.IsTrue(soldier.TryAddToInventory(ItemType.Wood, 18));
+            Assert.AreEqual(9.5f, soldier.CarryWeightKg);
+            Assert.IsTrue(soldier.CanCarry(ItemType.Wood, 10));
+            Assert.IsFalse(soldier.CanCarry(ItemType.Wood, 11));
+            Assert.IsTrue(soldier.TryAddToInventory(ItemType.Wood, 10));
             Assert.AreEqual(19.5f, soldier.CarryWeightKg);
             Assert.IsFalse(soldier.TryAddToInventory(ItemType.Wood, 1));
-            Assert.AreEqual(18, soldier.Inventory.Count(ItemType.Wood));
+            Assert.AreEqual(10, soldier.Inventory.Count(ItemType.Wood));
         }
 
         [Test]

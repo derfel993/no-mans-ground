@@ -7,6 +7,27 @@ salvo richiesta esplicita dell'utente.
 Le attivita ancora da implementare restano nei TODO del README.
 
 ===============================================================================
+0.5.4 - 2026-10-22
+===============================================================================
+
+Armi e dotazione iniziale
+- Aggiunti ai dati degli eserciti i colori HEX e l'arma predefinita; il Regio
+  Esercito Italiano ha il Carcano Mod. 91.
+- Ogni soldato generato riceve un Fucile Carcano Mod. 91 e 168 munizioni
+  6,5 x 52 mm. Il peso e conteggiato nell'inventario: 3,8 kg per il fucile,
+  0,025 kg per munizione.
+- Aggiunta la categoria Ammunition e l'item 6,5 x 52 mm; caricamento, sparo e
+  consumo delle munizioni restano da implementare.
+
+Pose armate in Guardia
+- Aggiunte otto pose direzionali con fucile per i soldati in Guardia; in Lavoro
+  resta la posa disarmata e il cambio segue l'orientamento dello sguardo.
+
+Test
+- Superati i test mirati per catalogo eserciti, inventario iniziale, peso,
+  roster, cucina, interfaccia inventario e sprite nelle otto direzioni.
+
+===============================================================================
 0.5.3 - 2026-10-22
 ===============================================================================
 

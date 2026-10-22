@@ -93,8 +93,10 @@ namespace NoMansGround.Tests
             {
                 Assert.AreEqual(SoldierTask.Hauler, soldier.Data.Task);
                 Assert.IsTrue(soldier.TaskReady);
-                Assert.AreEqual(1, soldier.Data.Inventory.TotalCount);
+                Assert.AreEqual(170, soldier.Data.Inventory.TotalCount);
                 Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.FullCanteen));
+                Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.CarcanoMod91));
+                Assert.AreEqual(168, soldier.Data.Inventory.Count(ItemType.CarcanoAmmunition));
             }
             Assert.IsTrue(kitchen.HasFacilities);
             Assert.IsNull(kitchen.Cook);

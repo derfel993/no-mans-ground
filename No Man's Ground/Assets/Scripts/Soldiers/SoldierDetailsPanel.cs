@@ -701,7 +701,8 @@ namespace NoMansGround.Soldiers
             inventoryStatus.text = string.Empty;
             if (Selected == null)
                 return;
-            foreach (ItemType type in new[] { ItemType.Shovel, ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
+            foreach (ItemType type in new[] { ItemType.CarcanoMod91, ItemType.CarcanoAmmunition, ItemType.Shovel,
+                ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
                 ItemType.Wood, ItemType.BuildingStone, ItemType.FullCanteen, ItemType.EmptyCanteen,
                 ItemType.ConstructionHammer })
             {

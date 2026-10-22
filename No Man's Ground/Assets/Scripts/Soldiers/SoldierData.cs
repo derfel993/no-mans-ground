@@ -338,6 +338,8 @@ namespace NoMansGround.Soldiers
                 skills[i] = new SkillProgress(skillLevels[i]);
             Skills = Array.AsReadOnly(skills);
             Inventory.Add(ItemType.FullCanteen, 1);
+            Inventory.Add(ItemType.CarcanoMod91, 1);
+            Inventory.Add(ItemType.CarcanoAmmunition, 168);
             Needs.Changed += HandleNeedsChanged;
         }
 
