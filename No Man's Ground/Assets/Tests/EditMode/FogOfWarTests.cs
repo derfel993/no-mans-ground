@@ -11,6 +11,23 @@ namespace NoMansGround.Tests
 {
     public sealed class FogOfWarTests
     {
+        [Test]
+        public void RosterCanToggleFogOfWarBeforeFogComponentExists()
+        {
+            var owner = new GameObject("Fog toggle test", typeof(MapPrototype), typeof(SoldierRoster));
+            try
+            {
+                SoldierRoster roster = owner.GetComponent<SoldierRoster>();
+                roster.Configure(owner.GetComponent<MapPrototype>(), null, null);
+                Assert.IsTrue(roster.FogOfWarEnabled);
+                roster.SetFogOfWarEnabled(false);
+                Assert.IsFalse(roster.FogOfWarEnabled);
+                roster.SetFogOfWarEnabled(true);
+                Assert.IsTrue(roster.FogOfWarEnabled);
+            }
+            finally { Object.DestroyImmediate(owner); }
+        }
+
         [TestCase(0d, 12)]
         [TestCase(900d, 12)]
         [TestCase(1000d, 9)]

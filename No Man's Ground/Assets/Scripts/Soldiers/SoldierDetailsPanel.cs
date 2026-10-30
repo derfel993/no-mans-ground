@@ -44,6 +44,9 @@ namespace NoMansGround.Soldiers
         private Text dutyStatus;
         private Text taskStatus;
         private Dropdown taskDropdown;
+        private Text taskDropdownTitle;
+        private bool taskDropdownShowsGuardRoles;
+        private bool taskDropdownOptionsInitialized;
         private GameObject automaticTransportRow;
         private Toggle automaticTransportToggle;
         private Text zoneStatus;
@@ -51,6 +54,8 @@ namespace NoMansGround.Soldiers
         private Text roomStatus;
         private Button guardButton;
         private Button workButton;
+        private Button fogButton;
+        private Text fogButtonText;
         private Button[] zoneButtons;
         private Button[] speedButtons;
         private Button[] soldierTabButtons;
@@ -123,6 +128,7 @@ namespace NoMansGround.Soldiers
             }
             RefreshClock();
             RefreshSpeedButtons();
+            RefreshFogButton();
             if (movementOrders != null)
                 movementOrders.StatusChanged += RefreshOrderStatus;
             if (trenchOrders != null)
@@ -603,8 +609,12 @@ namespace NoMansGround.Soldiers
             if (taskDropdown != null)
             {
                 taskDropdown.interactable = selected;
+                bool showGuardRoles = selected && (Selected.Duty == SoldierDuty.Guard || Selected.GuardRequested);
+                RefreshTaskDropdownOptions(showGuardRoles);
                 if (selected)
-                    taskDropdown.SetValueWithoutNotify((int)(Selected.RequestedTask ?? Selected.Data.Task));
+                    taskDropdown.SetValueWithoutNotify(showGuardRoles
+                        ? (int)Selected.GuardRole
+                        : (int)(Selected.RequestedTask ?? Selected.Data.Task));
                 taskStatus.text = selected ? (Selected.RequestedTask.HasValue
                     ? $"{SoldierTasks.DisplayName(Selected.Data.Task)} -> {SoldierTasks.DisplayName(Selected.RequestedTask.Value)}\n{Selected.TaskStatus}"
                     : Selected.TaskStatus) : string.Empty;
@@ -704,7 +714,7 @@ namespace NoMansGround.Soldiers
             foreach (ItemType type in new[] { ItemType.CarcanoMod91, ItemType.CarcanoAmmunition, ItemType.Shovel,
                 ItemType.Axe, ItemType.Pickaxe, ItemType.Rations,
                 ItemType.Wood, ItemType.BuildingStone, ItemType.FullCanteen, ItemType.EmptyCanteen,
-                ItemType.ConstructionHammer })
+                ItemType.ConstructionHammer, ItemType.Binoculars })
             {
                 int count = Selected.Data.Inventory.Count(type);
                 if (count > 0)
@@ -833,6 +843,8 @@ namespace NoMansGround.Soldiers
                 speedButtons[3] = CreateSpeedButton(speedRow, 5);
                 speedButtons[4] = CreateSpeedButton(speedRow, 10);
                 RefreshSpeedButtons();
+                fogButton = CreateFogButton(content);
+                RefreshFogButton();
             }
             CreateText(content, "SOLDATI", 13, 20f);
             dutyCounts = CreateText(content, "", 10, 20f);
@@ -1017,14 +1029,41 @@ namespace NoMansGround.Soldiers
         private Dropdown CreateTaskDropdown(Transform parent)
         {
             Dropdown dropdown = CreateOptionDropdown(parent, "Compito", "Scelta compito");
-            foreach (SoldierTask task in System.Enum.GetValues(typeof(SoldierTask)))
-                dropdown.options.Add(new Dropdown.OptionData(SoldierTasks.DisplayName(task)));
+            taskDropdownTitle = dropdown.transform.parent.GetChild(0).GetComponent<Text>();
+            RefreshTaskDropdownOptions(false);
             dropdown.onValueChanged.AddListener(value =>
             {
-                if (Selected != null) Selected.RequestTask((SoldierTask)value);
+                if (Selected == null)
+                    return;
+                if (Selected.Duty == SoldierDuty.Guard || Selected.GuardRequested)
+                    Selected.SetGuardRole((SoldierGuardRole)value);
+                else
+                    Selected.RequestTask((SoldierTask)value);
             });
             dropdown.RefreshShownValue();
             return dropdown;
+        }
+
+        private void RefreshTaskDropdownOptions(bool showGuardRoles)
+        {
+            if (taskDropdown == null || (taskDropdownOptionsInitialized && taskDropdownShowsGuardRoles == showGuardRoles))
+                return;
+            taskDropdownOptionsInitialized = true;
+            taskDropdownShowsGuardRoles = showGuardRoles;
+            taskDropdown.options.Clear();
+            if (showGuardRoles)
+            {
+                taskDropdown.options.Add(new Dropdown.OptionData("Sentinella"));
+                taskDropdown.options.Add(new Dropdown.OptionData("Ricognizione"));
+                taskDropdown.options.Add(new Dropdown.OptionData("Attacco"));
+            }
+            else
+            {
+                foreach (SoldierTask task in System.Enum.GetValues(typeof(SoldierTask)))
+                    taskDropdown.options.Add(new Dropdown.OptionData(SoldierTasks.DisplayName(task)));
+            }
+            taskDropdownTitle.text = showGuardRoles ? "Ruolo" : "Compito";
+            taskDropdown.RefreshShownValue();
         }
 
         private GameObject CreateAutomaticTransportToggle(Transform parent)
@@ -1195,6 +1234,38 @@ namespace NoMansGround.Soldiers
             Text text = CreateText(rect, label, 10, 0f);
             Stretch(text.rectTransform, 2f);
             return button;
+        }
+
+        private Button CreateFogButton(Transform parent)
+        {
+            var rect = CreateRect("Fog of war test toggle", parent);
+            rect.gameObject.AddComponent<LayoutElement>().preferredHeight = 22f;
+            var image = rect.gameObject.AddComponent<Image>();
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(ToggleFogOfWar);
+            fogButtonText = CreateText(rect, "Nebbia: ON", 10, 0f);
+            Stretch(fogButtonText.rectTransform, 2f);
+            return button;
+        }
+
+        private void ToggleFogOfWar()
+        {
+            if (roster != null)
+                roster.SetFogOfWarEnabled(!roster.FogOfWarEnabled);
+            RefreshFogButton();
+        }
+
+        private void RefreshFogButton()
+        {
+            if (fogButton == null || fogButtonText == null)
+                return;
+            bool enabled = roster != null && roster.FogOfWarEnabled;
+            fogButton.interactable = roster != null;
+            fogButtonText.text = roster == null ? "Nebbia: N/D" : enabled ? "Nebbia: ON" : "Nebbia: OFF";
+            fogButton.GetComponent<Image>().color = enabled
+                ? new Color(0.48f, 0.58f, 0.34f)
+                : new Color(0.26f, 0.32f, 0.22f);
         }
 
         private void RefreshSpeedButtons(int speed = -1)

@@ -340,6 +340,7 @@ namespace NoMansGround.Soldiers
             Inventory.Add(ItemType.FullCanteen, 1);
             Inventory.Add(ItemType.CarcanoMod91, 1);
             Inventory.Add(ItemType.CarcanoAmmunition, 168);
+            Inventory.Add(ItemType.Binoculars, 2);
             Needs.Changed += HandleNeedsChanged;
         }
 

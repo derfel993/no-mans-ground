@@ -6,6 +6,7 @@ using UnityEngine;
 namespace NoMansGround.Soldiers
 {
     public enum SoldierDuty { Work, Guard }
+    public enum SoldierGuardRole { Sentry, Reconnaissance, Attack }
 
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class SoldierView : MonoBehaviour
@@ -37,6 +38,7 @@ namespace NoMansGround.Soldiers
         public bool IsAvailable => IsAlive && isActiveAndEnabled && !IsMoving && !HasWorkAssignment;
         public bool IsAlive => Data != null && Data.IsAlive;
         public SoldierDuty Duty { get; private set; } = SoldierDuty.Work;
+        public SoldierGuardRole GuardRole { get; private set; } = SoldierGuardRole.Sentry;
         public bool GuardRequested { get; private set; }
         public SoldierTask? RequestedTask { get; private set; }
         public bool TaskReady { get; private set; } = true;
@@ -180,6 +182,16 @@ namespace NoMansGround.Soldiers
             MovementChanged?.Invoke();
             UpdateDirectionalSprite(LookDirection);
             return true;
+        }
+
+        public void SetGuardRole(SoldierGuardRole role)
+        {
+            if (!Enum.IsDefined(typeof(SoldierGuardRole), role))
+                throw new ArgumentOutOfRangeException(nameof(role));
+            if (!IsAlive || GuardRole == role)
+                return;
+            GuardRole = role;
+            MovementChanged?.Invoke();
         }
 
         public void Initialize(SoldierData data, Vector2Int cell, Sprite sprite,

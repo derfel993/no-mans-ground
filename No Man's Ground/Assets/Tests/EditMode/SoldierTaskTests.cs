@@ -93,10 +93,11 @@ namespace NoMansGround.Tests
             {
                 Assert.AreEqual(SoldierTask.Hauler, soldier.Data.Task);
                 Assert.IsTrue(soldier.TaskReady);
-                Assert.AreEqual(170, soldier.Data.Inventory.TotalCount);
+                Assert.AreEqual(172, soldier.Data.Inventory.TotalCount);
                 Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.FullCanteen));
                 Assert.AreEqual(1, soldier.Data.Inventory.Count(ItemType.CarcanoMod91));
                 Assert.AreEqual(168, soldier.Data.Inventory.Count(ItemType.CarcanoAmmunition));
+                Assert.AreEqual(2, soldier.Data.Inventory.Count(ItemType.Binoculars));
             }
             Assert.IsTrue(kitchen.HasFacilities);
             Assert.IsNull(kitchen.Cook);
@@ -368,6 +369,48 @@ namespace NoMansGround.Tests
                     Transform blocker = canvas.transform.Find("Blocker");
                     if (blocker != null) Object.DestroyImmediate(blocker.gameObject);
                 }
+            }
+            finally
+            {
+                typeof(SoldierDetailsPanel).GetMethod("OnDisable", flags).Invoke(panel, null);
+            }
+        }
+
+        [Test]
+        public void GuardDutySelectorShowsAndRemembersGuardRoles()
+        {
+            var panel = Object.FindAnyObjectByType<SoldierDetailsPanel>();
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            try
+            {
+                typeof(SoldierDetailsPanel).GetMethod("Awake", flags).Invoke(panel, null);
+                typeof(SoldierDetailsPanel).GetMethod("OnEnable", flags).Invoke(panel, null);
+                SoldierView soldier = roster.Soldiers[0];
+                panel.Select(soldier);
+                var inventoryStatus = (Text)typeof(SoldierDetailsPanel)
+                    .GetField("inventoryStatus", flags).GetValue(panel);
+                StringAssert.Contains("Binocolo x2", inventoryStatus.text);
+                Dropdown selector = (Dropdown)typeof(SoldierDetailsPanel)
+                    .GetField("taskDropdown", flags).GetValue(panel);
+
+                Assert.AreEqual(6, selector.options.Count);
+                Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Guard));
+                Assert.AreEqual(3, selector.options.Count);
+                Assert.AreEqual("Sentinella", selector.options[0].text);
+                Assert.AreEqual("Ricognizione", selector.options[1].text);
+                Assert.AreEqual("Attacco", selector.options[2].text);
+                Assert.AreEqual("Sentinella", selector.captionText.text);
+
+                selector.value = (int)SoldierGuardRole.Attack;
+                Assert.AreEqual(SoldierGuardRole.Attack, soldier.GuardRole);
+                Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Work));
+                Assert.AreEqual(6, selector.options.Count);
+                Assert.AreEqual("Trasportatore", selector.captionText.text);
+
+                Assert.IsTrue(soldier.RequestDuty(SoldierDuty.Guard));
+                Assert.AreEqual(3, selector.options.Count);
+                Assert.AreEqual((int)SoldierGuardRole.Attack, selector.value);
+                Assert.AreEqual("Attacco", selector.captionText.text);
             }
             finally
             {

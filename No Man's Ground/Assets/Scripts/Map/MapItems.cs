@@ -25,7 +25,8 @@ namespace NoMansGround.Map
         EmptyCanteen,
         ConstructionHammer,
         CarcanoMod91,
-        CarcanoAmmunition
+        CarcanoAmmunition,
+        Binoculars
     }
 
     public enum ItemAction
@@ -80,6 +81,8 @@ namespace NoMansGround.Map
                     return new ItemDefinition(type, "Fucile Carcano Mod. 91", ItemCategory.Weapon, null, 1, 3.8f);
                 case ItemType.CarcanoAmmunition:
                     return new ItemDefinition(type, "6,5 x 52 mm", ItemCategory.Ammunition, null, 250, 0.025f);
+                case ItemType.Binoculars:
+                    return new ItemDefinition(type, "Binocolo", ItemCategory.Equipment, null, 1, 0.6f);
                 default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }

@@ -25,12 +25,13 @@ non il limite totale dell'inventario o del deposito.
 | Borraccia vuota | `EmptyCanteen` | Equipment | 1 | Resta nell'inventario dopo la bevuta. Alla consegna effettiva del rancio viene sostituita con una borraccia piena; lo stesso vale per il cuoco quando mangia. |
 | Fucile Carcano Mod. 91 | `CarcanoMod91` | Weapon | 1 | Ogni soldato generato ne riceve uno. Peso: 3,8 kg; uso non implementato. |
 | 6,5 x 52 mm | `CarcanoAmmunition` | Ammunition | 250 | Ogni soldato generato ne riceve 168. Peso unitario: 0,025 kg; ricarica e consumo non implementati. |
+| Binocolo | `Binoculars` | Equipment | 1 | Ogni soldato generato ne riceve due. Peso unitario: 0,6 kg; uso non implementato. |
 
 ## Disponibilita Iniziale
 
 - Deposito: 6 Pale, 2 Accette, 2 Picconi e 2 Martelli da Costruzione.
 - Dispensa: 1000 Razioni, in quattro stack da 250.
-- Ogni personaggio generato: 1 Borraccia piena (acqua), 1 Fucile Carcano Mod. 91 e 168 munizioni 6,5 x 52 mm.
+- Ogni personaggio generato: 1 Borraccia piena (acqua), 1 Fucile Carcano Mod. 91, 168 munizioni 6,5 x 52 mm e 2 Binocoli.
 - Legna e Pietra da costruzione: ottenute dai lavori, senza scorte iniziali gratuite.
 - Borraccia vuota: prodotta dalla bevuta, non assegnata alla generazione.
 

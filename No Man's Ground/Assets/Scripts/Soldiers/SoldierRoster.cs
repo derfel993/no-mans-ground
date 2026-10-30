@@ -23,6 +23,7 @@ namespace NoMansGround.Soldiers
         private SoldierFogOfWar fogOfWar;
 
         public IReadOnlyList<SoldierView> Soldiers => readOnlySoldiers ?? (readOnlySoldiers = soldiers.AsReadOnly());
+        public bool FogOfWarEnabled => fogOfWar == null || fogOfWar.enabled;
         public event Action Rebuilt;
         public event Action DutiesChanged;
         public event Action<SoldierView> SoldierDied;
@@ -91,6 +92,14 @@ namespace NoMansGround.Soldiers
             if (fog == null) fog = gameObject.AddComponent<SoldierFogOfWar>();
             fogOfWar = fog;
             fog.Configure(map, mapView, this);
+        }
+
+        public void SetFogOfWarEnabled(bool enabled)
+        {
+            if (fogOfWar == null)
+                ConfigureFog();
+            if (fogOfWar != null)
+                fogOfWar.enabled = enabled;
         }
 
         private void OnDisable()
